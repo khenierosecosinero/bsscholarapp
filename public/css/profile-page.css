@@ -1,0 +1,196 @@
+/* Profile page — sidebar layout */
+.page-profile .profile-info-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.page-profile .profile-section-card {
+    padding: 20px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.page-profile .profile-section-card .card-header {
+    margin: 0 0 16px;
+}
+
+.page-profile .profile-section-intro {
+    margin-bottom: 20px;
+}
+
+.page-profile .profile-section-form .form-actions-right {
+    margin-top: 20px;
+}
+
+.page-profile .profile-sidebar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 24px;
+}
+
+.page-profile .profile-sidebar .card,
+.page-profile .profile-sidebar .sidebar-page-card {
+    width: 100%;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.page-profile .profile-sidebar .card-header {
+    margin: 0 0 16px;
+    padding: 0;
+}
+
+.page-profile .profile-sidebar .sidebar-help-text {
+    margin: 0 0 18px;
+    padding: 0;
+    font-size: 13px;
+    color: #64748b;
+    line-height: 1.6;
+}
+
+.page-profile .profile-sidebar .sidebar-help-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 600;
+    width: 100%;
+    margin: 0;
+}
+
+.page-profile .profile-sidebar .sidebar-help-btn-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1.5px solid #2563eb;
+    color: #2563eb;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.page-profile .sidebar-widgets {
+    gap: 16px;
+}
+
+.page-profile .profile-my-progress-card,
+.page-profile .dashboard-sidebar-calendar {
+    width: 100%;
+    margin: 0;
+}
+
+@media (max-width: 1200px) {
+    .page-profile .profile-sidebar {
+        position: static;
+        gap: 24px;
+    }
+}
+
+/* Delete account confirmation modal */
+.delete-account-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.delete-account-modal[hidden] {
+    display: none;
+}
+
+.delete-account-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.72);
+}
+
+.delete-account-modal-panel {
+    position: relative;
+    z-index: 1;
+    width: min(100%, 520px);
+    background: #fff;
+    border: 2px solid #fecaca;
+    border-radius: 16px;
+    padding: 28px 28px 24px;
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.28);
+    text-align: center;
+}
+
+.delete-account-modal-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: #fef2f2;
+    color: #dc2626;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.delete-account-modal-title {
+    margin: 0 0 12px;
+    font-size: 22px;
+    line-height: 1.35;
+    color: #991b1b;
+}
+
+.delete-account-modal-description {
+    margin: 0 0 24px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: #475569;
+}
+
+.delete-account-modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.delete-account-modal-actions .btn {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.delete-account-modal-actions .btn.danger.filled {
+    background: #dc2626;
+    border: 1px solid #dc2626;
+    color: #fff;
+}
+
+.delete-account-modal-actions .btn.danger.filled:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+.delete-account-modal-actions .btn.outline.neutral {
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+}
+
+.delete-account-modal-actions .btn.outline.neutral:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+}
+
+body.delete-account-modal-open {
+    overflow: hidden;
+}

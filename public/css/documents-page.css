@@ -1,0 +1,133 @@
+/* Documents page — right sidebar layout */
+.page-documents .documents-page-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 24px;
+    align-items: start;
+}
+
+.page-documents .documents-main {
+    min-width: 0;
+}
+
+.page-documents .documents-sidebar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 24px;
+    width: 100%;
+    min-width: 0;
+    align-self: start;
+}
+
+.page-documents .documents-sidebar-card,
+.page-documents .sidebar-page-card {
+    width: 100%;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.page-documents .documents-sidebar-card .card-header,
+.page-documents .sidebar-page-card .card-header {
+    margin: 0 0 16px;
+    padding: 0;
+}
+
+.page-documents .sidebar-help-text {
+    margin: 0 0 18px;
+    padding: 0;
+    font-size: 13px;
+    color: #64748b;
+    line-height: 1.6;
+}
+
+.page-documents .sidebar-help-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 600;
+    width: 100%;
+    margin: 0;
+}
+
+.page-documents .sidebar-help-btn-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1.5px solid #2563eb;
+    color: #2563eb;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.page-documents .upload-card form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 0;
+}
+
+.page-documents .upload-card .form-select {
+    width: 100%;
+    margin: 0;
+}
+
+.page-documents .upload-zone {
+    margin-bottom: 0;
+}
+
+.page-documents .guidelines-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 13px;
+}
+
+.page-documents .guidelines-list li {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.page-documents .guidelines-list li:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.page-documents .guidelines-list .check {
+    color: #2fa76a;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.page-documents .sidebar-widgets {
+    gap: 16px;
+}
+
+.page-documents .documents-overview-sidebar-card,
+.page-documents .current-semester-card {
+    width: 100%;
+    margin: 0;
+}
+
+@media (max-width: 900px) {
+    .page-documents .documents-page-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-documents .documents-sidebar {
+        gap: 24px;
+    }
+}

@@ -1,0 +1,223 @@
+/* Service Hours page — right sidebar layout */
+.page-service-hours .inner {
+    max-width: 1280px;
+}
+
+.service-hours-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 20px;
+    align-items: start;
+}
+
+.service-main {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+}
+
+.service-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    position: sticky;
+    top: 24px;
+    align-self: start;
+}
+
+.service-sidebar .card {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.sh-summary-legend-label .dot.remaining {
+    background: #d1d5db;
+}
+
+/* Service Hours Per Semester chart */
+.sh-chart-legend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 14px;
+}
+
+.sh-chart-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    line-height: 1;
+}
+
+.sh-bar-chart-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sh-bar-chart-frame {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 8px;
+}
+
+.sh-bar-y-gutter {
+    padding-top: 22px;
+    padding-bottom: 34px;
+}
+
+.sh-bar-y-axis {
+    height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #94a3b8;
+    text-align: right;
+    line-height: 1;
+}
+
+.sh-bar-chart-content {
+    position: relative;
+    min-width: 0;
+}
+
+.sh-bar-threshold {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 22px;
+    height: 120px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.sh-bar-threshold::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: var(--required-pct);
+    border-top: 2px dashed #2563eb;
+}
+
+.sh-bar-semesters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 10px;
+    position: relative;
+    z-index: 2;
+}
+
+.sh-bar-semester {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.sh-bar-semester-value {
+    height: 16px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #0f1721;
+    line-height: 16px;
+    text-align: center;
+}
+
+.sh-bar-semester-plot {
+    position: relative;
+    width: 100%;
+    height: 120px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+}
+
+.sh-bar-track {
+    width: 52px;
+    height: 120px;
+    background: #eef3f6;
+    border-radius: 8px;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+}
+
+.sh-bar-fill {
+    width: 100%;
+    background: #2fa76a;
+    border-radius: 8px 8px 0 0;
+    min-height: 0;
+}
+
+.sh-bar-required-tag {
+    position: absolute;
+    left: 50%;
+    bottom: var(--required-pct);
+    transform: translate(-50%, 50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.sh-bar-required-tag span {
+    font-size: 10px;
+    font-weight: 700;
+    color: #2563eb;
+    line-height: 1;
+}
+
+.sh-bar-required-tag i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #2563eb;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #2563eb;
+    display: block;
+}
+
+.sh-bar-semester-name {
+    min-height: 28px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-align: center;
+    line-height: 1.35;
+    padding: 0 2px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+.sh-bar-hours-title {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    line-height: 1;
+    padding-left: 34px;
+}
+
+@media (max-width: 900px) {
+    .service-hours-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .service-sidebar {
+        position: static;
+    }
+}
