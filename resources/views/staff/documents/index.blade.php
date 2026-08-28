@@ -20,7 +20,8 @@
 
 @if($types->isEmpty())
     <div class="staff-card">
-        <p class="staff-muted" style="margin:0">No required documents yet. <a href="{{ route('staff.documents.create') }}">Post the first document type</a> scholars must submit.</p>
+        <p class="staff-muted" style="margin:0 0 12px">No required documents posted yet. Only Scholar Staff can add the documents scholars must submit.</p>
+        <a href="{{ route('staff.documents.create') }}" class="staff-btn staff-btn-primary">+ Add Required Document</a>
     </div>
 @else
     <div class="staff-doc-type-grid">

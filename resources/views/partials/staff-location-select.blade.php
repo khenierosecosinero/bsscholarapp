@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!requireCity && province.id) {
                 var allOption = document.createElement('option');
                 allOption.value = String(province.id);
-                allOption.textContent = 'Entire province — ' + province.name;
+                allOption.textContent = province.name + ' — Province Scholar Program';
                 if (selectedCityId && String(selectedCityId) === String(province.id)) {
                     allOption.selected = true;
                 }
@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function () {
             (province.cities || []).forEach(function (city) {
                 var option = document.createElement('option');
                 option.value = String(city.id);
-                option.textContent = city.name;
+                option.textContent = city.name + ' — City Scholar Program';
                 if (selectedCityId && String(selectedCityId) === String(city.id)) {
                     option.selected = true;
                 }

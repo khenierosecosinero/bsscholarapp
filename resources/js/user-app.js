@@ -76,6 +76,11 @@ function initFileUpload() {
 
     input.addEventListener('change', () => {
         if (label) label.textContent = input.files[0]?.name ?? '';
+        const form = document.getElementById('upload-form');
+        const typeSelect = document.getElementById('doc-type-select');
+        if (form && typeSelect?.value && input.files.length) {
+            form.submit();
+        }
     });
 
     if (zone) {

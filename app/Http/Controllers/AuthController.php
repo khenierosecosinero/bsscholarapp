@@ -59,6 +59,10 @@ class AuthController extends Controller
         $user->markLogin();
         $request->session()->regenerate();
 
+        if ($user->isAdmin()) {
+            return redirect()->intended(route('admin.dashboard'));
+        }
+
         if ($user->isScholarStaff()) {
             return redirect()->intended(route('staff.dashboard'));
         }
@@ -73,16 +77,14 @@ class AuthController extends Controller
     public function showRegister()
     {
         return view('auth.register', [
-            'locationTree' => ScholarshipProgram::locationTree(),
-            'requireCity' => true,
+            'programGroups' => ScholarshipProgram::groupedActiveForPicker(citiesOnly: true),
         ]);
     }
 
     public function showStaffRegister()
     {
         return view('auth.staff-register', [
-            'locationTree' => ScholarshipProgram::locationTree(),
-            'requireCity' => false,
+            'programGroups' => ScholarshipProgram::groupedActiveForPicker(citiesOnly: false),
         ]);
     }
 
@@ -106,8 +108,8 @@ class AuthController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'confirmed', PasswordRule::min(8)],
         ], [
-            'scholarship_program_id.required' => 'Please select your municipality or city.',
-            'scholarship_program_id.exists' => 'Please select a valid municipality or city.',
+            'scholarship_program_id.required' => 'Please select your city scholar program.',
+            'scholarship_program_id.exists' => 'Please select a valid city scholar program.',
         ]);
 
         DB::transaction(function () use ($data) {
@@ -147,8 +149,8 @@ class AuthController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'confirmed', PasswordRule::min(8)],
         ], [
-            'scholarship_program_id.required' => 'Please select the province or municipality/city you will manage.',
-            'scholarship_program_id.exists' => 'Please select a valid province or municipality/city.',
+            'scholarship_program_id.required' => 'Please select the city or province scholar program you will manage.',
+            'scholarship_program_id.exists' => 'Please select a valid city or province scholar program.',
         ]);
 
         DB::transaction(function () use ($data) {

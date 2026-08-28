@@ -16,10 +16,10 @@
     </div>
     @if(($locationFilters ?? collect())->count() > 1)
         <select name="location" class="staff-select">
-            <option value="">All municipalities / cities</option>
+            <option value="">All scholar programs</option>
             @foreach($locationFilters as $location)
                 <option value="{{ $location->id }}" {{ (int) $locationId === (int) $location->id ? 'selected' : '' }}>
-                    {{ $location->dropdownLabel() }}
+                    {{ $location->programLabel() }}
                 </option>
             @endforeach
         </select>

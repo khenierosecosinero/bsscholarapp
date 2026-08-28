@@ -107,6 +107,7 @@
                 <li><span class="staff-dot" style="background:#1890ff"></span> Approved: {{ $attendanceBreakdown['approved'] }}</li>
                 <li><span class="staff-dot" style="background:#f59e0b"></span> Pending: {{ $attendanceBreakdown['pending'] }}</li>
                 <li><span class="staff-dot" style="background:#ef4444"></span> Rejected: {{ $attendanceBreakdown['rejected'] }}</li>
+                <li><span class="staff-dot" style="background:#991b1b"></span> Failed to Check In: {{ $attendanceBreakdown['failedCheckIn'] ?? 0 }}</li>
             </ul>
         </div>
     </div>
@@ -117,7 +118,12 @@
         <div class="staff-card-header">
             <h2>Service Hours Overview</h2>
         </div>
-        <div class="staff-chart-placeholder">Service hours chart for {{ $program->location_name ?? 'program' }}</div>
+        <div class="staff-chart-placeholder" style="height:auto;padding:20px;display:block">
+            <div class="staff-list-item"><div><strong>{{ number_format($hoursOverview['approved_hours'], 2) }} hrs</strong><div class="staff-muted">Approved and credited</div></div></div>
+            <div class="staff-list-item"><div><strong>{{ number_format($hoursOverview['pending_hours'], 2) }} hrs</strong><div class="staff-muted">Pending Scholar Staff verification</div></div></div>
+            <div class="staff-list-item"><div><strong>{{ $hoursOverview['failed_count'] }} records</strong><div class="staff-muted">Failed to check in · 0 hours</div></div></div>
+            <a href="{{ route('staff.reports.service-hours') }}" class="staff-card-link">Open service hours report</a>
+        </div>
     </div>
 
     <div class="staff-card">

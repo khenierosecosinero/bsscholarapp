@@ -19,6 +19,8 @@ class User extends Authenticatable
 
     public const ROLE_SCHOLAR_STAFF = 'scholar_staff';
 
+    public const ROLE_ADMIN = 'admin';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_APPROVED = 'approved';
@@ -70,7 +72,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return (bool) $this->is_admin;
+        return (bool) $this->is_admin || $this->role === self::ROLE_ADMIN;
     }
 
     public function isScholar(): bool
@@ -100,6 +102,10 @@ class User extends Authenticatable
 
     public function canLogin(): bool
     {
+        if ($this->isAdmin()) {
+            return true;
+        }
+
         if ($this->isScholarStaff()) {
             return true;
         }
@@ -145,6 +151,10 @@ class User extends Authenticatable
 
     public function locationLabel(): string
     {
+        if ($this->scholarshipProgram) {
+            return $this->scholarshipProgram->programLabel();
+        }
+
         $municipality = $this->municipalityName();
         $province = $this->provinceName();
 
@@ -156,8 +166,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Scholarship program IDs this staff member may manage.
-     * City staff see only their city; province staff see every city in that province.
+     * Scholarship program IDs this staff member may manage (their assigned program only).
      */
     public function managedLocationIds(): array
     {
@@ -168,6 +177,9 @@ class User extends Authenticatable
         return $this->scholarshipProgram->coveredLocationIds();
     }
 
+    /**
+     * Scholarship program IDs this user may view content for (their assigned program only).
+     */
     public function visibleLocationIds(): array
     {
         if (! $this->scholarshipProgram) {

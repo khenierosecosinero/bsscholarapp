@@ -21,9 +21,13 @@ class EventActionController extends Controller
     {
         $user = Auth::user();
 
+        if ($event->hasEnded()) {
+            return back()->with('error', 'This event has already ended.');
+        }
+
         EventRegistration::updateOrCreate(
             ['user_id' => $user->id, 'event_id' => $event->id],
-            ['status' => 'confirmed']
+            ['status' => EventRegistration::STATUS_CONFIRMED]
         );
 
         $this->scholar->logActivity($user, 'event', "You confirmed participation to {$event->title}");
@@ -42,20 +46,24 @@ class EventActionController extends Controller
 
         $registration = EventRegistration::where('user_id', $user->id)
             ->where('event_id', $event->id)
-            ->where('status', 'confirmed')
+            ->where('status', EventRegistration::STATUS_CONFIRMED)
             ->first();
 
         if (!$registration) {
             return back()->with('error', 'You must register for this event before checking in.');
         }
 
-        $period = $this->academic->current();
+        $period = $this->academic->forUser($user);
         $stamp = $this->academic->attendanceStamp($period);
 
         $attendance = Attendance::firstOrCreate(
             ['user_id' => $user->id, 'event_id' => $event->id],
-            array_merge(['status' => 'pending'], $stamp)
+            array_merge(['status' => Attendance::STATUS_PENDING], $stamp)
         );
+
+        if ($attendance && $attendance->status === Attendance::STATUS_FAILED_CHECK_IN) {
+            return back()->with('error', 'You failed to check in for this event. No service hours can be credited.');
+        }
 
         if ($attendance->check_in) {
             return back()->with('error', 'You have already checked in.');
@@ -65,7 +73,7 @@ class EventActionController extends Controller
         $this->scholar->logActivity($user, 'attendance', "Checked in for {$event->title}");
         $this->scholar->notify($user, 'Checked In', "You checked in for {$event->title}.", 'attendance');
 
-        return back()->with('success', 'Check-in recorded successfully.');
+        return back()->with('success', 'Check-in recorded. Attach a photo of your participation so Scholar Staff can verify your attendance.');
     }
 
     public function checkOut(Request $request, Event $event)
@@ -84,22 +92,64 @@ class EventActionController extends Controller
         }
 
         $checkOut = now();
-        $hours = round($attendance->check_in->diffInMinutes($checkOut) / 60, 2);
-        $hours = min($hours, (float) $event->service_hours);
+        $hours = $this->scholar->eventHourValue($event);
 
-        $period = $this->academic->current();
+        $period = $this->academic->forUser($user);
         $stamp = $this->academic->attendanceStamp($period);
 
         $attendance->update(array_merge([
             'check_out' => $checkOut,
             'hours_earned' => $hours,
-            'status' => 'pending',
+            'status' => Attendance::STATUS_PENDING,
         ], $stamp));
 
-        $this->scholar->logActivity($user, 'attendance', "Checked out from {$event->title} ({$hours} hrs)");
-        $this->scholar->notify($user, 'Attendance Submitted', "Your attendance for {$event->title} is pending verification.", 'attendance');
+        $this->scholar->logActivity($user, 'attendance', "Checked out from {$event->title} ({$hours} hrs pending verification)");
 
-        return back()->with('success', 'Check-out recorded. Hours pending verification.');
+        if (! $attendance->hasPhoto()) {
+            $this->scholar->notify($user, 'Photo Required', "Check-out for {$event->title} was recorded. Attach a photo of your participation so Scholar Staff can verify your attendance.", 'attendance');
+
+            return back()->with('success', 'Check-out recorded. Attach a photo of your participation to complete your attendance.');
+        }
+
+        $this->scholar->notify($user, 'Attendance Submitted', "Your attendance for {$event->title} is pending Scholar Staff verification. {$hours} service hours will be credited after approval.", 'attendance');
+
+        return back()->with('success', "Check-out recorded. {$hours} service hours are pending Scholar Staff verification.");
+    }
+
+    public function attachPhoto(Request $request, Event $event)
+    {
+        $request->validate([
+            'photo' => 'required|image|mimes:jpg,jpeg,png|max:5120',
+        ], [
+            'photo.required' => 'Please choose a photo of your participation.',
+            'photo.image' => 'The attachment must be a photo (JPG or PNG).',
+            'photo.mimes' => 'The photo must be a JPG or PNG file.',
+            'photo.max' => 'The photo must not be larger than 5MB.',
+        ]);
+
+        $user = Auth::user();
+        $attendance = Attendance::where('user_id', $user->id)
+            ->where('event_id', $event->id)
+            ->first();
+
+        if (! $attendance || ! $attendance->hasCheckedIn()) {
+            return back()->with('error', 'Check in first, then attach a photo of your participation.');
+        }
+
+        try {
+            $this->scholar->storeAttendancePhoto($attendance, $request->file('photo'));
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Participation photo uploaded. Scholar Staff will use it to verify your attendance.');
+    }
+
+    public function viewPhoto(Attendance $attendance)
+    {
+        abort_unless($attendance->user_id === Auth::id(), 403);
+
+        return $attendance->photoResponse();
     }
 
     public function approveAttendance(Request $request, Attendance $attendance)
@@ -110,7 +160,7 @@ class EventActionController extends Controller
             abort(403);
         }
 
-        if ($attendance->status === 'approved') {
+        if ($attendance->status === Attendance::STATUS_APPROVED) {
             return back()->with('info', 'Participation is already confirmed for this event.');
         }
 

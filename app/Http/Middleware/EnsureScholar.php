@@ -13,6 +13,10 @@ class EnsureScholar
     {
         $user = $request->user();
 
+        if ($user && $user->isAdmin()) {
+            return redirect()->route('admin.dashboard');
+        }
+
         if ($user && $user->isScholarStaff()) {
             return redirect()->route('staff.dashboard');
         }

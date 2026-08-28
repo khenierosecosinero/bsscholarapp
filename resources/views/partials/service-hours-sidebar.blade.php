@@ -90,7 +90,8 @@
         <div class="card-header">NOTES</div>
         <ul>
             <li>You are required to complete {{ $hourStats['required'] }} service hours per semester.</li>
-            <li>Service hours are credited only after admin approval.</li>
+            <li>Service hours are credited only after Scholar Staff verifies your attendance and participation photo.</li>
+            <li>Scholars who fail to check in receive 0 service hours for that event.</li>
         </ul>
     </div>
 </aside>

@@ -6,6 +6,7 @@ use App\Models\Document;
 use App\Models\Event;
 use App\Models\UserActivity;
 use App\Models\Announcement;
+use App\Models\DocumentType;
 use App\Services\AcademicSettingsService;
 use App\Services\AnnouncementService;
 use App\Services\ScholarService;
@@ -25,6 +26,8 @@ class UserController extends Controller
     {
         $user = Auth::user()->load('scholarshipProgram');
         $this->scholar->ensureUserDocuments($user);
+        $this->scholar->syncMissedCheckInsForUser($user);
+        $this->scholar->syncCompletedEventHoursForUser($user);
 
         $year = (int) request()->get('year', now()->year);
         $month = (int) request()->get('month', now()->month);
@@ -34,6 +37,16 @@ class UserController extends Controller
         $resolvedSubtitle = $subtitle !== ''
             ? $subtitle
             : ($program?->name ?? 'Scholar Dashboard');
+
+        $documentOverview = null;
+        $documents = collect();
+        $documentTypes = collect();
+
+        if ($user->hasScholarPortalAccess()) {
+            $documents = $this->scholar->documentsForUser($user);
+            $documentOverview = $this->scholar->documentOverviewStats($user);
+            $documentTypes = DocumentType::query()->orderBy('name')->get();
+        }
 
         return [
             'user' => $user,
@@ -50,6 +63,9 @@ class UserController extends Controller
             'sidebarMonthDate' => $sidebarMonthDate,
             'sidebarPrevMonth' => $sidebarMonthDate->copy()->subMonth(),
             'sidebarNextMonth' => $sidebarMonthDate->copy()->addMonth(),
+            'documents' => $documents,
+            'documentTypes' => $documentTypes,
+            'documentOverview' => $documentOverview,
         ];
     }
 
@@ -68,7 +84,7 @@ class UserController extends Controller
             'announcements' => $this->announcements->forUser($user, 5),
             'announcementStats' => $this->announcements->statsForUser($user),
             'pendingAttendances' => $this->academic->scopeAttendancesForPeriod(
-                $user->attendances()->with('event')->where('status', 'pending'),
+                $user->attendances()->with('event')->where('status', 'pending')->whereNotNull('check_in'),
                 $this->academic->forUser($user)
             )->get(),
             'dashboardDocuments' => $this->dashboardDocuments($user),
@@ -165,15 +181,14 @@ class UserController extends Controller
     {
         $user = Auth::user();
 
-        return view('user.documents', array_merge($this->layoutData(
-            'documents',
-            'Documents',
-            'Upload and manage your required documents.'
-        ), [
-            'documents' => Document::with('documentType')->where('user_id', $user->id)->get(),
-            'documentTypes' => \App\Models\DocumentType::orderBy('name')->get(),
-            'activeTab' => $request->get('tab', 'all'),
-        ]));
+        return view('user.documents', array_merge(
+            $this->layoutData(
+                'documents',
+                'Documents',
+                'Upload and manage your required documents.'
+            ),
+            ['activeTab' => $request->get('tab', 'all')]
+        ));
     }
 
     public function notifications(Request $request)
@@ -234,12 +249,7 @@ class UserController extends Controller
 
     private function dashboardDocuments($user)
     {
-        return Document::with('documentType')
-            ->where('user_id', $user->id)
-            ->whereHas('documentType', fn ($q) => $q->where('required', true))
-            ->get()
-            ->sortBy(fn ($doc) => $doc->documentType?->name)
-            ->values();
+        return $this->scholar->documentsForUser($user);
     }
 
     public function announcementShow(Request $request, Announcement $announcement)

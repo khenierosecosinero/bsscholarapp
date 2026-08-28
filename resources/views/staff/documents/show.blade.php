@@ -95,7 +95,7 @@
                                     @endif
 
                                     @if($document->reviewStatus() !== 'rejected')
-                                        <form method="POST" action="{{ route('staff.documents.status', $document) }}" class="staff-reject-form" onsubmit="return confirm('Reject this {{ addslashes($documentType->name) }}?')">
+                                        <form method="POST" action="{{ route('staff.documents.status', $document) }}" class="staff-reject-form" data-confirm="Reject this {{ $documentType->name }}?">
                                             @csrf
                                             @method('PATCH')
                                             <input type="hidden" name="status" value="rejected">

@@ -42,9 +42,73 @@
             <div class="value">{{ $event->registrations_count ?? 0 }}</div>
             <div class="sub">Registered scholars</div>
         </div>
-        <p class="staff-muted" style="margin-top:16px">Scholars can view and register for this event from their Events page once it is published with a confirmed or upcoming status.</p>
+        <p class="staff-muted" style="margin-top:16px">Scholars who clicked Attend but did not check in after the event ends are marked Failed to Check In and receive 0 service hours.</p>
     </div>
 </div>
+
+@if(isset($participants))
+<div class="staff-card" style="margin-top:20px">
+    <div class="staff-card-header"><h2>Registered Scholars</h2></div>
+    <div class="staff-table-wrap">
+        <table class="staff-table">
+            <thead>
+                <tr>
+                    <th>Scholar</th>
+                    <th>Check In</th>
+                    <th>Check Out</th>
+                    <th>Hours</th>
+                    <th>Photo</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($participants as $participant)
+                    <tr>
+                        <td>
+                            <div class="staff-scholar-cell">
+                                <div class="staff-scholar-avatar">{{ strtoupper(substr($participant['user']?->full_name ?? 'S', 0, 1)) }}</div>
+                                <div class="staff-scholar-meta">
+                                    <strong>{{ $participant['user']?->full_name ?? '—' }}</strong>
+                                    <small>{{ $participant['user']?->scholar_id }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>{{ $participant['attendance']?->check_in?->format('g:i A') ?? '—' }}</td>
+                        <td>{{ $participant['attendance']?->check_out?->format('g:i A') ?? '—' }}</td>
+                        <td>{{ $participant['attendance']?->hoursLabel() ?? '0.00 hrs' }}</td>
+                        <td>
+                            @include('partials.staff-attendance-photo', [
+                                'attendance' => $participant['attendance'],
+                                'photoUrl' => $participant['attendance']?->hasPhoto() ? route('staff.attendances.photo', $participant['attendance']) : null,
+                            ])
+                        </td>
+                        <td>
+                            @php
+                                $statusClass = match($participant['status']) {
+                                    'approved', 'confirmed' => 'green',
+                                    'rejected', 'failed_to_check_in' => 'red',
+                                    default => 'orange',
+                                };
+                            @endphp
+                            <span class="staff-badge {{ $statusClass }}">{{ $participant['status_label'] }}</span>
+                        </td>
+                        <td>
+                            @if($participant['attendance'] && $participant['status'] !== 'failed_to_check_in')
+                                @include('partials.staff-attendance-actions', ['attendance' => $participant['attendance']])
+                            @else
+                                <span class="staff-muted">—</span>
+                            @endif
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="7">No scholars have registered for this event yet.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
+@endif
 
 @endsection
 

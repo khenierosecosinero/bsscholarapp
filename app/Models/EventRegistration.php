@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EventRegistration extends Model
 {
+    public const STATUS_CONFIRMED = 'confirmed';
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_FAILED_CHECK_IN = 'failed_to_check_in';
+
     protected $fillable = ['user_id', 'event_id', 'status'];
 
     public function user(): BelongsTo

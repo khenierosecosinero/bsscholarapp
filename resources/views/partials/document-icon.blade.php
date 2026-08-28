@@ -28,6 +28,11 @@
             'label' => 'Good Moral Certificate',
             'svg' => '<path d="M12 3l2.2 4.5 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 8.2l5-.7L12 3z"/><path d="M8 19h8"/><path d="M10 21h4"/>',
         ],
+        'event' => [
+            'color' => 'blue',
+            'label' => 'Events',
+            'svg' => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>',
+        ],
         'default' => [
             'color' => 'blue',
             'label' => 'Document',

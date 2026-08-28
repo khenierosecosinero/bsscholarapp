@@ -12,6 +12,10 @@ class EnsureScholarStaff
     {
         $user = $request->user();
 
+        if ($user && $user->isAdmin()) {
+            return redirect()->route('admin.dashboard');
+        }
+
         if (! $user || ! $user->isScholarStaff()) {
             abort(403, 'This section is only available to scholar staff accounts.');
         }

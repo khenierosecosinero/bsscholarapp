@@ -1,5 +1,9 @@
 @extends('layouts.user')
 
+@push('styles')
+    <link rel="stylesheet" href="{{ asset('css/attendance-photo.css') }}">
+@endpush
+
 @section('page-content')
 
 <div class="calendar-toolbar">
@@ -29,7 +33,7 @@
                                 $eventsByDay->put($dayKey, $bucket->push($ev));
                             }
                         }
-                        $colorMap = ['participated' => 'blue', 'confirmed' => 'green', 'pending' => 'orange', 'not_joined' => 'purple'];
+                        $colorMap = ['participated' => 'blue', 'confirmed' => 'green', 'pending' => 'orange', 'not_joined' => 'purple', 'failed_to_check_in' => 'red'];
                     @endphp
                     @while($start->lte($end))
                         <div class="fc-row">
@@ -41,7 +45,7 @@
                                 <div class="fc-cell {{ !$inMonth ? 'other-month' : '' }} {{ $start->isToday() ? 'today' : '' }}">
                                     <span class="fc-day-num">{{ $start->day }}</span>
                     @foreach($dayEvents as $ev)
-                                        <a href="{{ route('user.calendar', ['year' => $monthDate->year, 'month' => $monthDate->month, 'event' => $ev['id']]) }}" class="fc-event {{ $colorMap[$ev['calendar_status']] ?? 'blue' }}" title="{{ $ev['title'] }} — {{ ucfirst(str_replace('_', ' ', $ev['calendar_status'])) }}">{{ $ev['title'] }} | {{ $ev['starts_at']->format('g:i A') }} | {{ $ev['hours'] }} hrs</a>
+                                        <a href="{{ route('user.calendar', ['year' => $monthDate->year, 'month' => $monthDate->month, 'event' => $ev['id']]) }}" class="fc-event {{ $colorMap[$ev['calendar_status']] ?? 'blue' }}" title="{{ $ev['title'] }} — {{ $ev['status_label'] }}">{{ $ev['title'] }} | {{ $ev['starts_at']->format('g:i A') }} | {{ $ev['hours'] }} hrs</a>
                                     @endforeach
                                 </div>
                                 @php $start->addDay(); @endphp
@@ -55,6 +59,7 @@
                     <span><span class="legend-dot green"></span> Confirmed</span>
                     <span><span class="legend-dot blue"></span> Participated</span>
                     <span><span class="legend-dot orange"></span> Pending</span>
+                    <span><span class="legend-dot red"></span> Failed to Check In</span>
                     <span><span class="legend-dot purple"></span> Not Joined</span>
                 </div>
             </div>
@@ -66,23 +71,9 @@
     <aside class="calendar-sidebar">
         <div class="calendar-sidebar-content">
             @if($selected)
-                @php
-                    $statusClass = match ($selected['calendar_status']) {
-                        'participated' => 'participated',
-                        'confirmed' => 'confirmed',
-                        'pending' => 'pending',
-                        default => 'not-joined',
-                    };
-                    $statusLabel = match ($selected['calendar_status']) {
-                        'participated' => 'Participated',
-                        'confirmed' => 'Confirmed',
-                        'pending' => 'Pending',
-                        default => 'Not Joined',
-                    };
-                @endphp
                 <div class="card event-detail-card">
                     @if($selected['image_url'])<img src="{{ $selected['image_url'] }}" alt="">@endif
-                    @include('partials.event-status-badge', compact('statusClass', 'statusLabel'))
+                    @include('partials.event-status-badge', ['statusClass' => $selected['status_class'], 'statusLabel' => $selected['status_label']])
                     <h3>{{ $selected['title'] }}</h3>
                     <div class="info-row"><span class="info-icon">&#128197;</span> {{ $selected['starts_at']->format('M d, Y') }}</div>
                     <div class="info-row"><span class="info-icon">&#128336;</span> {{ $selected['time'] }}</div>
@@ -94,30 +85,43 @@
                             <strong>Participation Confirmed</strong>
                             <p>Your attendance for this event has been officially verified.</p>
                             @if($selected['attendance']?->hours_earned)
-                                <p class="participation-hours">{{ $selected['attendance']->hours_earned }} service hours credited.</p>
+                                <p class="participation-hours">{{ $selected['attendance']->hoursLabel() }} credited.</p>
                             @endif
+                        </div>
+                    @elseif($selected['failed_to_check_in'])
+                        <div class="participation-record-box failed">
+                            <strong>Failed to Check In</strong>
+                            <p>You registered for this event but did not check in. No service hours were credited.</p>
                         </div>
                     @elseif($selected['attendance']?->status === 'pending' && $selected['attendance']->check_out)
                         <div class="participation-record-box pending">
-                            <strong>Pending Verification</strong>
-                            <p>Your attendance has been submitted and is awaiting official confirmation.</p>
+                            <strong>{{ $selected['attendance']->hasPhoto() ? 'Pending Verification' : 'Photo Required' }}</strong>
+                            <p>{{ $selected['attendance']->hasPhoto()
+                                ? 'Your attendance has been submitted and is awaiting official confirmation.'
+                                : 'Attach a participation photo on the event page so Scholar Staff can verify your attendance.' }}</p>
                         </div>
                     @endif
 
-                    @if($selected['attendance'] && ($selected['has_participated'] || $selected['attendance']->check_out))
+                    @if($selected['failed_to_check_in'] || ($selected['attendance'] && ($selected['has_participated'] || $selected['attendance']->check_out)))
                         @php $att = $selected['attendance']; @endphp
                         <div class="card inner-card calendar-attendance-card">
                             <div class="card-header">Your Participation Record</div>
                             <table class="table compact">
                                 <thead><tr><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th></tr></thead>
                                 <tbody><tr>
-                                    <td>{{ $att->check_in?->format('g:i A') ?? '—' }}</td>
-                                    <td>{{ $att->check_out?->format('g:i A') ?? '—' }}</td>
-                                    <td>{{ $att->hours_earned ? $att->hours_earned . ' hrs' : '—' }}</td>
-                                    <td>{{ $selected['has_participated'] ? 'Participated' : 'Pending' }}</td>
+                                    <td>{{ $att?->check_in?->format('g:i A') ?? '—' }}</td>
+                                    <td>{{ $att?->check_out?->format('g:i A') ?? '—' }}</td>
+                                    <td>{{ $att?->hoursLabel() ?? '0.00 hrs' }}</td>
+                                    <td>{{ $selected['status_label'] }}</td>
                                 </tr></tbody>
                             </table>
-                            @if($att->status === 'pending' && auth()->user()->isAdmin())
+                            @if($att?->hasPhoto())
+                                <div class="attendance-record-photo">
+                                    <span>Participation photo</span>
+                                    <a href="{{ route('user.attendances.photo', $att) }}" target="_blank" rel="noopener">View photo</a>
+                                </div>
+                            @endif
+                            @if($att?->status === 'pending' && $att?->isReadyForVerification() && auth()->user()->isAdmin())
                                 <form method="POST" action="{{ route('user.attendances.approve', $att->id) }}" class="attendance-approve-form">
                                     @csrf
                                     <button type="submit" class="btn full">Confirm Participation</button>

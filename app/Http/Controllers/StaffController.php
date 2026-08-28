@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendance;
 use App\Models\Event;
+use App\Models\EventRegistration;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
 use App\Services\AccountService;
@@ -43,6 +44,8 @@ class StaffController extends Controller
     {
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
+        $this->scholar->syncMissedCheckInsForPrograms($programIds);
+        $this->scholar->syncCompletedEventHoursForPrograms($programIds);
 
         return view('staff.dashboard', array_merge(
             $this->layoutData('dashboard', 'Dashboard', "Welcome back, {$staff->full_name}! Here's what's happening in {$staff->locationLabel()}."),
@@ -52,6 +55,7 @@ class StaffController extends Controller
                 'upcomingEvents' => $this->staffData->upcomingEvents($programIds),
                 'recentActivities' => $this->staffData->recentActivities($programIds),
                 'attendanceBreakdown' => $this->staffData->attendanceBreakdown($programIds),
+                'hoursOverview' => $this->staffData->hoursOverview($programIds),
             ]
         ));
     }
@@ -78,11 +82,11 @@ class StaffController extends Controller
             ->withQueryString();
 
         $stats = $this->staffData->dashboardStats($programIds);
-        $locationFilters = ScholarshipProgram::query()
-            ->whereIn('id', $programIds ?: [0])
-            ->orderBy('province_name')
-            ->orderBy('location_name')
-            ->get(['id', 'location_name', 'province_name', 'location_type', 'display_name']);
+        $locationFilters = ScholarshipProgram::sortAlphabetically(
+            ScholarshipProgram::query()
+                ->whereIn('id', $programIds ?: [0])
+                ->get(['id', 'location_name', 'province_name', 'location_type', 'display_name'])
+        );
 
         return view('staff.scholars', array_merge(
             $this->layoutData('scholars', 'Scholars', 'Scholars registered in '.$staff->locationLabel().'.'),
@@ -103,6 +107,8 @@ class StaffController extends Controller
 
         $scholar->load('scholarshipProgram');
         $this->scholar->ensureUserDocuments($scholar);
+        $this->scholar->syncMissedCheckInsForUser($scholar);
+        $this->scholar->syncCompletedEventHoursForUser($scholar);
 
         return view('staff.scholar-show', array_merge(
             $this->layoutData('scholars', $scholar->full_name, 'Scholar account overview'),
@@ -111,6 +117,7 @@ class StaffController extends Controller
                 'hourStats' => $this->scholar->serviceHourStats($scholar),
                 'documents' => $scholar->documents()->with('documentType')->get(),
                 'recentActivities' => $scholar->activities()->latest()->limit(10)->get(),
+                'attendances' => $scholar->attendances()->with('event')->latest()->get(),
             ]
         ));
     }
@@ -123,12 +130,7 @@ class StaffController extends Controller
         $statusFilter = $request->get('status', 'all');
 
         $baseQuery = Event::query()
-            ->where(function ($q) use ($programIds) {
-                $q->whereNull('scholarship_program_id');
-                if ($programIds) {
-                    $q->orWhereIn('scholarship_program_id', $programIds);
-                }
-            });
+            ->whereIn('scholarship_program_id', $programIds ?: [0]);
 
         $events = (clone $baseQuery)
             ->when($search !== '', fn ($q) => $q->where(function ($scoped) use ($search) {
@@ -228,10 +230,41 @@ class StaffController extends Controller
         );
 
         $event->loadCount('registrations');
+        $event->load(['registrations.user', 'attendances']);
+
+        foreach ($event->registrations as $registration) {
+            if ($registration->user) {
+                $this->scholar->applyMissedCheckIn(
+                    $event,
+                    $registration->user,
+                    $registration,
+                    $event->attendances->firstWhere('user_id', $registration->user_id)
+                );
+            }
+        }
+
+        $event->load(['registrations.user', 'attendances']);
+
+        $participants = $event->registrations->map(function ($registration) use ($event) {
+            $attendance = $event->attendances->firstWhere('user_id', $registration->user_id);
+            $failed = $event->hasEnded() && ! $attendance?->check_in;
+            $status = $failed
+                ? Attendance::STATUS_FAILED_CHECK_IN
+                : ($attendance?->status ?? $registration->status);
+
+            return [
+                'user' => $registration->user,
+                'attendance' => $attendance,
+                'status' => $status,
+                'status_label' => $failed
+                    ? Attendance::labelFor(Attendance::STATUS_FAILED_CHECK_IN)
+                    : ($attendance ? $attendance->statusLabel() : ucfirst(str_replace('_', ' ', $registration->status))),
+            ];
+        });
 
         return view('staff.events.show', array_merge(
             $this->layoutData('events', $event->title, 'Event details and participation overview.'),
-            compact('event')
+            compact('event', 'participants')
         ));
     }
 
@@ -241,23 +274,14 @@ class StaffController extends Controller
         $programIds = $this->staffData->programIds($staff);
         $search = trim((string) $request->get('search', ''));
 
-        $attendances = Attendance::query()
-            ->with(['user.scholarshipProgram', 'event'])
-            ->whereHas('user', fn ($q) => $q->where('role', User::ROLE_SCHOLAR)
-                ->whereIn('scholarship_program_id', $programIds ?: [0]))
-            ->when($search !== '', function ($q) use ($search) {
-                $q->where(function ($scoped) use ($search) {
-                    $scoped->whereHas('user', fn ($u) => $u->where('full_name', 'like', "%{$search}%"))
-                        ->orWhereHas('event', fn ($e) => $e->where('title', 'like', "%{$search}%"));
-                });
-            })
-            ->latest()
-            ->paginate(10)
-            ->withQueryString();
+        $this->scholar->syncMissedCheckInsForPrograms($programIds);
+        $this->scholar->syncCompletedEventHoursForPrograms($programIds);
+
+        $panel = $this->attendanceEventPanel($programIds, (int) $request->get('event', 0), $search);
 
         return view('staff.attendance', array_merge(
-            $this->layoutData('attendance', 'Attendance', 'Monitor, review, and manage scholar attendance and service hours.'),
-            compact('attendances', 'search')
+            $this->layoutData('attendance', 'Attendance', 'Select an event to review check-ins, photos, and service hours.'),
+            compact('search', 'panel')
         ));
     }
 
@@ -333,22 +357,48 @@ class StaffController extends Controller
 
     public function serviceHoursReports()
     {
-        return view('staff.reports.service-hours', $this->layoutData('service-hours-reports', 'Service Hours Reports', 'Track and analyze scholar service hours and completion status.', 'Service Hours Reports'));
+        $staff = Auth::user();
+        $programIds = $this->staffData->programIds($staff);
+        $this->scholar->syncCompletedEventHoursForPrograms($programIds);
+
+        return view('staff.reports.service-hours', array_merge(
+            $this->layoutData('service-hours-reports', 'Service Hours Reports', 'Track and analyze scholar service hours and completion status.', 'Service Hours Reports'),
+            ['report' => $this->staffData->serviceHoursReport($programIds)]
+        ));
     }
 
     public function attendanceReports()
     {
-        return view('staff.reports.attendance', $this->layoutData('attendance-reports', 'Attendance Reports', 'Track and analyze attendance records and participation status.', 'Attendance Reports'));
+        $staff = Auth::user();
+        $programIds = $this->staffData->programIds($staff);
+
+        return view('staff.reports.attendance', array_merge(
+            $this->layoutData('attendance-reports', 'Attendance Reports', 'Track and analyze attendance records and participation status.', 'Attendance Reports'),
+            ['report' => $this->staffData->attendanceReport($programIds)]
+        ));
     }
 
     public function participationReports()
     {
-        return view('staff.reports.participation', $this->layoutData('participation-reports', 'Participation Reports', 'Track and analyze scholar event participation and engagement.', 'Participation Reports'));
+        $staff = Auth::user();
+        $programIds = $this->staffData->programIds($staff);
+
+        return view('staff.reports.participation', array_merge(
+            $this->layoutData('participation-reports', 'Participation Reports', 'Track and analyze scholar event participation and engagement.', 'Participation Reports'),
+            ['report' => $this->staffData->participationReport($programIds)]
+        ));
     }
 
     public function completionReports()
     {
-        return view('staff.reports.completion', $this->layoutData('completion-reports', 'Completion Reports', 'Track and analyze scholar completion and achievement status.', 'Completion Reports'));
+        $staff = Auth::user();
+        $programIds = $this->staffData->programIds($staff);
+        $this->scholar->syncCompletedEventHoursForPrograms($programIds);
+
+        return view('staff.reports.completion', array_merge(
+            $this->layoutData('completion-reports', 'Completion Reports', 'Track and analyze scholar completion and achievement status.', 'Completion Reports'),
+            ['report' => $this->staffData->completionReport($programIds)]
+        ));
     }
 
     public function approveScholar(User $scholar)
@@ -385,5 +435,134 @@ class StaffController extends Controller
         $this->accounts->permanentlyDelete($scholar);
 
         return back()->with('success', "{$scholarName}'s account has been rejected and permanently removed from the system.");
+    }
+
+    public function viewAttendancePhoto(Attendance $attendance)
+    {
+        $this->assertManagesAttendance($attendance);
+
+        return $attendance->photoResponse();
+    }
+
+    public function approveAttendance(Attendance $attendance)
+    {
+        $this->assertManagesAttendance($attendance);
+
+        try {
+            $this->scholar->confirmParticipation($attendance);
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', "Attendance for {$attendance->user?->full_name} was verified and service hours were approved.");
+    }
+
+    public function rejectAttendance(Request $request, Attendance $attendance)
+    {
+        $this->assertManagesAttendance($attendance);
+
+        $data = $request->validate([
+            'remarks' => 'nullable|string|max:500',
+        ]);
+
+        try {
+            $this->scholar->rejectParticipation(
+                $attendance,
+                filled($data['remarks'] ?? null) ? trim($data['remarks']) : null
+            );
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', "Attendance for {$attendance->user?->full_name} was not approved.");
+    }
+
+    private function assertManagesAttendance(Attendance $attendance): void
+    {
+        $attendance->loadMissing('user');
+
+        abort_unless(
+            $attendance->user && Auth::user()->canManageScholar($attendance->user),
+            403
+        );
+    }
+
+    private function attendanceEventPanel(array $programIds, int $selectedEventId, string $search = ''): array
+    {
+        $events = Event::query()
+            ->with(['registrations.user', 'attendances.user'])
+            ->where(function ($q) use ($programIds) {
+                $q->whereNull('scholarship_program_id');
+                if ($programIds) {
+                    $q->orWhereIn('scholarship_program_id', $programIds);
+                }
+            })
+            ->when($search !== '' && $selectedEventId <= 0, function ($q) use ($search) {
+                $q->where(function ($inner) use ($search) {
+                    $inner->where('title', 'like', "%{$search}%")
+                        ->orWhere('location', 'like', "%{$search}%")
+                        ->orWhereHas('registrations.user', function ($user) use ($search) {
+                            $user->where('full_name', 'like', "%{$search}%")
+                                ->orWhere('scholar_id', 'like', "%{$search}%");
+                        });
+                });
+            })
+            ->orderByDesc('starts_at')
+            ->get()
+            ->each(function (Event $event) {
+                $event->setAttribute('checked_in_count', $event->attendances->filter(fn ($attendance) => $attendance->hasCheckedIn())->count());
+                $event->setAttribute('failed_count', $event->registrations->filter(function ($registration) use ($event) {
+                    $attendance = $event->attendances->firstWhere('user_id', $registration->user_id);
+
+                    return $event->hasEnded() && ! $attendance?->hasCheckedIn();
+                })->count());
+            });
+
+        $selected = $selectedEventId > 0
+            ? $events->firstWhere('id', $selectedEventId)
+            : null;
+
+        $checkedIn = collect();
+        $failed = collect();
+
+        if ($selected) {
+            foreach ($selected->registrations as $registration) {
+                if ($registration->user) {
+                    $this->scholar->applyMissedCheckIn(
+                        $selected,
+                        $registration->user,
+                        $registration,
+                        $selected->attendances->firstWhere('user_id', $registration->user_id)
+                    );
+                }
+            }
+
+            $selected->load(['registrations.user', 'attendances.user']);
+
+            foreach ($selected->registrations as $registration) {
+                $attendance = $selected->attendances->firstWhere('user_id', $registration->user_id);
+                $row = [
+                    'user' => $registration->user,
+                    'attendance' => $attendance,
+                ];
+
+                if ($attendance?->hasCheckedIn()) {
+                    $checkedIn->push($row);
+                } elseif (
+                    $selected->hasEnded()
+                    || $attendance?->status === Attendance::STATUS_FAILED_CHECK_IN
+                    || $registration->status === EventRegistration::STATUS_FAILED_CHECK_IN
+                ) {
+                    $failed->push($row);
+                }
+            }
+        }
+
+        return [
+            'events' => $events,
+            'selected' => $selected,
+            'checkedIn' => $checkedIn,
+            'failed' => $failed,
+        ];
     }
 }

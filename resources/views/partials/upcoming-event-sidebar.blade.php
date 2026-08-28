@@ -3,12 +3,8 @@
 
     @if($upcomingEvent)
         @php
-            $statusClass = match ($upcomingEvent['registration_status']) {
-                'confirmed' => 'confirmed',
-                'pending' => 'pending',
-                default => 'not-joined',
-            };
-            $statusLabel = ucfirst(str_replace('_', ' ', $upcomingEvent['registration_status']));
+            $statusClass = $upcomingEvent['status_class'] ?? 'not-joined';
+            $statusLabel = $upcomingEvent['status_label'] ?? 'Not Joined';
         @endphp
 
         <div class="upcoming-event-body">

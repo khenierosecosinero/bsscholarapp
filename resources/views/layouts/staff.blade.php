@@ -11,6 +11,7 @@
         @include('partials.staff-admin-topbar')
         <main class="staff-main">
             @include('partials.flash-messages')
+            @include('partials.staff-confirm-modal')
             @yield('page-content')
         </main>
     </div>

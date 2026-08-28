@@ -16,7 +16,11 @@
                 <div class="auth-form-body">
                     <input class="form-input" type="text" name="full_name" placeholder="Name of Scholar Staff" value="{{ old('full_name') }}" required autocomplete="name" />
                     <input class="form-input" type="text" name="scholar_id" placeholder="Scholar Staff Number" value="{{ old('scholar_id') }}" required />
-                    @include('partials.staff-location-select', ['fieldId' => 'scholarship_program_id', 'requireCity' => false])
+                    @include('partials.location-select', [
+                        'programGroups' => $programGroups,
+                        'placeholder' => 'Select scholar program...',
+                        'helpText' => 'City and province scholar programs are listed alphabetically in separate groups. Example: Surigao City — City Scholar Program, Surigao del Norte — Province Scholar Program.',
+                    ])
                     <input class="form-input" type="email" name="email" placeholder="Email" value="{{ old('email') }}" required autocomplete="email" />
                     <input class="form-input" type="password" name="password" placeholder="Password" required autocomplete="new-password" minlength="8" />
                     <input class="form-input" type="password" name="password_confirmation" placeholder="Confirm Password" required autocomplete="new-password" minlength="8" />

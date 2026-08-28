@@ -1,5 +1,9 @@
 @extends('layouts.user')
 
+@push('styles')
+    <link rel="stylesheet" href="{{ asset('css/dashboard-events.css') }}">
+@endpush
+
 @section('page-content')
 
 @php $accountPending = auth()->user()->isPendingApproval(); @endphp
@@ -47,22 +51,30 @@
 
 <section class="content-grid">
     <div class="left-col">
-        <div class="card events">
+        <div class="card events dashboard-upcoming-events">
             <div class="card-header">UPCOMING EVENTS @if(!$accountPending)<a class="view-all" href="{{ route('user.events') }}">View All</a>@endif</div>
             <div class="event-list">
                 @forelse($events as $ev)
                     <div class="event-item">
                         <div class="event-date"><span class="month">{{ $ev['month'] }}</span><span class="day">{{ $ev['day'] }}</span><span class="dow">{{ $ev['dow'] }}</span></div>
-                        @if($ev['image_url'])<img class="event-thumb" src="{{ $ev['image_url'] }}" alt="">@endif
+                        @if($ev['image_url'])
+                            <img class="event-thumb" src="{{ $ev['image_url'] }}" alt="">
+                        @else
+                            <span class="event-thumb event-thumb-placeholder" aria-hidden="true"></span>
+                        @endif
                         <div class="event-details">
                             <div class="event-title">{{ $ev['title'] }}</div>
                             <div class="event-meta">{{ $ev['time'] }} · {{ $ev['location'] }}</div>
                             <div class="event-footer">
-                                <span class="badge {{ $ev['registration_status'] === 'confirmed' ? 'confirmed' : ($ev['registration_status'] === 'pending' ? 'pending' : 'not-joined') }}">{{ ucfirst(str_replace('_', ' ', $ev['registration_status'])) }}</span>
+                                <span class="badge {{ $ev['status_class'] }}">{{ $ev['status_label'] }}</span>
                                 <span class="hours">Service Hours: {{ $ev['hours'] }}</span>
                             </div>
                         </div>
-                        <div class="event-action">@if(!$accountPending)<a href="{{ route('user.events', ['event' => $ev['id']]) }}" class="btn outline small">View Details</a>@endif</div>
+                        <div class="event-action">
+                            @if(!$accountPending)
+                                <a href="{{ route('user.events', ['event' => $ev['id']]) }}" class="event-view-btn">View Details</a>
+                            @endif
+                        </div>
                     </div>
                 @empty
                     <p class="muted center">No upcoming events.</p>
@@ -84,8 +96,8 @@
                                 <td>{{ $att->event?->starts_at?->format('M d, Y') }}</td>
                                 <td>{{ $att->check_in?->format('g:i A') ?? '—' }}</td>
                                 <td>{{ $att->check_out?->format('g:i A') ?? '—' }}</td>
-                                <td>{{ $att->hours_earned ? $att->hours_earned . ' hrs' : '—' }}</td>
-                                <td><span class="badge pending">Pending Verification</span></td>
+                                <td>{{ $att->hoursLabel() }}</td>
+                                <td><span class="badge pending">{{ $att->hasPhoto() && $att->check_out ? 'Pending Verification' : 'Incomplete' }}</span></td>
                                 <td>@if(!$accountPending)<a href="{{ route('user.events', ['event' => $att->event_id]) }}" class="btn outline small">View Details</a>@endif</td>
                             </tr>
                         @endforeach
@@ -126,7 +138,7 @@
                         <span class="dashboard-doc-status {{ $statusClass }}">{{ $statusLabel }}</span>
                     </div>
                 @empty
-                    <p class="muted">No documents yet.</p>
+        <p class="muted">No required documents have been posted yet.</p>
                 @endforelse
             </div>
         </div>

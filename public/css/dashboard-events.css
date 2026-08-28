@@ -1,0 +1,67 @@
+.dashboard-upcoming-events .event-item {
+    display: grid !important;
+    grid-template-columns: 56px 64px minmax(0, 1fr) 128px;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.dashboard-upcoming-events .event-date,
+.dashboard-upcoming-events .event-thumb {
+    flex: none;
+}
+
+.dashboard-upcoming-events .event-thumb-placeholder {
+    display: block;
+    background: #f1f8f4;
+}
+
+.dashboard-upcoming-events .event-details {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.dashboard-upcoming-events .event-title,
+.dashboard-upcoming-events .event-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dashboard-upcoming-events .event-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.dashboard-upcoming-events .event-action {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 128px;
+    min-width: 128px;
+    max-width: 128px;
+}
+
+.dashboard-upcoming-events .event-view-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 128px;
+    height: 36px;
+    padding: 0 12px;
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    color: #2fa76a;
+    background: #fff;
+    border: 1px solid #2fa76a;
+    border-radius: 999px;
+}

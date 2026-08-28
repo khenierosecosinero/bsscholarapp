@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 
 class ScholarshipProgram extends Model
@@ -60,7 +61,73 @@ class ScholarshipProgram extends Model
 
     public function dropdownLabel(): string
     {
-        return $this->display_name ?: $this->location_name;
+        return $this->programLabel();
+    }
+
+    public function programTypeLabel(): string
+    {
+        return match ($this->location_type) {
+            'province' => 'Province Scholar Program',
+            'city_municipality' => 'City Scholar Program',
+            default => 'Scholar Program',
+        };
+    }
+
+    public function programLabel(): string
+    {
+        $name = $this->display_name ?: $this->location_name;
+
+        return "{$name} — {$this->programTypeLabel()}";
+    }
+
+    /**
+     * Sort programs alphabetically by their full program label.
+     */
+    public static function sortAlphabetically(Collection $programs): Collection
+    {
+        return $programs
+            ->sortBy(fn (self $program) => Str::lower($program->programLabel()), SORT_NATURAL)
+            ->values();
+    }
+
+    /**
+     * Active programs for pickers, sorted alphabetically.
+     */
+    public static function activeForPicker(bool $citiesOnly = false): Collection
+    {
+        $query = static::active();
+
+        if ($citiesOnly) {
+            $query->where('location_type', 'city_municipality');
+        }
+
+        return static::sortAlphabetically($query->get());
+    }
+
+    /**
+     * Active programs grouped by program type for selection menus.
+     *
+     * @return array{cities: Collection, provinces: Collection}
+     */
+    public static function groupedActiveForPicker(bool $citiesOnly = false): array
+    {
+        $programs = static::activeForPicker($citiesOnly);
+
+        if ($citiesOnly) {
+            return [
+                'cities' => $programs,
+                'provinces' => collect(),
+            ];
+        }
+
+        return [
+            'cities' => static::sortAlphabetically(
+                $programs->where('location_type', 'city_municipality')
+            ),
+            'provinces' => static::sortAlphabetically(
+                $programs->where('location_type', 'province')
+            ),
+        ];
     }
 
     public function isProvince(): bool
@@ -74,47 +141,20 @@ class ScholarshipProgram extends Model
     }
 
     /**
-     * Location IDs covered by this program: a city is itself;
-     * a province includes itself and every municipality/city under it.
+     * Scholarship program IDs used for data scoping.
+     * Each city/municipality and province program is kept separate.
      */
     public function coveredLocationIds(): array
     {
-        if ($this->isProvince()) {
-            return static::query()
-                ->where(function (Builder $query) {
-                    $query->whereKey($this->id)
-                        ->orWhere(function (Builder $cities) {
-                            $cities->where('location_type', 'city_municipality')
-                                ->where('province_name', $this->location_name);
-                        });
-                })
-                ->pluck('id')
-                ->all();
-        }
-
         return [$this->id];
     }
 
     /**
-     * Content a scholar in this location should see: their own program,
-     * plus the parent province when they registered under a city/municipality.
+     * Content a scholar in this program should see: only their assigned program.
      */
     public function visibleLocationIds(): array
     {
-        $ids = [$this->id];
-
-        if ($this->isCityOrMunicipality() && $this->province_name) {
-            $provinceId = static::query()
-                ->where('location_type', 'province')
-                ->where('location_name', $this->province_name)
-                ->value('id');
-
-            if ($provinceId) {
-                $ids[] = (int) $provinceId;
-            }
-        }
-
-        return $ids;
+        return [$this->id];
     }
 
     /**
@@ -141,10 +181,12 @@ class ScholarshipProgram extends Model
             $tree[] = [
                 'id' => $province->id,
                 'name' => $province->location_name,
+                'label' => $province->programLabel(),
                 'region' => $province->region_name,
-                'cities' => $cities->map(fn (self $city) => [
+                'cities' => static::sortAlphabetically($cities)->map(fn (self $city) => [
                     'id' => $city->id,
                     'name' => $city->location_name,
+                    'label' => $city->programLabel(),
                 ])->values()->all(),
             ];
         }
@@ -157,10 +199,12 @@ class ScholarshipProgram extends Model
             $tree[] = [
                 'id' => null,
                 'name' => $provinceName,
+                'label' => $provinceName,
                 'region' => $cities->first()?->region_name,
-                'cities' => $cities->map(fn (self $city) => [
+                'cities' => static::sortAlphabetically($cities)->map(fn (self $city) => [
                     'id' => $city->id,
                     'name' => $city->location_name,
+                    'label' => $city->programLabel(),
                 ])->values()->all(),
             ];
         }

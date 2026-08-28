@@ -2,70 +2,160 @@
 
 @section('page-content')
 
-<form method="GET" class="staff-filter-bar">
-    <div class="staff-search">
-        <span>🔍</span>
-        <input type="search" name="search" value="{{ $search }}" placeholder="Search by scholar name, ID or event...">
-    </div>
-    <button type="submit" class="staff-btn">Search</button>
-</form>
+@if($panel['selected'])
+    @php $event = $panel['selected']; @endphp
 
-<div class="staff-card">
-    <div class="staff-table-wrap">
-        <table class="staff-table">
-            <thead>
-                <tr>
-                    <th>Scholar Information</th>
-                    <th>Event</th>
-                    <th>Date &amp; Time</th>
-                    <th>Check In / Out</th>
-                    <th>Hours</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($attendances as $attendance)
-                    <tr>
-                        <td>
-                            <div class="staff-scholar-cell">
-                                <div class="staff-scholar-avatar">{{ strtoupper(substr($attendance->user?->full_name ?? 'S', 0, 1)) }}</div>
-                                <div class="staff-scholar-meta">
-                                    <strong>{{ $attendance->user?->full_name ?? '—' }}</strong>
-                                    <small>{{ $attendance->user?->scholar_id }}</small>
-                                </div>
-                            </div>
-                        </td>
-                        <td>{{ $attendance->event?->title ?? '—' }}</td>
-                        <td>{{ $attendance->event?->starts_at?->format('M j, Y') ?? '—' }}</td>
-                        <td>
-                            {{ $attendance->check_in?->format('g:i A') ?? '—' }}
-                            <div class="staff-muted">{{ $attendance->check_out?->format('g:i A') ?? '—' }}</div>
-                        </td>
-                        <td>{{ number_format((float) ($attendance->hours_earned ?? 0), 2) }}</td>
-                        <td>
-                            @php
-                                $statusClass = match($attendance->status) {
-                                    'approved' => 'green',
-                                    'rejected' => 'red',
-                                    default => 'orange',
-                                };
-                            @endphp
-                            <span class="staff-badge {{ $statusClass }}">{{ ucfirst($attendance->status ?? 'pending') }}</span>
-                        </td>
-                        <td><span class="staff-action-btn" title="View">👁</span></td>
-                    </tr>
-                @empty
-                    <tr><td colspan="7">No attendance records found.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
+    <div class="staff-card staff-event-selector-open" style="margin-bottom:20px">
+        <div class="staff-card-header">
+            <div>
+                <h2>{{ $event->title }}</h2>
+                <p class="staff-muted" style="margin:4px 0 0">
+                    {{ $event->starts_at?->format('M j, Y') }}
+                    · {{ $event->starts_at?->format('g:i A') }}{{ $event->ends_at ? ' – '.$event->ends_at->format('g:i A') : '' }}
+                    · {{ $event->location }}
+                </p>
+            </div>
+            <a href="{{ route('staff.attendance', array_filter(['search' => $search ?: null])) }}" class="staff-card-link">&larr; Back to events</a>
+        </div>
+        <div class="staff-doc-type-counts">
+            <span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span>
+            <span>Service Hours: {{ number_format((float) $event->service_hours, 2) }}</span>
+            <span class="approved">{{ $panel['checkedIn']->count() }} checked in</span>
+            <span class="rejected">{{ $panel['failed']->count() }} failed to check in</span>
+        </div>
     </div>
-    <div class="staff-pagination">{{ $attendances->links() }}</div>
-</div>
+
+    <div class="staff-attendance-split">
+        <section class="staff-card staff-attendance-group">
+            <h4>Scholars Who Checked In <span>{{ $panel['checkedIn']->count() }}</span></h4>
+            <p class="staff-muted" style="margin:0 8px 12px">Review each scholar’s check-in time, participation photo, status, and hours before approving service hours.</p>
+            @forelse($panel['checkedIn'] as $row)
+                @php $attendance = $row['attendance']; @endphp
+                <article class="staff-attendance-record">
+                    <div class="staff-scholar-cell">
+                        <div class="staff-scholar-avatar">{{ strtoupper(substr($row['user']?->full_name ?? 'S', 0, 1)) }}</div>
+                        <div class="staff-scholar-meta">
+                            <strong>{{ $row['user']?->full_name ?? '—' }}</strong>
+                            <small>{{ $row['user']?->scholar_id }}</small>
+                        </div>
+                    </div>
+                    <dl class="staff-attendance-facts">
+                        <div>
+                            <dt>Check in</dt>
+                            <dd>{{ $attendance?->check_in?->format('g:i A') ?? '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Check out</dt>
+                            <dd>{{ $attendance?->check_out?->format('g:i A') ?? '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Hours</dt>
+                            <dd>{{ $attendance?->hoursLabel() ?? '0.00 hrs' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Status</dt>
+                            <dd>
+                                @php
+                                    $statusClass = match($attendance?->status) {
+                                        'approved' => 'green',
+                                        'rejected', 'failed_to_check_in' => 'red',
+                                        default => 'orange',
+                                    };
+                                @endphp
+                                <span class="staff-badge {{ $statusClass }}">{{ $attendance?->statusLabel() ?? 'Pending' }}</span>
+                            </dd>
+                        </div>
+                    </dl>
+                    <div class="staff-attendance-record-proof">
+                        <span class="staff-muted">Proof / photo</span>
+                        @include('partials.staff-attendance-photo', [
+                            'attendance' => $attendance,
+                            'photoUrl' => $attendance?->hasPhoto() ? route('staff.attendances.photo', $attendance) : null,
+                        ])
+                    </div>
+                    <div class="staff-attendance-record-actions">
+                        @if($attendance)
+                            @include('partials.staff-attendance-actions', ['attendance' => $attendance])
+                        @endif
+                    </div>
+                </article>
+            @empty
+                <p class="staff-muted">No scholars have checked in for this event.</p>
+            @endforelse
+        </section>
+
+        <section class="staff-card staff-attendance-group failed">
+            <h4>Scholars Who Failed to Check In <span>{{ $panel['failed']->count() }}</span></h4>
+            <p class="staff-muted" style="margin:0 8px 12px">Scholars who clicked Attend / Register but did not check in. They receive Failed to Check In status and 0 service hours.</p>
+            @forelse($panel['failed'] as $row)
+                <article class="staff-attendance-record">
+                    <div class="staff-scholar-cell">
+                        <div class="staff-scholar-avatar">{{ strtoupper(substr($row['user']?->full_name ?? 'S', 0, 1)) }}</div>
+                        <div class="staff-scholar-meta">
+                            <strong>{{ $row['user']?->full_name ?? '—' }}</strong>
+                            <small>{{ $row['user']?->scholar_id }}</small>
+                        </div>
+                    </div>
+                    <dl class="staff-attendance-facts">
+                        <div>
+                            <dt>Check in</dt>
+                            <dd>—</dd>
+                        </div>
+                        <div>
+                            <dt>Hours</dt>
+                            <dd>0.00 hrs</dd>
+                        </div>
+                        <div>
+                            <dt>Status</dt>
+                            <dd><span class="staff-badge red">Failed to Check In</span></dd>
+                        </div>
+                    </dl>
+                </article>
+            @empty
+                <p class="staff-muted">No failed check-ins for this event.</p>
+            @endforelse
+        </section>
+    </div>
+@else
+    <form method="GET" class="staff-filter-bar">
+        <div class="staff-search">
+            <span>🔍</span>
+            <input type="search" name="search" value="{{ $search }}" placeholder="Search events by name, location, or scholar...">
+        </div>
+        <button type="submit" class="staff-btn">Search</button>
+    </form>
+
+    @if($panel['events']->isEmpty())
+        <div class="staff-card">
+            <p class="staff-muted" style="margin:0">No events found. Create an event first, then scholars can register and check in.</p>
+        </div>
+    @else
+        <div class="staff-doc-type-grid">
+            @foreach($panel['events'] as $event)
+                <article class="staff-doc-type-card">
+                    <a href="{{ route('staff.attendance', array_filter(['event' => $event->id, 'search' => $search ?: null])) }}" class="staff-doc-type-main">
+                        @include('partials.document-icon', ['slug' => 'event', 'size' => 'lg'])
+                        <div class="staff-doc-type-body">
+                            <div class="staff-doc-type-title-row">
+                                <h3>{{ $event->title }}</h3>
+                                <span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span>
+                            </div>
+                            <p>
+                                {{ $event->starts_at?->format('M j, Y') }}
+                                · {{ $event->starts_at?->format('g:i A') }}{{ $event->ends_at ? ' – '.$event->ends_at->format('g:i A') : '' }}
+                            </p>
+                            <p>{{ $event->location }}</p>
+                            <div class="staff-doc-type-counts">
+                                <span>Service Hours: {{ number_format((float) $event->service_hours, 2) }}</span>
+                                <span class="approved">{{ $event->checked_in_count }} checked in</span>
+                                <span class="rejected">{{ $event->failed_count }} failed to check in</span>
+                            </div>
+                        </div>
+                    </a>
+                </article>
+            @endforeach
+        </div>
+    @endif
+@endif
 
 @endsection
-
-@push('styles')
-<style>.staff-muted{color:#6b7280;font-size:13px}</style>
-@endpush

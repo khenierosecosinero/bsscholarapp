@@ -105,9 +105,7 @@ class AnnouncementService
         User::query()
             ->where('role', User::ROLE_SCHOLAR)
             ->when($announcement->scholarship_program_id, function ($query) use ($announcement) {
-                $locationIds = $announcement->scholarshipProgram?->coveredLocationIds()
-                    ?? [$announcement->scholarship_program_id];
-                $query->whereIn('scholarship_program_id', $locationIds);
+                $query->where('scholarship_program_id', $announcement->scholarship_program_id);
             })
             ->each(function (User $user) use ($announcement) {
             $prefs = $user->notificationPreferences();

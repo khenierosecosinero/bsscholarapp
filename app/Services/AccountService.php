@@ -93,6 +93,11 @@ class AccountService
             $disk->deleteDirectory($documentDirectory);
         }
 
+        $photoDirectory = "attendance_photos/{$user->id}";
+        if ($disk->exists($photoDirectory)) {
+            $disk->deleteDirectory($photoDirectory);
+        }
+
         if ($user->avatar_path && $disk->exists($user->avatar_path)) {
             $disk->delete($user->avatar_path);
         }

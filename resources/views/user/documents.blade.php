@@ -7,14 +7,30 @@
 @section('page-content')
 <div class="page-documents">
 
+@if(!empty($documentOverview))
+    @php $o = $documentOverview; @endphp
+    <section class="documents-overview-banner card">
+        <div class="card-header">DOCUMENTS OVERVIEW</div>
+        <div class="documents-overview-stats">
+            <div class="documents-overview-stat"><span>Total Required</span><strong>{{ $o['total'] }}</strong></div>
+            <div class="documents-overview-stat approved"><span>Approved</span><strong>{{ $o['approved'] }}</strong></div>
+            <div class="documents-overview-stat pending"><span>Pending</span><strong>{{ $o['pending'] }}</strong></div>
+            <div class="documents-overview-stat rejected"><span>Rejected</span><strong>{{ $o['rejected'] }}</strong></div>
+            <div class="documents-overview-stat muted"><span>Not Submitted</span><strong>{{ $o['not_submitted'] }}</strong></div>
+        </div>
+    </section>
+@endif
+
 <section class="doc-status-grid">
-    @foreach($documents as $doc)
+    @forelse($documents as $doc)
         @php
             $badgeClass = match ($doc->status) {
-                'approved', 'submitted' => 'confirmed',
+                'approved' => 'confirmed',
+                'submitted' => 'confirmed',
                 'pending' => 'pending',
                 'rejected' => 'rejected',
-                default => 'pending',
+                'not_submitted' => 'muted',
+                default => 'muted',
             };
         @endphp
         <div class="doc-status-card {{ $doc->status }}">
@@ -33,9 +49,16 @@
                 <div class="doc-status-check orange">&#128336;</div>
             @elseif($doc->status === 'rejected')
                 <div class="doc-status-check red">✕</div>
+            @elseif($doc->status === 'not_submitted')
+                <div class="doc-status-check gray">—</div>
             @endif
         </div>
-    @endforeach
+    @empty
+        <div class="doc-empty-banner">
+            <strong>No required documents yet</strong>
+            <p class="muted">Scholar Staff has not posted any documents to submit. Check back after staff adds a requirement.</p>
+        </div>
+    @endforelse
 </section>
 
 <section class="documents-page-grid">
@@ -64,10 +87,12 @@
                     @forelse($filtered as $doc)
                         @php
                             $badgeClass = match ($doc->status) {
-                                'approved', 'submitted' => 'confirmed',
+                                'approved' => 'confirmed',
+                                'submitted' => 'confirmed',
                                 'pending' => 'pending',
                                 'rejected' => 'rejected',
-                                default => 'pending',
+                                'not_submitted' => 'muted',
+                                default => 'muted',
                             };
                         @endphp
                         <tr>
@@ -85,7 +110,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="muted center">No documents found.</td></tr>
+                        <tr><td colspan="5" class="muted center">{{ $documentTypes->isEmpty() ? 'No required documents have been posted by Scholar Staff yet.' : 'No documents found.' }}</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -101,6 +126,9 @@
     <aside class="documents-sidebar">
         <div class="card documents-sidebar-card upload-card">
             <div class="card-header">UPLOAD NEW DOCUMENT</div>
+            @if($documentTypes->isEmpty())
+                <p class="muted" style="margin:0">Uploads will be available after Scholar Staff posts a required document.</p>
+            @else
             <form method="POST" action="{{ route('user.documents.upload') }}" enctype="multipart/form-data" id="upload-form">
                 @csrf
                 <div class="upload-zone" onclick="document.getElementById('file-input').click()">
@@ -117,6 +145,7 @@
                 </select>
                 <button type="submit" class="btn blue full">Upload Document</button>
             </form>
+            @endif
         </div>
 
         <div class="card documents-sidebar-card guidelines-card">

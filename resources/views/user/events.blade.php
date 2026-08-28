@@ -1,5 +1,9 @@
 @extends('layouts.user')
 
+@push('styles')
+    <link rel="stylesheet" href="{{ asset('css/attendance-photo.css') }}">
+@endpush
+
 @section('page-content')
 
 <form method="GET" action="{{ route('user.events') }}" class="filter-bar">
@@ -12,6 +16,7 @@
         <option value="all" @selected(request('status') === 'all')>All Events</option>
         <option value="confirmed" @selected(request('status') === 'confirmed')>Confirmed</option>
         <option value="pending" @selected(request('status') === 'pending')>Pending</option>
+        <option value="failed_to_check_in" @selected(request('status') === 'failed_to_check_in')>Failed to Check In</option>
         <option value="not_joined" @selected(request('status') === 'not_joined')>Not Joined</option>
     </select>
     @if($selected)<input type="hidden" name="event" value="{{ $selected['id'] }}">@endif
@@ -32,7 +37,7 @@
                             <div class="event-footer"><span class="hours">Service Hours: {{ $ev['hours'] }}</span></div>
                         </div>
                         <div class="event-action">
-                            <span class="badge {{ $ev['registration_status'] === 'confirmed' ? 'confirmed' : ($ev['registration_status'] === 'pending' ? 'pending' : 'not-joined') }}">{{ ucfirst(str_replace('_', ' ', $ev['registration_status'])) }}</span>
+                            <span class="badge {{ $ev['status_class'] }}">{{ $ev['status_label'] }}</span>
                         </div>
                     </a>
                 @empty
@@ -46,7 +51,7 @@
         @if($selected)
             <div class="card event-detail">
                 <a href="{{ route('user.events', request()->only('search', 'status')) }}" class="back-link">&lt; Back to Events</a>
-                <span class="badge {{ $selected['has_participated'] ? 'participated' : ($selected['registration_status'] === 'confirmed' ? 'confirmed' : ($selected['registration_status'] === 'pending' ? 'pending' : 'not-joined')) }} float-right">{{ $selected['has_participated'] ? 'Participated' : ucfirst(str_replace('_', ' ', $selected['registration_status'])) }}</span>
+                <span class="badge {{ $selected['status_class'] }} float-right">{{ $selected['status_label'] }}</span>
 
                 <div class="event-hero">
                     @if($selected['image_url'])<img src="{{ $selected['image_url'] }}" alt="{{ $selected['title'] }}">@endif
@@ -68,32 +73,61 @@
                     <form method="POST" action="{{ route('user.events.register', $selected['id']) }}">@csrf<button type="submit" class="btn full">Attend / Register</button></form>
                 @endif
 
-                @if($selected['registration_status'] === 'confirmed')
-                    <div class="reminder-box"><strong>Reminder:</strong> Check in during the event to log your attendance.</div>
+                @if($selected['failed_to_check_in'])
+                    <div class="reminder-box failed">
+                        <strong>Failed to Check In:</strong> You registered for this event but did not check in through the attendance system. No service hours were credited.
+                    </div>
+                    <div class="card inner-card">
+                        <div class="card-header">Your Attendance Record <span class="badge failed-to-check-in">Failed to Check In</span></div>
+                        <table class="table compact">
+                            <thead><tr><th>Check In</th><th>Check Out</th><th>Total Hours</th><th>Status</th></tr></thead>
+                            <tbody><tr>
+                                <td>—</td>
+                                <td>—</td>
+                                <td>0 hrs</td>
+                                <td>Failed to Check In</td>
+                            </tr></tbody>
+                        </table>
+                    </div>
+                @elseif($selected['registration_status'] === 'confirmed')
+                    <div class="reminder-box"><strong>Reminder:</strong> Check in during the event, then attach a photo of your participation so Scholar Staff can verify your attendance.</div>
                     <div class="card inner-card">
                         <div class="card-header">Attendance</div>
                         @php $att = $selected['attendance']; @endphp
                         @if(!$att || !$att->check_in)
                             <form method="POST" action="{{ route('user.events.check-in', $selected['id']) }}">@csrf<button type="submit" class="btn full checkin-btn" {{ !$selected['can_check_in'] ? 'disabled' : '' }}>&#128247; Check In</button></form>
                             <p class="muted center small">You can only check in during the event.</p>
-                        @elseif(!$att->check_out)
-                            <form method="POST" action="{{ route('user.events.check-out', $selected['id']) }}">@csrf<button type="submit" class="btn full">Check Out</button></form>
                         @else
-                            <p class="muted center">Attendance submitted.</p>
+                            @if(!$att->check_out)
+                                <form method="POST" action="{{ route('user.events.check-out', $selected['id']) }}">@csrf<button type="submit" class="btn full">Check Out</button></form>
+                            @endif
+                            @include('partials.attendance-photo-upload', ['attendance' => $att, 'eventId' => $selected['id']])
                         @endif
                     </div>
                     <div class="card inner-card">
-                        <div class="card-header">Your Attendance Record @if($att && $att->status === 'pending')<span class="badge pending">Pending Verification</span>@elseif($att && $att->status === 'approved')<span class="badge participated">Participated</span>@endif</div>
+                        <div class="card-header">Your Attendance Record
+                        @if($att && $att->status === 'pending' && $att->check_in)
+                            <span class="badge pending">{{ $att->hasPhoto() && $att->check_out ? 'Pending Verification' : ($att->hasPhoto() ? 'Pending Check Out' : 'Photo Required') }}</span>
+                        @elseif($att && $att->status === 'approved')<span class="badge participated">Participated</span>
+                        @elseif($att && $att->status === 'rejected')<span class="badge rejected">Rejected</span>
+                        @endif
+                        </div>
                         <table class="table compact">
                             <thead><tr><th>Check In</th><th>Check Out</th><th>Total Hours</th><th>Status</th></tr></thead>
                             <tbody><tr>
                                 <td>{{ $att?->check_in?->format('g:i A') ?? '—' }}</td>
                                 <td>{{ $att?->check_out?->format('g:i A') ?? '—' }}</td>
-                                <td>{{ $att?->hours_earned ? $att->hours_earned . ' hrs' : '—' }}</td>
-                                <td>{{ $att ? ($att->status === 'approved' ? 'Participated' : ucfirst($att->status)) : '—' }}</td>
+                                <td>{{ $att ? $att->hoursLabel() : '—' }}</td>
+                                <td>{{ $att ? ($att->status === 'approved' ? 'Participated' : $att->statusLabel()) : '—' }}</td>
                             </tr></tbody>
                         </table>
-                        @if($att && $att->status === 'pending' && auth()->user()->isAdmin())
+                        @if($att && $att->hasPhoto())
+                            <div class="attendance-record-photo">
+                                <span>Participation photo</span>
+                                <a href="{{ route('user.attendances.photo', $att) }}" target="_blank" rel="noopener">View photo</a>
+                            </div>
+                        @endif
+                        @if($att && $att->status === 'pending' && $att->isReadyForVerification() && auth()->user()->isAdmin())
                             <form method="POST" action="{{ route('user.attendances.approve', $att->id) }}" class="attendance-approve-form">
                                 @csrf
                                 <button type="submit" class="btn full">Confirm Participation</button>

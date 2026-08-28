@@ -1,0 +1,42 @@
+.attendance-photo-form{margin-top:14px}
+.attendance-photo-drop{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
+    border:2px dashed #d1d5db;
+    border-radius:12px;
+    padding:18px 16px;
+    text-align:center;
+    cursor:pointer;
+    background:#fff;
+    margin-bottom:10px;
+    font-size:14px;
+    font-weight:600;
+    color:#0f1721;
+}
+.attendance-photo-drop small{font-weight:400;color:#6b7280;font-size:12px}
+.attendance-photo-drop input[type="file"]{margin-top:8px;font-size:13px;font-weight:400}
+.attendance-photo-drop-icon{font-size:22px;line-height:1}
+.attendance-photo-preview{
+    width:100%;
+    max-height:220px;
+    object-fit:cover;
+    border-radius:10px;
+    display:block;
+    margin:12px 0 8px;
+}
+.attendance-photo-link{display:block}
+.attendance-photo-note{font-size:13px;color:#6b7280;text-align:center;margin:8px 0 0;line-height:1.45}
+.attendance-photo-rejected{color:#b91c1c;font-weight:600}
+.attendance-record-photo{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px solid #eef3f6;
+    font-size:13px;
+}
+.attendance-record-photo a{color:#18794e;font-weight:600;text-decoration:none}

@@ -36,15 +36,61 @@
     <div class="staff-card">
         <div class="staff-card-header"><h2>Service Hours</h2></div>
         <div class="staff-stat-body">
-            <div class="value">{{ $hourStats['approved'] }}</div>
-            <div class="sub">Approved of {{ $hourStats['required'] }} required hours</div>
+            <div class="value">{{ number_format($hourStats['approved'], 2) }}</div>
+            <div class="sub">Approved of {{ number_format($hourStats['required'], 2) }} required hours</div>
         </div>
         <div style="margin-top:16px">
-            <p class="staff-muted">Pending: <strong>{{ $hourStats['pending'] }}</strong></p>
-            <p class="staff-muted">Remaining: <strong>{{ $hourStats['remaining'] }}</strong></p>
+            <p class="staff-muted">Pending: <strong>{{ number_format($hourStats['pending'], 2) }}</strong></p>
+            <p class="staff-muted">Remaining: <strong>{{ number_format($hourStats['remaining'], 2) }}</strong></p>
         </div>
     </div>
 </section>
+
+<div class="staff-card" style="margin-top:20px">
+    <div class="staff-card-header"><h2>Service Hour Records</h2></div>
+    @if($attendances->isEmpty())
+        <p class="staff-muted">No attendance records yet.</p>
+    @else
+        <div class="staff-table-wrap">
+            <table class="staff-table">
+                <thead>
+                    <tr>
+                        <th>Event</th>
+                        <th>Check In / Out</th>
+                        <th>Hours</th>
+                        <th>Status</th>
+                        <th>Notes</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($attendances as $attendance)
+                        <tr>
+                            <td>{{ $attendance->event?->title ?? '—' }}</td>
+                            <td>
+                                {{ $attendance->check_in?->format('M j, g:i A') ?? '—' }}
+                                <div class="staff-muted">{{ $attendance->check_out?->format('g:i A') ?? '—' }}</div>
+                            </td>
+                            <td>{{ $attendance->hoursLabel() }}</td>
+                            <td>
+                                @php
+                                    $statusClass = match($attendance->status) {
+                                        'approved' => 'green',
+                                        'rejected', 'failed_to_check_in' => 'red',
+                                        default => 'orange',
+                                    };
+                                @endphp
+                                <span class="staff-badge {{ $statusClass }}">{{ $attendance->statusLabel() }}</span>
+                            </td>
+                            <td class="staff-muted">{{ $attendance->reviewNote() }}</td>
+                            <td>@include('partials.staff-attendance-actions', ['attendance' => $attendance])</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+</div>
 
 <div class="staff-card" style="margin-top:20px">
     <div class="staff-card-header"><h2>Documents</h2></div>

@@ -1,21 +1,24 @@
 @php
     $fieldId = $fieldId ?? 'scholarship_program_id';
     $selectedId = old('scholarship_program_id', $selectedId ?? '');
-    $programs = $scholarshipPrograms ?? collect();
+    $groups = $programGroups ?? ['cities' => collect(), 'provinces' => collect()];
+    $programs = ($groups['cities'] ?? collect())->merge($groups['provinces'] ?? collect());
     $selectedProgram = $programs->firstWhere('id', (int) $selectedId);
+    $placeholder = $placeholder ?? 'Select scholar program...';
+    $helpText = $helpText ?? 'Choose the city or province scholar program you belong to.';
 @endphp
 
 <div class="location-select-field" data-location-select>
-    <label class="sr-only" for="{{ $fieldId }}">Municipality/City/Province</label>
+    <label class="sr-only" for="{{ $fieldId }}">Scholar Program</label>
     <input
         type="search"
         id="{{ $fieldId }}_search"
         class="form-input location-search-input"
-        placeholder="Search municipality, city, or province..."
+        placeholder="Search scholar program..."
         autocomplete="off"
         aria-controls="{{ $fieldId }}_listbox"
         aria-autocomplete="list"
-        value="{{ $selectedProgram?->dropdownLabel() }}"
+        value="{{ $selectedProgram?->programLabel() }}"
     >
     <select
         id="{{ $fieldId }}"
@@ -24,19 +27,10 @@
         required
         size="8"
     >
-        <option value="" disabled {{ $selectedId ? '' : 'selected' }}>Select Municipality/City/Province</option>
-        @foreach($programs as $program)
-            <option
-                value="{{ $program->id }}"
-                data-label="{{ $program->dropdownLabel() }}"
-                data-region="{{ $program->region_name }}"
-                {{ (string) $selectedId === (string) $program->id ? 'selected' : '' }}
-            >
-                {{ $program->dropdownLabel() }}
-            </option>
-        @endforeach
+        <option value="" disabled {{ $selectedId ? '' : 'selected' }}>{{ $placeholder }}</option>
+        @include('partials.program-select-options', ['programGroups' => $groups, 'selectedId' => $selectedId])
     </select>
-    <p class="muted small location-select-help">Search and select your official Philippine municipality, city, or province.</p>
+    <p class="muted small location-select-help">{{ $helpText }}</p>
 </div>
 
 <script>

@@ -316,6 +316,8 @@ body:has(.staff-shell) {
 .staff-stat-icon.orange { background: #ffedd5; }
 .staff-stat-icon.purple { background: #ede9fe; }
 .staff-stat-icon.teal { background: #ccfbf1; }
+.staff-stat-icon.red { background: #fee2e2; }
+.staff-stat-icon.gray { background: #f3f4f6; }
 
 .staff-stat-body h3 {
     margin: 0;
@@ -872,4 +874,237 @@ body:has(.staff-shell) {
 .staff-muted {
     color: #6b7280;
     font-size: 13px;
+}
+
+.staff-event-selector-wrap {
+    margin-bottom: 20px;
+}
+
+.staff-event-selector-open .staff-card-header {
+    align-items: flex-start;
+}
+
+.staff-event-selector-open .staff-doc-type-card {
+    box-shadow: none;
+}
+
+.staff-attendance-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.staff-attendance-record {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 12px;
+    margin: 0 0 10px;
+    display: grid;
+    gap: 10px;
+}
+
+.staff-attendance-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 8px;
+    margin: 0;
+}
+
+.staff-attendance-facts dt {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--staff-muted);
+}
+
+.staff-attendance-facts dd {
+    margin: 2px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.staff-attendance-record-proof {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.staff-attendance-record-actions {
+    border-top: 1px solid #f1f5f9;
+    padding-top: 10px;
+}
+
+.staff-attendance-person {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 10px;
+    color: inherit;
+}
+
+.staff-attendance-person-meta {
+    flex: 1;
+    min-width: 0;
+}
+
+.staff-attendance-photo-link {
+    flex-shrink: 0;
+}
+
+.staff-attendance-photo {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--staff-border);
+    display: block;
+    background: #f8fafc;
+}
+
+.staff-attendance-person:hover {
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.staff-attendance-person strong {
+    display: block;
+    font-size: 13px;
+}
+
+.staff-attendance-person small {
+    display: block;
+    color: var(--staff-muted);
+    font-size: 12px;
+}
+
+.staff-card.staff-attendance-group {
+    margin: 0;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+}
+
+.staff-attendance-group.failed {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.staff-attendance-group h4 {
+    margin: 0 8px 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #15803d;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.staff-attendance-group.failed h4 {
+    color: #b91c1c;
+}
+
+.staff-attendance-group .staff-muted {
+    margin: 0 8px;
+}
+
+@media (max-width: 800px) {
+    .staff-attendance-split {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Staff confirm modal */
+.staff-confirm-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.staff-confirm-modal.is-open {
+    display: flex;
+}
+
+.staff-confirm-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 39, 68, 0.45);
+    backdrop-filter: blur(2px);
+}
+
+.staff-confirm-dialog {
+    position: relative;
+    width: min(100%, 420px);
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid var(--staff-border);
+    box-shadow: 0 20px 50px rgba(15, 39, 68, 0.18);
+    padding: 28px 24px 22px;
+    text-align: center;
+    animation: staffConfirmIn 0.2s ease;
+}
+
+@keyframes staffConfirmIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.staff-confirm-icon {
+    width: 52px;
+    height: 52px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    background: #fee2e2;
+    color: #b91c1c;
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 52px;
+}
+
+.staff-confirm-title {
+    margin: 0 0 10px;
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f2744;
+}
+
+.staff-confirm-message {
+    margin: 0 0 22px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #4b5563;
+}
+
+.staff-confirm-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+.staff-confirm-no {
+    min-width: 96px;
+    background: #fff;
+    border-color: #d1d5db;
+    color: #374151;
+    font-weight: 700;
+}
+
+.staff-confirm-no:hover {
+    background: #f9fafb;
+}
+
+.staff-confirm-yes {
+    min-width: 96px;
+    font-weight: 700;
 }

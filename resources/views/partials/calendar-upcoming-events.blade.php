@@ -12,21 +12,7 @@
                 <div class="upcoming-item-body">
                     <strong>{{ $ev['title'] }}</strong>
                     <span class="muted">{{ $ev['starts_at']->format('g:i A') }} &middot; {{ $ev['location'] }}</span>
-                    @php
-                        $statusClass = match ($ev['calendar_status']) {
-                            'participated' => 'participated',
-                            'confirmed' => 'confirmed',
-                            'pending' => 'pending',
-                            default => 'not-joined',
-                        };
-                        $statusLabel = match ($ev['calendar_status']) {
-                            'participated' => 'Participated',
-                            'confirmed' => 'Confirmed',
-                            'pending' => 'Pending',
-                            default => 'Not Joined',
-                        };
-                    @endphp
-                    @include('partials.event-status-badge', ['statusClass' => $statusClass, 'statusLabel' => $statusLabel, 'small' => true])
+                    @include('partials.event-status-badge', ['statusClass' => $ev['status_class'], 'statusLabel' => $ev['status_label'], 'small' => true])
                 </div>
             </a>
         @empty

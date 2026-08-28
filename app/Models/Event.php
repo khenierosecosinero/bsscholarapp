@@ -46,6 +46,52 @@ class Event extends Model
         return $now->between($this->starts_at, $this->ends_at);
     }
 
+    public function hasEnded(): bool
+    {
+        return $this->ends_at && $this->ends_at->isPast();
+    }
+
+    public function scheduleLabel(): string
+    {
+        if ($this->isHappeningNow()) {
+            return 'Ongoing';
+        }
+
+        if ($this->hasEnded()) {
+            return 'Completed';
+        }
+
+        return match ($this->status) {
+            'pending' => 'Pending',
+            'completed' => 'Completed',
+            'ongoing' => 'Ongoing',
+            'confirmed' => 'Confirmed',
+            default => 'Upcoming',
+        };
+    }
+
+    public function scheduleBadgeClass(): string
+    {
+        return match ($this->scheduleLabel()) {
+            'Ongoing' => 'blue',
+            'Completed' => 'gray',
+            'Pending' => 'orange',
+            'Confirmed' => 'blue',
+            default => 'green',
+        };
+    }
+
+    public function syncStatusFromSchedule(): self
+    {
+        if ($this->hasEnded() && $this->status !== 'completed') {
+            $this->updateQuietly(['status' => 'completed']);
+        } elseif ($this->isHappeningNow() && $this->status !== 'ongoing') {
+            $this->updateQuietly(['status' => 'ongoing']);
+        }
+
+        return $this;
+    }
+
     /**
      * Events whose schedule overlaps the given window, so staff-set dates
      * appear on every calendar day they occupy.
