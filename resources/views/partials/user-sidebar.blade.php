@@ -38,12 +38,6 @@
 
     <div class="brand">
 
-        <div class="logo">
-
-            <img src="https://ui-avatars.com/api/?name=BS&background=2fa76a&color=fff&size=56" alt="Batang Surigaonon logo">
-
-        </div>
-
         <div class="title">Batang Surigaonon<br>Scholar's App</div>
 
         @if(!empty($scholarshipProgram))

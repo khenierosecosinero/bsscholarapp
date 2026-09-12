@@ -29,10 +29,10 @@
 
 <aside class="staff-sidebar" id="sidebar">
     <div class="staff-brand">
-        <div class="staff-brand-logo">
-            <img src="https://ui-avatars.com/api/?name=BS&background=2563eb&color=fff&size=56" alt="BSSA logo">
-        </div>
         <div class="staff-brand-text">Batang Surigaonon<br>Scholar's App</div>
+        @if(!empty($programName))
+            <div class="staff-brand-program">{{ $programName }}</div>
+        @endif
     </div>
 
     <nav class="staff-nav" aria-label="Staff navigation">
