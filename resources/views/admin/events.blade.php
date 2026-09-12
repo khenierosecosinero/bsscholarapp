@@ -3,9 +3,10 @@
 @section('page-content')
 
 @include('partials.admin-location-filter')
+@include('partials.admin-scope-banner')
 
 <form method="GET" class="staff-filter-bar">
-    <input type="hidden" name="location" value="{{ $locationKey }}">
+    @include('partials.admin-scope-fields')
     <div class="staff-search">
         <span>🔍</span>
         <input type="search" name="search" value="{{ $search }}" placeholder="Search events...">
@@ -20,6 +21,7 @@
                 <tr>
                     <th>Event</th>
                     <th>Scholar Program</th>
+                    <th>Program Type</th>
                     <th>Schedule</th>
                     <th>Status</th>
                     <th>Service Hours</th>
@@ -30,12 +32,13 @@
                     <tr>
                         <td><strong>{{ $event->title }}</strong></td>
                         <td>{{ $event->scholarshipProgram?->programLabel() ?? '—' }}</td>
+                        <td>{{ $event->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>
                         <td>{{ $event->starts_at?->format('M j, Y g:i A') ?? '—' }}</td>
                         <td><span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span></td>
                         <td>{{ $event->service_hours ?? 0 }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="5">No events found for this scope.</td></tr>
+                    <tr><td colspan="6">No events found for this scope.</td></tr>
                 @endforelse
             </tbody>
         </table>

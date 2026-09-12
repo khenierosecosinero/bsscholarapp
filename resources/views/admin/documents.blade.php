@@ -3,6 +3,7 @@
 @section('page-content')
 
 @include('partials.admin-location-filter')
+@include('partials.admin-scope-banner')
 
 <section class="staff-stat-grid">
     <div class="staff-stat-card"><div class="staff-stat-icon green">✓</div><div class="staff-stat-body"><h3>Approved</h3><div class="value">{{ $documentOverview['approved'] ?? 0 }}</div></div></div>
@@ -20,7 +21,8 @@
                 <tr>
                     <th>Scholar</th>
                     <th>Document Type</th>
-                        <th>Scholar Program</th>
+                    <th>Scholar Program</th>
+                    <th>Program Type</th>
                     <th>Submitted</th>
                     <th>Status</th>
                 </tr>
@@ -31,11 +33,12 @@
                         <td>{{ $document->user?->full_name ?? '—' }}</td>
                         <td>{{ $document->documentType?->name ?? 'Document' }}</td>
                         <td>{{ $document->user?->scholarshipProgram?->programLabel() ?? '—' }}</td>
+                        <td>{{ $document->user?->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>
                         <td>{{ $document->created_at?->format('M j, Y') ?? '—' }}</td>
                         <td><span class="staff-badge {{ $document->reviewBadgeClass() }}">{{ ucfirst(str_replace('_', ' ', $document->reviewStatus())) }}</span></td>
                     </tr>
                 @empty
-                    <tr><td colspan="5">No documents found for this scope.</td></tr>
+                    <tr><td colspan="6">No documents found for this scope.</td></tr>
                 @endforelse
             </tbody>
         </table>

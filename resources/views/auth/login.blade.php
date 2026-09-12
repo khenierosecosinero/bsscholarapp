@@ -15,6 +15,10 @@
                 <div class="errors">{{ session('error') }}</div>
             @endif
 
+            @if(session('warning'))
+                <div class="errors" style="background:#fff7ed;border-color:#fed7aa;color:#9a3412">{{ session('warning') }}</div>
+            @endif
+
             @if($errors->any())
                 <div class="errors">{{ $errors->first() }}</div>
             @endif

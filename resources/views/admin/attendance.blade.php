@@ -3,6 +3,7 @@
 @section('page-content')
 
 @include('partials.admin-location-filter')
+@include('partials.admin-scope-banner')
 
 @php $b = $report['breakdown']; @endphp
 
@@ -21,6 +22,8 @@
                 <tr>
                     <th>Scholar</th>
                     <th>Event</th>
+                    <th>Scholar Program</th>
+                    <th>Program Type</th>
                     <th>Check In</th>
                     <th>Hours</th>
                     <th>Status</th>
@@ -31,12 +34,14 @@
                     <tr>
                         <td>{{ $attendance->user?->full_name ?? '—' }}</td>
                         <td>{{ $attendance->event?->title ?? '—' }}</td>
+                        <td>{{ $attendance->user?->scholarshipProgram?->programLabel() ?? '—' }}</td>
+                        <td>{{ $attendance->user?->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>
                         <td>{{ $attendance->check_in?->format('M j, Y g:i A') ?? '—' }}</td>
                         <td>{{ $attendance->hours_earned ?? 0 }}</td>
                         <td><span class="staff-badge {{ $attendance->status === 'approved' ? 'green' : ($attendance->status === 'pending' ? 'orange' : 'red') }}">{{ ucfirst(str_replace('_', ' ', $attendance->status)) }}</span></td>
                     </tr>
                 @empty
-                    <tr><td colspan="5">No attendance records found.</td></tr>
+                    <tr><td colspan="7">No attendance records found.</td></tr>
                 @endforelse
             </tbody>
         </table>

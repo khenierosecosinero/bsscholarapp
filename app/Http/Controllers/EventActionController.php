@@ -20,8 +20,9 @@ class EventActionController extends Controller
     public function register(Request $request, Event $event)
     {
         $user = Auth::user();
+        $this->scholar->assertEventVisibleToUser($event, $user);
 
-        if ($event->hasEnded()) {
+        if ($event->hasEnded() && ! $event->isAttendanceOpen()) {
             return back()->with('error', 'This event has already ended.');
         }
 
@@ -39,14 +40,15 @@ class EventActionController extends Controller
     public function checkIn(Request $request, Event $event)
     {
         $user = Auth::user();
+        $this->scholar->assertEventVisibleToUser($event, $user);
 
-        if (!$event->isHappeningNow()) {
-            return back()->with('error', 'Check-in is only available during the event time.');
+        if (! $event->isAttendanceOpen()) {
+            return back()->with('error', 'Attendance is currently CLOSED. You can no longer submit or modify your attendance until Scholar Staff opens it.');
         }
 
         $registration = EventRegistration::where('user_id', $user->id)
             ->where('event_id', $event->id)
-            ->where('status', EventRegistration::STATUS_CONFIRMED)
+            ->whereIn('status', [EventRegistration::STATUS_CONFIRMED, EventRegistration::STATUS_FAILED_CHECK_IN])
             ->first();
 
         if (!$registration) {
@@ -61,8 +63,16 @@ class EventActionController extends Controller
             array_merge(['status' => Attendance::STATUS_PENDING], $stamp)
         );
 
-        if ($attendance && $attendance->status === Attendance::STATUS_FAILED_CHECK_IN) {
+        if ($attendance && $attendance->status === Attendance::STATUS_FAILED_CHECK_IN && $attendance->hasCheckedIn()) {
             return back()->with('error', 'You failed to check in for this event. No service hours can be credited.');
+        }
+
+        if ($attendance && $attendance->status === Attendance::STATUS_FAILED_CHECK_IN && ! $attendance->hasCheckedIn()) {
+            $attendance->update(array_merge([
+                'status' => Attendance::STATUS_PENDING,
+                'remarks' => null,
+            ], $stamp));
+            $registration->update(['status' => EventRegistration::STATUS_CONFIRMED]);
         }
 
         if ($attendance->check_in) {
@@ -71,7 +81,7 @@ class EventActionController extends Controller
 
         $attendance->update(array_merge(['check_in' => now()], $stamp));
         $this->scholar->logActivity($user, 'attendance', "Checked in for {$event->title}");
-        $this->scholar->notify($user, 'Checked In', "You checked in for {$event->title}.", 'attendance');
+        $this->scholar->notify($user, 'Checked In', "You checked in for {$event->title}.", 'attendance', false, $event->id);
 
         return back()->with('success', 'Check-in recorded. Attach a photo of your participation so Scholar Staff can verify your attendance.');
     }
@@ -79,6 +89,12 @@ class EventActionController extends Controller
     public function checkOut(Request $request, Event $event)
     {
         $user = Auth::user();
+        $this->scholar->assertEventVisibleToUser($event, $user);
+
+        if (! $event->isAttendanceOpen()) {
+            return back()->with('error', 'Attendance is currently CLOSED. You can no longer submit or modify your attendance.');
+        }
+
         $attendance = Attendance::where('user_id', $user->id)
             ->where('event_id', $event->id)
             ->first();
@@ -106,12 +122,12 @@ class EventActionController extends Controller
         $this->scholar->logActivity($user, 'attendance', "Checked out from {$event->title} ({$hours} hrs pending verification)");
 
         if (! $attendance->hasPhoto()) {
-            $this->scholar->notify($user, 'Photo Required', "Check-out for {$event->title} was recorded. Attach a photo of your participation so Scholar Staff can verify your attendance.", 'attendance');
+            $this->scholar->notify($user, 'Photo Required', "Check-out for {$event->title} was recorded. Attach a photo of your participation so Scholar Staff can verify your attendance.", 'attendance', false, $event->id);
 
             return back()->with('success', 'Check-out recorded. Attach a photo of your participation to complete your attendance.');
         }
 
-        $this->scholar->notify($user, 'Attendance Submitted', "Your attendance for {$event->title} is pending Scholar Staff verification. {$hours} service hours will be credited after approval.", 'attendance');
+        $this->scholar->notify($user, 'Attendance Submitted', "Your attendance for {$event->title} is pending Scholar Staff verification. {$hours} service hours will be credited after approval.", 'attendance', false, $event->id);
 
         return back()->with('success', "Check-out recorded. {$hours} service hours are pending Scholar Staff verification.");
     }
@@ -128,6 +144,12 @@ class EventActionController extends Controller
         ]);
 
         $user = Auth::user();
+        $this->scholar->assertEventVisibleToUser($event, $user);
+
+        if (! $event->isAttendanceOpen()) {
+            return back()->with('error', 'Attendance is currently CLOSED. You can no longer submit or modify your attendance.');
+        }
+
         $attendance = Attendance::where('user_id', $user->id)
             ->where('event_id', $event->id)
             ->first();
@@ -143,6 +165,29 @@ class EventActionController extends Controller
         }
 
         return back()->with('success', 'Participation photo uploaded. Scholar Staff will use it to verify your attendance.');
+    }
+
+    public function viewEventImage(Event $event)
+    {
+        $user = Auth::user();
+
+        if ($user->isAdmin()) {
+            return $event->imageResponse();
+        }
+
+        if ($user->isScholarStaff()) {
+            abort_unless(
+                $event->scholarship_program_id
+                    && in_array((int) $event->scholarship_program_id, array_map('intval', $user->managedLocationIds()), true),
+                403
+            );
+
+            return $event->imageResponse();
+        }
+
+        $this->scholar->assertEventVisibleToUser($event, $user);
+
+        return $event->imageResponse();
     }
 
     public function viewPhoto(Attendance $attendance)

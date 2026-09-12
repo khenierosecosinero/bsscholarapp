@@ -25,6 +25,8 @@ Route::get('/register/staff', [AuthController::class, 'showStaffRegister'])->nam
 Route::post('/register/staff', [AuthController::class, 'registerStaff'])->name('register.staff.post');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+Route::middleware('auth')->get('/events/{event}/image', [EventActionController::class, 'viewEventImage'])->name('events.image');
+
 Route::get('/dashboard', function () {
     $user = auth()->user();
 
@@ -43,14 +45,31 @@ Route::get('/dashboard', function () {
         }
 
         if ($user->isScholarStaff()) {
-        return redirect()->route('staff.dashboard');
-    }
+            if ($user->isStaffPendingApproval() || $user->isStaffRejected()) {
+                $isRejected = $user->isStaffRejected();
+
+                Auth::logout();
+                request()->session()->invalidate();
+                request()->session()->regenerateToken();
+
+                $message = $isRejected
+                    ? 'Your scholar staff account has been rejected and can no longer access the system. Please contact the system administrator for assistance.'
+                    : 'Your scholar staff account is pending administrator approval. You cannot log in until your registration has been approved.';
+
+                return redirect()
+                    ->route('login')
+                    ->with($isRejected ? 'error' : 'warning', $message);
+            }
+
+            return redirect()->route('staff.dashboard');
+        }
 
     return redirect()->route('user.dashboard');
 })->middleware('auth')->name('dashboard');
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
+    Route::get('/sidebar-badges', [AdminController::class, 'sidebarBadges'])->name('sidebar-badges');
     Route::get('/locations', [AdminController::class, 'locations'])->name('locations');
     Route::post('/locations', [AdminController::class, 'storeLocation'])->name('locations.store');
     Route::get('/locations/{location}/edit', [AdminController::class, 'editLocation'])->name('locations.edit');
@@ -66,9 +85,15 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/settings', [AdminController::class, 'settings'])->name('settings');
     Route::put('/settings', [AdminController::class, 'updateSettings'])->name('settings.update');
     Route::put('/settings/password', [AdminController::class, 'changePassword'])->name('settings.password');
+    Route::post('/staff/{staffMember}/approve', [AdminController::class, 'approveStaff'])->name('staff.approve');
+    Route::post('/staff/{staffMember}/reject', [AdminController::class, 'rejectStaff'])->name('staff.reject');
 });
 
 Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->group(function () {
+    Route::get('/pending-approval', [StaffController::class, 'pendingApproval'])->name('pending-approval');
+    Route::post('/dismiss-pending-modal', [StaffController::class, 'dismissPendingStaffModal'])->name('dismiss-pending-modal');
+
+    Route::middleware('scholar.staff.approved')->group(function () {
     Route::get('/dashboard', [StaffController::class, 'dashboard'])->name('dashboard');
     Route::get('/scholars', [StaffController::class, 'scholars'])->name('scholars');
     Route::get('/scholars/{scholar}', [StaffController::class, 'showScholar'])->name('scholars.show');
@@ -77,6 +102,8 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
     Route::post('/events', [StaffController::class, 'storeEvent'])->name('events.store');
     Route::get('/events/{event}', [StaffController::class, 'showEvent'])->name('events.show');
         Route::get('/attendance', [StaffController::class, 'attendance'])->name('attendance');
+        Route::post('/events/{event}/attendance/open', [StaffController::class, 'openAttendance'])->name('attendance.open');
+        Route::post('/events/{event}/attendance/close', [StaffController::class, 'closeAttendance'])->name('attendance.close');
         Route::get('/attendances/{attendance}/photo', [StaffController::class, 'viewAttendancePhoto'])->name('attendances.photo');
         Route::post('/attendances/{attendance}/approve', [StaffController::class, 'approveAttendance'])->name('attendances.approve');
         Route::post('/attendances/{attendance}/reject', [StaffController::class, 'rejectAttendance'])->name('attendances.reject');
@@ -93,12 +120,14 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
     Route::get('/approval-requests', [StaffController::class, 'approvalRequests'])->name('approval-requests');
     Route::get('/calendar', [StaffController::class, 'calendar'])->name('calendar');
     Route::get('/settings', [StaffController::class, 'settings'])->name('settings');
+    Route::put('/settings/password', [StaffController::class, 'changePassword'])->name('settings.password');
     Route::get('/reports/service-hours', [StaffController::class, 'serviceHoursReports'])->name('reports.service-hours');
     Route::get('/reports/attendance', [StaffController::class, 'attendanceReports'])->name('reports.attendance');
     Route::get('/reports/participation', [StaffController::class, 'participationReports'])->name('reports.participation');
     Route::get('/reports/completion', [StaffController::class, 'completionReports'])->name('reports.completion');
     Route::post('/scholars/{scholar}/approve', [StaffController::class, 'approveScholar'])->name('scholars.approve');
     Route::post('/scholars/{scholar}/reject', [StaffController::class, 'rejectScholar'])->name('scholars.reject');
+    });
 });
 
 Route::middleware(['auth', 'scholar'])->prefix('user')->name('user.')->group(function () {
@@ -111,10 +140,12 @@ Route::middleware(['auth', 'scholar'])->prefix('user')->name('user.')->group(fun
 
     Route::middleware('scholar.approved')->group(function () {
         Route::get('/events', [UserController::class, 'events'])->name('events');
+        Route::get('/attendance-status', [UserController::class, 'attendanceStatus'])->name('attendance.status');
         Route::get('/calendar', [UserController::class, 'calendar'])->name('calendar');
         Route::get('/service-hours', [UserController::class, 'serviceHours'])->name('service-hours');
         Route::get('/documents', [UserController::class, 'documents'])->name('documents');
         Route::get('/notifications', [UserController::class, 'notifications'])->name('notifications');
+        Route::get('/notifications/more', [UserController::class, 'moreNotifications'])->name('notifications.more');
         Route::get('/profile', [UserController::class, 'profile'])->name('profile');
 
         Route::post('/events/{event}/register', [EventActionController::class, 'register'])->name('events.register');

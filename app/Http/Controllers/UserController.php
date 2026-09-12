@@ -9,6 +9,7 @@ use App\Models\Announcement;
 use App\Models\DocumentType;
 use App\Services\AcademicSettingsService;
 use App\Services\AnnouncementService;
+use App\Services\AttendanceSessionService;
 use App\Services\ScholarService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -20,6 +21,7 @@ class UserController extends Controller
         private ScholarService $scholar,
         private AnnouncementService $announcements,
         private AcademicSettingsService $academic,
+        private AttendanceSessionService $attendanceSessions,
     ) {}
 
     private function layoutData(string $active, string $title, string $subtitle = ''): array
@@ -45,7 +47,10 @@ class UserController extends Controller
         if ($user->hasScholarPortalAccess()) {
             $documents = $this->scholar->documentsForUser($user);
             $documentOverview = $this->scholar->documentOverviewStats($user);
-            $documentTypes = DocumentType::query()->orderBy('name')->get();
+            $documentTypes = DocumentType::query()
+                ->where('scholarship_program_id', $user->scholarship_program_id)
+                ->orderBy('name')
+                ->get();
         }
 
         return [
@@ -66,6 +71,7 @@ class UserController extends Controller
             'documents' => $documents,
             'documentTypes' => $documentTypes,
             'documentOverview' => $documentOverview,
+            'unreadNotificationsCount' => $user->unreadNotificationCount(),
         ];
     }
 
@@ -89,6 +95,9 @@ class UserController extends Controller
             )->get(),
             'dashboardDocuments' => $this->dashboardDocuments($user),
             'calendarEvents' => $this->scholar->calendarEvents($user, now()->year, now()->month),
+            'attendanceSessions' => $user->hasScholarPortalAccess()
+                ? $this->attendanceSessions->sessionsForUser($user)
+                : collect(),
             'showPendingApprovalModal' => $user->isPendingApproval() && $request->session()->get('show_pending_approval_modal', false),
         ]));
     }
@@ -120,6 +129,7 @@ class UserController extends Controller
             'events' => $events,
             'selected' => $selected,
             'upcomingEvent' => $this->scholar->nextUpcomingEvent($user),
+            'attendanceSessions' => $this->attendanceSessions->sessionsForUser($user),
         ]));
     }
 
@@ -195,31 +205,71 @@ class UserController extends Controller
     {
         $user = Auth::user();
         $filter = $request->get('filter', 'all');
+        $pageSize = 5;
 
-        $query = $user->scholarNotifications()->latest();
-        if ($filter === 'unread') {
-            $query->where('is_read', false);
-        } elseif ($filter === 'important') {
-            $query->where('is_important', true);
-        }
-
-        $all = $user->scholarNotifications()->get();
+        $baseQuery = $user->scholarNotifications();
+        $query = $this->filteredNotificationQuery($user, $filter);
+        $allFiltered = $query->get();
+        $filteredTotal = $allFiltered->count();
+        $notifications = $allFiltered->take($pageSize)->values();
+        $extraNotifications = $allFiltered->slice($pageSize)->values();
 
         return view('user.notifications', array_merge($this->layoutData(
             'notifications',
             'Notifications',
             'Stay updated with the latest announcements, reminders, and updates.'
         ), [
-            'notifications' => $query->get(),
+            'notifications' => $notifications,
+            'extraNotifications' => $extraNotifications,
+            'filteredTotal' => $filteredTotal,
+            'hasMoreNotifications' => $extraNotifications->isNotEmpty(),
+            'notificationPreviewCount' => $pageSize,
             'notifStats' => [
-                'unread' => $all->where('is_read', false)->count(),
-                'read' => $all->where('is_read', true)->count(),
-                'important' => $all->where('is_important', true)->count(),
-                'total' => $all->count(),
+                'unread' => (clone $baseQuery)->where('is_read', false)->count(),
+                'read' => (clone $baseQuery)->where('is_read', true)->count(),
+                'important' => (clone $baseQuery)->where('is_important', true)->count(),
+                'total' => (clone $baseQuery)->count(),
             ],
             'activeFilter' => $filter,
             'preferences' => $user->notificationPreferences(),
         ]));
+    }
+
+    public function moreNotifications(Request $request)
+    {
+        $user = Auth::user();
+        $filter = $request->get('filter', 'all');
+        $offset = max(0, (int) $request->get('offset', 5));
+        $query = $this->filteredNotificationQuery($user, $filter);
+        $total = (clone $query)->count();
+        $notifications = $query->skip($offset)->get();
+
+        $html = $notifications->map(
+            fn ($notif) => view('partials.user-notification-item', [
+                'notif' => $notif,
+                'isExtra' => true,
+            ])->render()
+        )->implode('');
+
+        return response()->json([
+            'html' => $html,
+            'count' => $notifications->count(),
+            'total' => $total,
+            'shown' => $offset + $notifications->count(),
+        ]);
+    }
+
+    private function filteredNotificationQuery($user, string $filter)
+    {
+        $query = $user->scholarNotifications()->latest();
+
+        if ($filter === 'unread') {
+            $query->where('is_read', false);
+        } elseif ($filter === 'important') {
+            $query->where('is_important', true);
+        }
+
+        return $query;
     }
 
     public function profile(Request $request)
@@ -259,6 +309,7 @@ class UserController extends Controller
         }
 
         $user = Auth::user();
+        $this->scholar->assertAnnouncementVisibleToUser($announcement, $user);
         $this->announcements->markAsRead($user, $announcement);
         $announcement->setAttribute('is_read', true);
 
@@ -270,5 +321,13 @@ class UserController extends Controller
             'announcement' => $announcement,
             'announcementStats' => $this->announcements->statsForUser($user),
         ]));
+    }
+
+    public function attendanceStatus()
+    {
+        $user = Auth::user();
+        abort_unless($user->hasScholarPortalAccess(), 403);
+
+        return response()->json($this->attendanceSessions->liveStatusForUser($user));
     }
 }

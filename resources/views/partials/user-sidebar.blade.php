@@ -68,17 +68,24 @@
 
                     <span class="nav-icon">{!! $item['icon'] !!}</span>
 
-                    {{ $item['label'] }}
+                    <span class="nav-label">{{ $item['label'] }}</span>
 
                 </span>
 
             @else
 
-                <a href="{{ route($item['route']) }}" class="nav-item {{ $active === $key ? 'active' : '' }}">
+                <a href="{{ route($item['route']) }}" class="nav-item {{ $active === $key ? 'active' : '' }}" @if($key === 'notifications') data-nav="notifications" @endif>
 
                     <span class="nav-icon">{!! $item['icon'] !!}</span>
 
-                    {{ $item['label'] }}
+                    <span class="nav-label">{{ $item['label'] }}</span>
+
+                    @if($key === 'notifications')
+                        @php $unreadCount = (int) ($unreadNotificationsCount ?? $notifStats['unread'] ?? 0); @endphp
+                        @if($unreadCount > 0)
+                            <span class="nav-notif-badge" data-unread-notifications aria-label="{{ $unreadCount }} unread notifications">{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
+                        @endif
+                    @endif
 
                 </a>
 

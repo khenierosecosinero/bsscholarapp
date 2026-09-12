@@ -21,38 +21,39 @@ class ScholarService
 {
     public const REQUIRED_HOURS = 30;
 
-    public function __construct(private AcademicSettingsService $academic) {}
+    public function __construct(
+        private AcademicSettingsService $academic,
+        private ProgramScopeService $programScope,
+    ) {}
 
     public function scopeEventsForUser(Builder $query, User $user): Builder
     {
         $query->whereIn('status', ['confirmed', 'upcoming', 'ongoing', 'completed', 'pending']);
 
         if (! $user->scholarship_program_id) {
-            return $query;
+            return $query->whereRaw('1 = 0');
         }
 
-        $locationIds = $user->visibleLocationIds();
-
-        if ($locationIds) {
-            return $query->whereIn('scholarship_program_id', $locationIds);
-        }
-
-        return $query->whereNull('scholarship_program_id');
+        return $this->programScope->scopeByPrograms($query, $user->visibleLocationIds());
     }
 
     public function scopeAnnouncementsForUser(Builder $query, User $user): Builder
     {
         if (! $user->scholarship_program_id) {
-            return $query->whereNull('scholarship_program_id');
+            return $query->whereRaw('1 = 0');
         }
 
-        $locationIds = $user->visibleLocationIds();
+        return $this->programScope->scopeByPrograms($query, $user->visibleLocationIds());
+    }
 
-        if ($locationIds) {
-            return $query->whereIn('scholarship_program_id', $locationIds);
-        }
+    public function assertEventVisibleToUser(Event $event, User $user): void
+    {
+        $this->programScope->assertEventVisibleToScholar($event, $user);
+    }
 
-        return $query->whereNull('scholarship_program_id');
+    public function assertAnnouncementVisibleToUser(Announcement $announcement, User $user): void
+    {
+        $this->programScope->assertAnnouncementVisibleToScholar($announcement, $user);
     }
 
     public function semesterStart(User $user): Carbon
@@ -174,7 +175,7 @@ class ScholarService
                     $this->academic->forUser($user)
                 )
                 ->count(),
-            'notifications' => $user->scholarNotifications()->where('is_read', false)->count(),
+            'notifications' => $user->unreadNotificationCount(),
         ];
     }
 
@@ -255,6 +256,9 @@ class ScholarService
             : $user->attendances()->where('event_id', $event->id)->first();
 
         $attendance = $this->applyMissedCheckIn($event, $user, $registration, $attendance);
+        if ($attendance && ! $attendance->relationLoaded('event')) {
+            $attendance->setRelation('event', $event);
+        }
         $hasParticipated = $this->hasParticipated($attendance);
         $calendarStatus = $this->calendarStatus($event, $user, $attendance, $registration);
 
@@ -282,9 +286,20 @@ class ScholarService
             'failed_to_check_in' => $calendarStatus === 'failed_to_check_in',
             'calendar_days' => $event->calendarDateKeys(),
             'attendance' => $attendance,
-            'can_check_in' => $event->isHappeningNow()
+            'attendance_open' => $event->isAttendanceOpen(),
+            'attendance_status' => $event->attendanceStatusLabel(),
+            'attendance_opened_at' => $event->attendanceOpenedAtLabel(),
+            'attendance_closed_at' => $event->attendanceClosedAtLabel(),
+            'attendance_message' => $this->attendanceSessionMessage($event),
+            'can_check_in' => $event->isAttendanceOpen()
                 && $registration
-                && $registration->status === EventRegistration::STATUS_CONFIRMED,
+                && in_array($registration->status, [
+                    EventRegistration::STATUS_CONFIRMED,
+                    EventRegistration::STATUS_FAILED_CHECK_IN,
+                ], true)
+                && ! $attendance?->hasCheckedIn(),
+            'can_check_out' => $attendance?->scholarCanCheckOut() ?? false,
+            'can_modify_attendance' => $attendance?->scholarCanModify() ?? false,
             'is_past' => $event->hasEnded(),
         ];
     }
@@ -296,9 +311,37 @@ class ScholarService
             && $attendance->hasCheckedIn();
     }
 
+    public function attendanceSessionMessage(Event $event): string
+    {
+        $eventStamp = sprintf(
+            '%s on %s at %s',
+            $event->title,
+            $event->starts_at?->format('M j, Y') ?? 'the scheduled date',
+            $event->starts_at?->format('g:i A') ?? 'the scheduled time'
+        );
+
+        if ($event->isAttendanceOpen()) {
+            $opened = $event->attendanceOpenedAtLabel() ?? now()->format('M j, Y g:i A');
+
+            return "Attendance for {$eventStamp} is OPEN as of {$opened}. You may mark your attendance until Scholar Staff closes the session.";
+        }
+
+        if ($event->attendanceSessionClosed()) {
+            $closed = $event->attendanceClosedAtLabel() ?? now()->format('M j, Y g:i A');
+
+            return "Attendance for {$eventStamp} is CLOSED as of {$closed}. You can no longer submit or modify your attendance.";
+        }
+
+        return "Attendance for {$eventStamp} is CLOSED. You can mark attendance only after Scholar Staff opens the session.";
+    }
+
     public function missedCheckIn(Event $event, ?EventRegistration $registration, ?Attendance $attendance): bool
     {
-        if (! $event->hasEnded()) {
+        if ($event->isAttendanceOpen()) {
+            return false;
+        }
+
+        if (! $event->attendanceSessionClosed() && ! $event->hasEnded()) {
             return false;
         }
 
@@ -340,7 +383,9 @@ class ScholarService
             array_merge($stamp, [
                 'status' => Attendance::STATUS_FAILED_CHECK_IN,
                 'hours_earned' => 0,
-                'remarks' => 'Did not check in during the event. No service hours credited.',
+                'remarks' => $event->attendanceSessionClosed()
+                    ? 'Did not check in before attendance was closed. No service hours credited.'
+                    : 'Did not check in during the event. No service hours credited.',
             ])
         );
 
@@ -362,7 +407,14 @@ class ScholarService
             ->with('event')
             ->where('user_id', $user->id)
             ->whereIn('status', [EventRegistration::STATUS_CONFIRMED, EventRegistration::STATUS_FAILED_CHECK_IN])
-            ->whereHas('event', fn ($q) => $q->where('ends_at', '<', now()))
+            ->whereHas('event', fn ($q) => $q->where(function ($event) {
+                $event->where('ends_at', '<', now())
+                    ->orWhere(function ($closed) {
+                        $closed->where('attendance_is_open', false)
+                            ->whereNotNull('attendance_opened_at')
+                            ->whereNotNull('attendance_closed_at');
+                    });
+            }))
             ->get();
 
         $attendances = $user->attendances()->get()->keyBy('event_id');
@@ -384,7 +436,14 @@ class ScholarService
         $registrations = EventRegistration::query()
             ->with(['event', 'user'])
             ->whereIn('status', [EventRegistration::STATUS_CONFIRMED, EventRegistration::STATUS_FAILED_CHECK_IN])
-            ->whereHas('event', fn ($q) => $q->where('ends_at', '<', now()))
+            ->whereHas('event', fn ($q) => $q->where(function ($event) {
+                $event->where('ends_at', '<', now())
+                    ->orWhere(function ($closed) {
+                        $closed->where('attendance_is_open', false)
+                            ->whereNotNull('attendance_opened_at')
+                            ->whereNotNull('attendance_closed_at');
+                    });
+            }))
             ->whereHas('user', fn ($q) => $q->where('role', User::ROLE_SCHOLAR)
                 ->whereIn('scholarship_program_id', $programIds ?: [0]))
             ->get();
@@ -405,6 +464,56 @@ class ScholarService
                 $registration,
                 $attendance
             );
+        }
+    }
+
+    public function syncMissedCheckInsForEvent(Event $event): void
+    {
+        $registrations = EventRegistration::query()
+            ->with('user')
+            ->where('event_id', $event->id)
+            ->whereIn('status', [EventRegistration::STATUS_CONFIRMED, EventRegistration::STATUS_FAILED_CHECK_IN])
+            ->get();
+
+        foreach ($registrations as $registration) {
+            if (! $registration->user) {
+                continue;
+            }
+
+            $attendance = Attendance::query()
+                ->where('user_id', $registration->user_id)
+                ->where('event_id', $event->id)
+                ->first();
+
+            $this->applyMissedCheckIn($event, $registration->user, $registration, $attendance);
+        }
+    }
+
+    public function restoreCheckInEligibility(Event $event): void
+    {
+        $registrations = EventRegistration::query()
+            ->where('event_id', $event->id)
+            ->where('status', EventRegistration::STATUS_FAILED_CHECK_IN)
+            ->get();
+
+        foreach ($registrations as $registration) {
+            $attendance = Attendance::query()
+                ->where('user_id', $registration->user_id)
+                ->where('event_id', $event->id)
+                ->first();
+
+            if ($attendance?->hasCheckedIn()) {
+                continue;
+            }
+
+            $registration->update(['status' => EventRegistration::STATUS_CONFIRMED]);
+
+            if ($attendance && $attendance->status === Attendance::STATUS_FAILED_CHECK_IN) {
+                $attendance->update([
+                    'status' => Attendance::STATUS_PENDING,
+                    'remarks' => null,
+                ]);
+            }
         }
     }
 
@@ -655,7 +764,13 @@ class ScholarService
 
     public function ensureUserDocuments(User $user): void
     {
-        $types = DocumentType::all();
+        if (! $user->scholarship_program_id) {
+            return;
+        }
+
+        $types = DocumentType::query()
+            ->where('scholarship_program_id', $user->scholarship_program_id)
+            ->get();
 
         foreach ($types as $type) {
             Document::firstOrCreate(
@@ -702,10 +817,15 @@ class ScholarService
 
     public function provisionDocumentType(DocumentType $type): int
     {
+        if (! $type->scholarship_program_id) {
+            return 0;
+        }
+
         $count = 0;
 
         User::query()
             ->where('role', User::ROLE_SCHOLAR)
+            ->where('scholarship_program_id', $type->scholarship_program_id)
             ->chunkById(100, function ($scholars) use ($type, &$count) {
                 foreach ($scholars as $scholar) {
                     Document::firstOrCreate(
@@ -721,13 +841,14 @@ class ScholarService
 
     public function notifyScholarsOfDocumentType(DocumentType $type, array $programIds = []): int
     {
+        if (! $type->scholarship_program_id) {
+            return 0;
+        }
+
         $scholarsQuery = User::query()
             ->where('role', User::ROLE_SCHOLAR)
-            ->where('status', User::STATUS_APPROVED);
-
-        if ($programIds) {
-            $scholarsQuery->whereIn('scholarship_program_id', $programIds);
-        }
+            ->where('status', User::STATUS_APPROVED)
+            ->where('scholarship_program_id', $type->scholarship_program_id);
 
         $title = 'Required document: '.$type->name;
         $body = $type->description
@@ -794,10 +915,11 @@ class ScholarService
         ]);
     }
 
-    public function notify(User $user, string $title, string $body, string $category = 'system', bool $important = false): void
+    public function notify(User $user, string $title, string $body, string $category = 'system', bool $important = false, ?int $eventId = null): void
     {
         ScholarNotification::create([
             'user_id' => $user->id,
+            'event_id' => $eventId,
             'title' => $title,
             'body' => $body,
             'category' => $category,
@@ -807,13 +929,14 @@ class ScholarService
 
     public function notifyScholarsOfPublishedEvent(Event $event): int
     {
+        if (! $event->scholarship_program_id) {
+            return 0;
+        }
+
         $scholarsQuery = User::query()
             ->where('role', User::ROLE_SCHOLAR)
-            ->where('status', User::STATUS_APPROVED);
-
-        if ($event->scholarship_program_id) {
-            $scholarsQuery->where('scholarship_program_id', $event->scholarship_program_id);
-        }
+            ->where('status', User::STATUS_APPROVED)
+            ->where('scholarship_program_id', $event->scholarship_program_id);
 
         $title = 'New Event: '.$event->title;
         $body = sprintf(
@@ -827,13 +950,14 @@ class ScholarService
 
         $count = 0;
 
-        $scholarsQuery->each(function (User $scholar) use ($title, $body, &$count) {
+        $scholarsQuery->each(function (User $scholar) use ($event, $title, $body, &$count) {
             ScholarNotification::updateOrCreate(
                 [
                     'user_id' => $scholar->id,
                     'title' => $title,
                 ],
                 [
+                    'event_id' => $event->id,
                     'body' => $body,
                     'category' => 'event_reminder',
                     'is_important' => true,

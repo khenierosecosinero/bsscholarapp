@@ -2,11 +2,23 @@
 
 @section('page-content')
 
+@include('partials.admin-location-filter')
+@include('partials.admin-scope-banner')
+
 <div class="staff-card" style="margin-bottom:20px">
     <div class="staff-card-header">
         <h2>Edit Location: {{ $location->display_name ?: $location->location_name }}</h2>
         <a href="{{ route('admin.locations') }}" class="staff-card-link">Back to locations</a>
     </div>
+    <p class="staff-muted" style="padding:0 18px 12px;margin:0">
+        <strong>{{ $location->programTypeLabel() }}</strong>
+        @if($location->province_name)
+            · Province: {{ $location->province_name }}
+        @endif
+        @if($location->region_name)
+            · Region: {{ $location->region_name }}
+        @endif
+    </p>
     <form method="POST" action="{{ route('admin.locations.update', $location) }}">
         @csrf
         @method('PUT')
@@ -14,6 +26,10 @@
             <div class="staff-form-group">
                 <label>Location Name</label>
                 <input type="text" value="{{ $location->location_name }}" readonly>
+            </div>
+            <div class="staff-form-group">
+                <label>Program Type</label>
+                <input type="text" value="{{ $location->programTypeLabel() }}" readonly>
             </div>
             <div class="staff-form-group">
                 <label for="display_name">Display Name</label>
@@ -40,10 +56,16 @@
     <div class="staff-stat-card"><div class="staff-stat-icon orange">⏳</div><div class="staff-stat-body"><h3>Pending</h3><div class="value">{{ $stats['pending_records'] ?? 0 }}</div></div></div>
 </section>
 
+@php
+    $locationProgramType = $location->isCityProgram() ? 'city_municipality' : 'province';
+    $locationScope = ['location' => $location->id, 'program_type' => $locationProgramType];
+@endphp
+
 <div class="staff-quick-actions" style="margin-top:20px">
-    <a href="{{ route('admin.dashboard', ['location' => $location->id]) }}" class="staff-quick-btn blue">Open Location Dashboard</a>
-    <a href="{{ route('admin.scholars', ['location' => $location->id]) }}" class="staff-quick-btn green">View Scholars</a>
-    <a href="{{ route('admin.reports', ['location' => $location->id]) }}" class="staff-quick-btn orange">Location Reports</a>
+    <a href="{{ route('admin.dashboard', $locationScope) }}" class="staff-quick-btn blue">Open Location Dashboard</a>
+    <a href="{{ route('admin.scholars', $locationScope) }}" class="staff-quick-btn green">View Scholars</a>
+    <a href="{{ route('admin.staff', $locationScope) }}" class="staff-quick-btn teal">View Scholar Staff</a>
+    <a href="{{ route('admin.reports', $locationScope) }}" class="staff-quick-btn orange">Location Reports</a>
 </div>
 
 @endsection

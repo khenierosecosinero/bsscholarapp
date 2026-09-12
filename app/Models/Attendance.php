@@ -56,6 +56,23 @@ class Attendance extends Model
             && ! in_array($this->status, [self::STATUS_APPROVED, self::STATUS_FAILED_CHECK_IN], true);
     }
 
+    public function scholarCanModify(): bool
+    {
+        $this->loadMissing('event');
+
+        return $this->event?->isAttendanceOpen() && $this->canReplacePhoto();
+    }
+
+    public function scholarCanCheckOut(): bool
+    {
+        $this->loadMissing('event');
+
+        return $this->event?->isAttendanceOpen()
+            && $this->hasCheckedIn()
+            && ! $this->check_out
+            && $this->status !== self::STATUS_FAILED_CHECK_IN;
+    }
+
     public function isReadyForVerification(): bool
     {
         return $this->status === self::STATUS_PENDING

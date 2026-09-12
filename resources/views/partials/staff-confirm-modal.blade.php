@@ -16,15 +16,24 @@ document.addEventListener('DOMContentLoaded', function () {
     var modal = document.getElementById('staff-confirm-modal');
     if (!modal) return;
 
+    var titleEl = modal.querySelector('.staff-confirm-title');
     var messageEl = modal.querySelector('.staff-confirm-message');
     var yesBtn = modal.querySelector('[data-confirm-yes]');
     var noBtn = modal.querySelector('[data-confirm-no]');
     var closeTriggers = modal.querySelectorAll('[data-confirm-close]');
     var pendingForm = null;
+    var defaultTitle = titleEl ? titleEl.textContent : 'Confirm action';
+    var defaultYes = yesBtn ? yesBtn.textContent : 'Yes';
+    var defaultNo = noBtn ? noBtn.textContent : 'No';
 
     function openModal(message, form) {
         pendingForm = form;
+        if (titleEl) {
+            titleEl.textContent = form.getAttribute('data-confirm-title') || defaultTitle;
+        }
         messageEl.textContent = message;
+        yesBtn.textContent = form.getAttribute('data-confirm-yes') || defaultYes;
+        noBtn.textContent = form.getAttribute('data-confirm-no') || defaultNo;
         modal.classList.add('is-open');
         modal.setAttribute('aria-hidden', 'false');
         yesBtn.focus();

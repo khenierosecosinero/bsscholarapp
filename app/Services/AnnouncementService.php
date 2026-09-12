@@ -56,6 +56,8 @@ class AnnouncementService
 
     public function markAsRead(User $user, Announcement $announcement): void
     {
+        $this->scholar->assertAnnouncementVisibleToUser($announcement, $user);
+
         AnnouncementRead::updateOrCreate(
             ['user_id' => $user->id, 'announcement_id' => $announcement->id],
             ['read_at' => now()]
@@ -106,7 +108,7 @@ class AnnouncementService
             ->where('role', User::ROLE_SCHOLAR)
             ->when($announcement->scholarship_program_id, function ($query) use ($announcement) {
                 $query->where('scholarship_program_id', $announcement->scholarship_program_id);
-            })
+            }, fn ($query) => $query->whereRaw('1 = 0'))
             ->each(function (User $user) use ($announcement) {
             $prefs = $user->notificationPreferences();
             if (!($prefs['announcements'] ?? true)) {

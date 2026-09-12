@@ -12,7 +12,7 @@
         The start and end date you set here is saved immediately and shown on the same day in the scholar Events page and Calendar of Activities.
     </p>
 
-    <form method="POST" action="{{ route('staff.events.store') }}" class="staff-settings-grid">
+    <form method="POST" action="{{ route('staff.events.store') }}" class="staff-settings-grid" enctype="multipart/form-data">
         @csrf
 
         <div class="staff-form-group">
@@ -53,27 +53,21 @@
             </div>
         </div>
 
-        <div class="staff-form-grid">
-            <div class="staff-form-group">
-                <label for="service_hours">Service Hours *</label>
-                <input type="number" id="service_hours" name="service_hours" value="{{ old('service_hours', '4') }}" min="0" step="0.5" required>
-                @error('service_hours')<div class="staff-field-error">{{ $message }}</div>@enderror
-            </div>
-            <div class="staff-form-group">
-                <label for="status">Status *</label>
-                <select id="status" name="status" required>
-                    <option value="confirmed" @selected(old('status', 'confirmed') === 'confirmed')>Confirmed (visible on scholar calendars)</option>
-                    <option value="upcoming" @selected(old('status') === 'upcoming')>Upcoming (visible on scholar calendars)</option>
-                    <option value="pending" @selected(old('status') === 'pending')>Draft / pending (still shown on calendars)</option>
-                </select>
-                @error('status')<div class="staff-field-error">{{ $message }}</div>@enderror
-            </div>
+        <div class="staff-form-group">
+            <label for="service_hours">Service Hours *</label>
+            <input type="number" id="service_hours" name="service_hours" value="{{ old('service_hours', '4') }}" min="0" step="0.5" required>
+            @error('service_hours')<div class="staff-field-error">{{ $message }}</div>@enderror
         </div>
 
         <div class="staff-form-group">
-            <label for="image_url">Event Image URL</label>
-            <input type="url" id="image_url" name="image_url" value="{{ old('image_url') }}" placeholder="https://example.com/event-photo.jpg">
-            @error('image_url')<div class="staff-field-error">{{ $message }}</div>@enderror
+            <label for="image">Event Image</label>
+            <div class="staff-event-image-drop" id="event-image-drop">
+                <span class="staff-event-image-drop-icon" aria-hidden="true">&#128247;</span>
+                <span>Drag and drop an image here, or choose a file</span>
+                <small>JPG, JPEG, or PNG, up to 5MB</small>
+                <input type="file" id="image" name="image" accept=".jpg,.jpeg,.png,image/jpeg,image/png">
+            </div>
+            @error('image')<div class="staff-field-error">{{ $message }}</div>@enderror
         </div>
 
         <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px">
@@ -83,6 +77,34 @@
     </form>
 </div>
 
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var drop = document.getElementById('event-image-drop');
+    var input = document.getElementById('image');
+    if (!drop || !input) return;
+
+    ['dragenter', 'dragover'].forEach(function (type) {
+        drop.addEventListener(type, function (event) {
+            event.preventDefault();
+            drop.classList.add('is-dragover');
+        });
+    });
+
+    ['dragleave', 'drop'].forEach(function (type) {
+        drop.addEventListener(type, function (event) {
+            event.preventDefault();
+            drop.classList.remove('is-dragover');
+        });
+    });
+
+    drop.addEventListener('drop', function (event) {
+        var files = event.dataTransfer && event.dataTransfer.files;
+        if (!files || !files.length) return;
+        input.files = files;
+    });
+});
+</script>
+
 @endsection
 
 @push('styles')
@@ -90,5 +112,23 @@
 .staff-muted{color:#6b7280;font-size:13px;margin:0}
 .staff-form-group textarea{width:100%;padding:12px 14px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;resize:vertical}
 .staff-field-error{color:#dc2626;font-size:12px;margin-top:4px}
+.staff-event-image-drop{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+    border:2px dashed #d1d5db;
+    border-radius:12px;
+    padding:20px 16px;
+    text-align:center;
+    background:#fff;
+    font-size:14px;
+    font-weight:600;
+    color:#0f172a;
+}
+.staff-event-image-drop.is-dragover{border-color:#2563eb;background:#eff6ff}
+.staff-event-image-drop-icon{font-size:22px;line-height:1}
+.staff-event-image-drop small{font-weight:400;color:#6b7280;font-size:12px}
+.staff-event-image-drop input[type="file"]{margin-top:8px;font-size:13px;font-weight:400;width:auto;padding:0;border:none}
 </style>
 @endpush

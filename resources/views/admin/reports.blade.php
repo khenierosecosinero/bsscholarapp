@@ -3,6 +3,7 @@
 @section('page-content')
 
 @include('partials.admin-location-filter')
+@include('partials.admin-scope-banner')
 
 <section class="staff-stat-grid">
     <div class="staff-stat-card"><div class="staff-stat-icon blue">👥</div><div class="staff-stat-body"><h3>Scholars</h3><div class="value">{{ $stats['total_scholars'] }}</div><div class="sub">Active: {{ $stats['active_scholars'] ?? 0 }}</div></div></div>
@@ -25,6 +26,7 @@
                     <thead>
                         <tr>
                             <th>Scholar Program</th>
+                            <th>Program Type</th>
                             <th>Scholars</th>
                             <th>Staff</th>
                             <th>Events</th>
@@ -35,6 +37,7 @@
                         @foreach($locationSummaries as $summary)
                             <tr>
                                 <td>{{ $summary['program']->programLabel() }}</td>
+                                <td>{{ $summary['program']->programTypeLabel() }}</td>
                                 <td>{{ $summary['scholars'] }}</td>
                                 <td>{{ $summary['staff'] }}</td>
                                 <td>{{ $summary['events'] }}</td>
@@ -77,6 +80,10 @@
             <thead>
                 <tr>
                     <th>Scholar</th>
+                    @if($isAllLocations ?? true)
+                        <th>Scholar Program</th>
+                        <th>Program Type</th>
+                    @endif
                     <th>Approved Hours</th>
                     <th>Required</th>
                     <th>Progress</th>
@@ -87,13 +94,17 @@
                 @forelse($completionReport['rows'] as $row)
                     <tr>
                         <td>{{ $row['scholar']->full_name }}</td>
+                        @if($isAllLocations ?? true)
+                            <td>{{ $row['scholar']->scholarshipProgram?->programLabel() ?? '—' }}</td>
+                            <td>{{ $row['scholar']->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>
+                        @endif
                         <td>{{ number_format($row['approved'], 2) }}</td>
                         <td>{{ $completionReport['required'] }}</td>
                         <td>{{ number_format($row['remaining'], 2) }} remaining</td>
                         <td><span class="staff-badge {{ $row['status'] === 'Completed' ? 'green' : ($row['status'] === 'In Progress' ? 'orange' : 'gray') }}">{{ $row['status'] }}</span></td>
                     </tr>
                 @empty
-                    <tr><td colspan="5">No completion data available.</td></tr>
+                    <tr><td colspan="{{ ($isAllLocations ?? true) ? 7 : 5 }}">No completion data available.</td></tr>
                 @endforelse
             </tbody>
         </table>

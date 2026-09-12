@@ -5,7 +5,7 @@
     <div class="auth-container">
         <div class="auth-card">
             <h1>Registration</h1>
-            <p class="lead">Create your scholar account to get started. Accounts are permanent and can be used to log in at any time.</p>
+            <p class="lead">Create your scholar account to get started. Select your province and designated area to be connected to the correct City or Province Scholarship Program.</p>
 
             @if($errors->any())
                 <div class="errors">{{ implode(' ', $errors->all()) }}</div>
@@ -16,11 +16,13 @@
                 <div class="auth-form-body">
                     <input class="form-input" type="text" name="full_name" placeholder="Full Name" value="{{ old('full_name') }}" required autocomplete="name" />
                     <input class="form-input" type="text" name="scholar_id" placeholder="Scholar ID" value="{{ old('scholar_id') }}" required />
-                    @include('partials.location-select', [
-                        'programGroups' => $programGroups,
-                        'placeholder' => 'Select city scholar program...',
-                        'helpText' => 'City scholar programs are listed alphabetically. Example: Surigao City — City Scholar Program.',
+                    @include('partials.staff-location-select', [
+                        'locationTree' => $locationTree,
+                        'requireCity' => false,
                     ])
+                    <p class="muted small" style="margin:-4px 0 12px;padding-left:4px">
+                        Choose your province, then select your municipality/city for a City Scholarship Program, or the province-wide option for a Province Scholarship Program.
+                    </p>
                     <input class="form-input" type="email" name="email" placeholder="Email" value="{{ old('email') }}" required autocomplete="email" />
                     <input class="form-input" type="text" name="school_university" placeholder="School/University" value="{{ old('school_university') }}" />
                     <input class="form-input" type="text" name="course_year_level" placeholder="Course and Year Level" value="{{ old('course_year_level') }}" />

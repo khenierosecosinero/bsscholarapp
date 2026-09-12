@@ -16,7 +16,7 @@
     <p class="attendance-photo-note attendance-photo-rejected">{{ $attendance->remarks }}</p>
 @endif
 
-@if($attendance->canReplacePhoto())
+@if(($canModify ?? $attendance->scholarCanModify()))
     <form method="POST" action="{{ route('user.events.photo', $eventId) }}" enctype="multipart/form-data" class="attendance-photo-form">
         @csrf
         <label class="attendance-photo-drop">

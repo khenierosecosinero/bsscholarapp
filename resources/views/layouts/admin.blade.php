@@ -35,6 +35,55 @@
                 this.form.submit();
             });
         }
+
+        var dashboardSelect = document.getElementById('admin-dashboard-location-select');
+        var dashboardForm = document.getElementById('admin-dashboard-scope-form');
+        var dashboardType = document.getElementById('dashboard-program-type');
+        if (dashboardSelect && dashboardForm) {
+            dashboardSelect.addEventListener('change', function () {
+                var option = this.options[this.selectedIndex];
+                if (dashboardType) {
+                    dashboardType.value = option.getAttribute('data-program-type') || 'all';
+                }
+                dashboardForm.submit();
+            });
+        }
+
+        var staffNav = document.querySelector('[data-admin-nav="staff"]');
+        if (staffNav) {
+            var badgesUrl = @json(route('admin.sidebar-badges'));
+            var updateStaffBadge = function (count) {
+                count = parseInt(count, 10) || 0;
+                var badge = staffNav.querySelector('[data-admin-staff-badge]');
+                if (count > 0) {
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'staff-nav-badge';
+                        badge.setAttribute('data-admin-staff-badge', '');
+                        staffNav.appendChild(badge);
+                    }
+                    badge.textContent = count > 99 ? '99+' : String(count);
+                    badge.setAttribute('aria-label', count + ' pending staff registrations');
+                } else if (badge) {
+                    badge.remove();
+                }
+            };
+            var pollStaffBadge = function () {
+                fetch(badgesUrl, {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin'
+                }).then(function (response) {
+                    if (!response.ok) return null;
+                    return response.json();
+                }).then(function (data) {
+                    if (data && typeof data.staff !== 'undefined') {
+                        updateStaffBadge(data.staff);
+                    }
+                }).catch(function () {});
+            };
+            setInterval(pollStaffBadge, 8000);
+        }
     });
     </script>
+    @stack('scripts')
 @endsection

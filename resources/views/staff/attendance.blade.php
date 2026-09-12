@@ -19,10 +19,12 @@
         </div>
         <div class="staff-doc-type-counts">
             <span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span>
+            <span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}">{{ $event->attendanceStatusLabel() }}</span>
             <span>Service Hours: {{ number_format((float) $event->service_hours, 2) }}</span>
             <span class="approved">{{ $panel['checkedIn']->count() }} checked in</span>
             <span class="rejected">{{ $panel['failed']->count() }} failed to check in</span>
         </div>
+        @include('partials.staff-attendance-session', ['event' => $event])
     </div>
 
     <div class="staff-attendance-split">
@@ -117,6 +119,7 @@
         </section>
     </div>
 @else
+    <p class="staff-muted" style="margin:0 0 12px">Select an event to open or close its attendance session. Attendance stays open until you click Close Attendance and does not follow the event schedule.</p>
     <form method="GET" class="staff-filter-bar">
         <div class="staff-search">
             <span>🔍</span>
@@ -138,7 +141,10 @@
                         <div class="staff-doc-type-body">
                             <div class="staff-doc-type-title-row">
                                 <h3>{{ $event->title }}</h3>
-                                <span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span>
+                                <span class="staff-attendance-card-badges">
+                                    <span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span>
+                                    <span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}">{{ $event->attendanceStatusLabel() }}</span>
+                                </span>
                             </div>
                             <p>
                                 {{ $event->starts_at?->format('M j, Y') }}

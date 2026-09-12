@@ -31,6 +31,7 @@ class StaffDashboardService
         $totalScholars = (clone $scholars)->count();
         $activeScholars = (clone $scholars)->where('status', 'approved')->count();
         $pendingScholars = (clone $scholars)->where('status', 'pending')->count();
+        $rejectedScholars = (clone $scholars)->where('status', 'rejected')->count();
 
         $events = Event::query()
             ->whereIn('scholarship_program_id', $programIds ?: [0]);
@@ -59,6 +60,7 @@ class StaffDashboardService
             'total_scholars' => $totalScholars,
             'active_scholars' => $activeScholars,
             'pending_scholars' => $pendingScholars,
+            'rejected_scholars' => $rejectedScholars,
             'total_events' => (clone $events)->count(),
             'upcoming_events' => (clone $events)->where('starts_at', '>=', now())->count(),
             'pending_attendances' => $pendingAttendances,
@@ -99,12 +101,7 @@ class StaffDashboardService
     public function upcomingEvents(array $programIds, int $limit = 3): Collection
     {
         return Event::query()
-            ->where(function ($q) use ($programIds) {
-                $q->whereNull('scholarship_program_id');
-                if ($programIds) {
-                    $q->orWhereIn('scholarship_program_id', $programIds);
-                }
-            })
+            ->whereIn('scholarship_program_id', $programIds ?: [0])
             ->where('starts_at', '>=', now())
             ->orderBy('starts_at')
             ->limit($limit)
@@ -243,6 +240,7 @@ class StaffDashboardService
             ->count();
 
         $events = Event::query()
+            ->with('scholarshipProgram')
             ->withCount([
                 'registrations',
                 'attendances as checked_in_count' => fn ($q) => $q->whereNotNull('check_in'),

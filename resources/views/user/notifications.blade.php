@@ -4,20 +4,12 @@
     <link rel="stylesheet" href="{{ asset('css/notifications-page.css') }}">
 @endpush
 
+@push('scripts')
+    <script src="{{ asset('js/notifications-toggle.js') }}" defer></script>
+@endpush
+
 @section('page-content')
 <div class="page-notifications">
-
-@php
-    $categoryIcons = [
-        'event_reminder' => ['icon' => '&#128197;', 'class' => 'blue'],
-        'attendance' => ['icon' => '&#128336;', 'class' => 'orange'],
-        'service_hours' => ['icon' => '&#10003;', 'class' => 'green'],
-        'documents' => ['icon' => '&#128196;', 'class' => 'purple'],
-        'reminder' => ['icon' => '&#9888;', 'class' => 'red'],
-        'announcement' => ['icon' => '&#128226;', 'class' => 'blue'],
-        'system' => ['icon' => '&#9993;', 'class' => 'green'],
-    ];
-@endphp
 
 <section class="notifications-page-grid">
     <div class="notifications-main">
@@ -30,34 +22,28 @@
             <form method="POST" action="{{ route('user.notifications.read-all') }}">@csrf<button type="submit" class="link mark-read">&#10003; Mark all as read</button></form>
         </div>
 
-        <div class="notification-list">
+        <div class="notification-list" data-notification-list>
             @forelse($notifications as $notif)
-                @php $meta = $categoryIcons[$notif->category] ?? ['icon' => '&#128276;', 'class' => 'blue']; @endphp
-                <div class="notification-item {{ !$notif->is_read ? 'unread' : '' }}" data-id="{{ $notif->id }}">
-                    <div class="notif-icon {{ $meta['class'] }}">{!! $meta['icon'] !!}</div>
-                    <div class="notif-body">
-                        <strong>{{ $notif->title }}</strong>
-                        <p>{{ $notif->body }}</p>
-                        <span class="badge info">{{ ucfirst(str_replace('_', ' ', $notif->category)) }}</span>
-                        @if($notif->announcement_id)
-                            <a href="{{ route('user.announcements.show', $notif->announcement_id) }}" class="link small notif-view-link">View Announcement</a>
-                        @elseif($notif->category === 'event_reminder')
-                            <a href="{{ route('user.events') }}" class="link small notif-view-link">View Events</a>
-                        @endif
-                    </div>
-                    <div class="notif-meta">
-                        <span class="notif-time">{{ $notif->created_at->diffForHumans() }}</span>
-                        <span class="status-dot {{ $notif->is_read ? 'green' : 'blue' }}"></span>
-                        @if(!$notif->is_read)
-                            <form method="POST" action="{{ route('user.notifications.read', $notif) }}">@csrf<button type="submit" class="link small">Mark read</button></form>
-                        @endif
-                    </div>
-                </div>
+                @include('partials.user-notification-item', ['notif' => $notif])
             @empty
                 <p class="muted center">No notifications found.</p>
             @endforelse
+            @foreach($extraNotifications ?? [] as $notif)
+                @include('partials.user-notification-item', ['notif' => $notif, 'isExtra' => true])
+            @endforeach
         </div>
-        <p class="table-footer muted center">Showing {{ $notifications->count() }} notification(s)</p>
+        @if(!empty($hasMoreNotifications))
+            <div class="notifications-see-more-wrap">
+                <button
+                    type="button"
+                    class="btn outline full notifications-see-more"
+                    id="notifications-toggle"
+                    data-preview-count="{{ $notificationPreviewCount }}"
+                    data-total="{{ $filteredTotal }}"
+                >See More Notifications</button>
+            </div>
+        @endif
+        <p class="table-footer muted center" id="notifications-footer">Showing {{ $notifications->count() }} of {{ $filteredTotal }} notification(s)</p>
     </div>
 
     <aside class="notifications-sidebar">
@@ -96,5 +82,34 @@
 </section>
 
 </div>
+
+<script>
+(function () {
+    var button = document.getElementById('notifications-toggle');
+    var footer = document.getElementById('notifications-footer');
+    if (!button) return;
+
+    var expanded = false;
+    var previewCount = parseInt(button.getAttribute('data-preview-count'), 10) || 5;
+    var total = parseInt(button.getAttribute('data-total'), 10) || previewCount;
+
+    function extras() {
+        return document.querySelectorAll('[data-notification-extra]');
+    }
+
+    button.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        expanded = !expanded;
+        extras().forEach(function (item) {
+            item.hidden = !expanded;
+        });
+        button.textContent = expanded ? 'Show Less Notifications' : 'See More Notifications';
+        if (footer) {
+            footer.textContent = 'Showing ' + (expanded ? total : previewCount) + ' of ' + total + ' notification(s)';
+        }
+    });
+})();
+</script>
 
 @endsection

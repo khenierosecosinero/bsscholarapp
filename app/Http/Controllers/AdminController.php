@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\ScholarshipProgram;
 use App\Models\User;
+use App\Services\AccountService;
 use App\Services\AdminDashboardService;
+use App\Services\ScholarService;
 use App\Services\StaffDashboardService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +20,8 @@ class AdminController extends Controller
     public function __construct(
         private AdminDashboardService $admin,
         private StaffDashboardService $staff,
+        private ScholarService $scholar,
+        private AccountService $accounts,
     ) {}
 
     private function syncLocation(Request $request): string
@@ -29,18 +33,45 @@ class AdminController extends Controller
         return (string) session('admin_location', 'all');
     }
 
+    private function syncProgramType(Request $request): string
+    {
+        if ($request->has('program_type')) {
+            session(['admin_program_type' => $this->admin->syncProgramType($request->get('program_type'))]);
+        }
+
+        return $this->admin->syncProgramType((string) session('admin_program_type', 'all'));
+    }
+
     private function scope(Request $request): array
     {
         $locationKey = $this->syncLocation($request);
+        $programType = $this->syncProgramType($request);
 
         return [
             'locationKey' => $locationKey,
-            'programIds' => $this->admin->resolveScope($locationKey),
+            'programType' => $programType,
+            'programTypeLabel' => match ($programType) {
+                'city_municipality' => 'City Scholarship Programs',
+                'province' => 'Province Scholarship Programs',
+                default => 'All Program Types',
+            },
+            'programIds' => $this->admin->resolveAdminProgramIds($locationKey, $programType),
             'selectedLocation' => $this->admin->selectedLocation($locationKey),
             'locations' => $this->admin->locationOptions($locationKey),
-            'locationGroups' => $this->admin->locationOptionGroups($locationKey),
+            'locationGroups' => $this->admin->locationOptionGroups($locationKey, $programType),
             'isAllLocations' => $locationKey === 'all',
+            'isAllProgramTypes' => $programType === 'all',
         ];
+    }
+
+    private function assertStaffInScope(array $programIds, User $staffMember): void
+    {
+        abort_unless(
+            $staffMember->scholarship_program_id
+                && in_array((int) $staffMember->scholarship_program_id, array_map('intval', $programIds), true),
+            403,
+            'This scholar staff account is outside your current admin scope.'
+        );
     }
 
     private function layoutData(Request $request, string $active, string $title, string $subtitle = ''): array
@@ -55,7 +86,10 @@ class AdminController extends Controller
             'breadcrumb' => $title,
             'locationLabel' => $scope['selectedLocation']
                 ? $scope['selectedLocation']->programLabel()
-                : 'Overall / All Locations',
+                : (($scope['programType'] ?? 'all') === 'all'
+                    ? 'All Locations / All Programs'
+                    : ($scope['programTypeLabel'].' — All Locations')),
+            'adminSidebarBadges' => $this->admin->adminSidebarBadges($scope['programIds']),
         ]);
     }
 
@@ -67,16 +101,22 @@ class AdminController extends Controller
             $this->layoutData($request, 'dashboard', 'Admin Dashboard', 'Monitor system-wide performance and location-specific records.'),
             [
                 'stats' => $this->admin->dashboardStats($scope['programIds']),
-                'locationSummaries' => $this->admin->locationSummaries($scope['locationKey']),
+                'programGroups' => $this->admin->locationOptionGroups($scope['locationKey'], 'all'),
             ]
         ));
     }
 
     public function locations(Request $request)
     {
+        $scope = $this->scope($request);
+
         return view('admin.locations', array_merge(
-            $this->layoutData($request, 'locations', 'Locations', 'Manage scholarship program locations and view location statistics.'),
-            ['summaries' => $this->admin->locationSummaries()]
+            $this->layoutData($request, 'locations', 'Locations', 'Manage City and Province Scholarship Program locations separately.'),
+            [
+                'summaries' => $this->admin->locationSummaries($scope['locationKey'], $scope['programType']),
+                'citySummaries' => $this->admin->locationSummaries('all', 'city_municipality'),
+                'provinceSummaries' => $this->admin->locationSummaries('all', 'province'),
+            ]
         ));
     }
 
@@ -111,7 +151,7 @@ class AdminController extends Controller
         $data = $request->validate([
             'location_name' => ['required', 'string', 'max:255'],
             'location_type' => ['required', 'in:province,city_municipality'],
-            'province_name' => ['nullable', 'string', 'max:255'],
+            'province_name' => ['nullable', 'required_if:location_type,city_municipality', 'string', 'max:255'],
             'region_name' => ['nullable', 'string', 'max:255'],
             'display_name' => ['nullable', 'string', 'max:255'],
         ]);
@@ -158,21 +198,81 @@ class AdminController extends Controller
         $scope = $this->scope($request);
         $search = trim((string) $request->get('search', ''));
 
-        $staffMembers = $this->admin->staffQuery($scope['programIds'])
+        $staffMembers = $this->admin->visibleStaffQuery($scope['programIds'])
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($scoped) use ($search) {
                     $scoped->where('full_name', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%");
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('scholar_id', 'like', "%{$search}%");
                 });
             })
+            ->orderByRaw("CASE WHEN status = 'approved' THEN 0 ELSE 1 END")
             ->orderBy('full_name')
             ->paginate(15)
             ->withQueryString();
 
+        $pendingStaff = $this->admin->pendingStaffQuery($scope['programIds'])
+            ->orderBy('created_at')
+            ->get();
+
         return view('admin.staff', array_merge(
-            $this->layoutData($request, 'staff', 'Scholar Staff', 'View scholar staff accounts and their assigned locations.'),
-            ['staffMembers' => $staffMembers, 'search' => $search]
+            $this->layoutData($request, 'staff', 'Scholar Staff', 'Review scholar staff accounts and approve new registrations.'),
+            [
+                'staffMembers' => $staffMembers,
+                'pendingStaff' => $pendingStaff,
+                'search' => $search,
+                'staffStats' => [
+                    'total' => $this->admin->approvedStaffQuery($scope['programIds'])->count(),
+                    'pending' => $pendingStaff->count(),
+                    'approved' => $this->admin->approvedStaffQuery($scope['programIds'])->count(),
+                    'rejected' => $this->admin->staffQuery($scope['programIds'])->where('status', User::STATUS_REJECTED)->count(),
+                ],
+            ]
         ));
+    }
+
+    public function approveStaff(Request $request, User $staffMember)
+    {
+        abort_unless(Auth::user()?->isAdmin(), 403);
+        $scope = $this->scope($request);
+
+        abort_unless($staffMember->isScholarStaff(), 404);
+        abort_unless($staffMember->status === User::STATUS_PENDING, 422, 'This scholar staff account is not pending approval.');
+        $this->assertStaffInScope($scope['programIds'], $staffMember);
+
+        $staffMember->update(['status' => User::STATUS_APPROVED]);
+
+        $this->scholar->logActivity($staffMember, 'account', 'Scholar staff account approved by administrator');
+        $this->scholar->notify(
+            $staffMember,
+            'Scholar Staff Account Approved',
+            'Your scholar staff account has been approved. You now have full access to the Scholar Staff section.',
+            'system'
+        );
+
+        return back()->with('success', "{$staffMember->full_name}'s scholar staff account has been approved.");
+    }
+
+    public function rejectStaff(Request $request, User $staffMember)
+    {
+        abort_unless(Auth::user()?->isAdmin(), 403);
+        $scope = $this->scope($request);
+
+        abort_unless($staffMember->isScholarStaff(), 404);
+        abort_unless($staffMember->status === User::STATUS_PENDING, 422, 'Only pending scholar staff accounts can be rejected.');
+        $this->assertStaffInScope($scope['programIds'], $staffMember);
+
+        $staffMember->update(['status' => User::STATUS_REJECTED]);
+
+        $this->scholar->logActivity($staffMember, 'account', 'Scholar staff account rejected by administrator');
+        $this->scholar->notify(
+            $staffMember,
+            'Scholar Staff Registration Rejected',
+            'Your scholar staff registration has been rejected by an administrator. You cannot access the Scholar Staff section. Please contact the system administrator if you believe this was a mistake.',
+            'system'
+        );
+
+        return back()->with('success', "{$staffMember->full_name}'s scholar staff registration has been rejected.");
     }
 
     public function events(Request $request)
@@ -197,7 +297,6 @@ class AdminController extends Controller
     public function attendance(Request $request)
     {
         $scope = $this->scope($request);
-        $programIds = $scope['programIds'] ?? ScholarshipProgram::active()->pluck('id')->all();
 
         $attendances = $this->admin->attendanceQuery($scope['programIds'])
             ->whereNotNull('check_in')
@@ -206,10 +305,10 @@ class AdminController extends Controller
             ->withQueryString();
 
         return view('admin.attendance', array_merge(
-            $this->layoutData($request, 'attendance', 'Attendance', 'Review attendance records across the system.'),
+            $this->layoutData($request, 'attendance', 'Attendance', 'Review attendance records for the selected scholarship program scope.'),
             [
                 'attendances' => $attendances,
-                'report' => $this->staff->attendanceReport($programIds),
+                'report' => $this->staff->attendanceReport($scope['programIds']),
             ]
         ));
     }
@@ -217,11 +316,10 @@ class AdminController extends Controller
     public function serviceHours(Request $request)
     {
         $scope = $this->scope($request);
-        $programIds = $scope['programIds'] ?? ScholarshipProgram::active()->pluck('id')->all();
 
         return view('admin.service-hours', array_merge(
-            $this->layoutData($request, 'service-hours', 'Service Hours', 'Track service hours and completion progress.'),
-            ['report' => $this->staff->serviceHoursReport($programIds)]
+            $this->layoutData($request, 'service-hours', 'Service Hours', 'Track service hours for the selected City or Province Scholarship Program scope.'),
+            ['report' => $this->staff->serviceHoursReport($scope['programIds'])]
         ));
     }
 
@@ -238,7 +336,7 @@ class AdminController extends Controller
             $this->layoutData($request, 'documents', 'Documents', 'Monitor scholar document submissions.'),
             [
                 'documents' => $documents,
-                'documentTypesCount' => $this->admin->documentTypesCount(),
+                'documentTypesCount' => $this->admin->documentTypesCount($scope['programIds']),
                 'documentOverview' => $this->admin->documentOverviewStats($scope['programIds']),
             ]
         ));
@@ -247,27 +345,25 @@ class AdminController extends Controller
     public function participation(Request $request)
     {
         $scope = $this->scope($request);
-        $programIds = $scope['programIds'] ?? ScholarshipProgram::active()->pluck('id')->all();
 
         return view('admin.participation', array_merge(
-            $this->layoutData($request, 'participation', 'Participation', 'Track event participation across locations.'),
-            ['report' => $this->staff->participationReport($programIds)]
+            $this->layoutData($request, 'participation', 'Participation', 'Track event participation for the selected scholarship program scope.'),
+            ['report' => $this->staff->participationReport($scope['programIds'])]
         ));
     }
 
     public function reports(Request $request)
     {
         $scope = $this->scope($request);
-        $programIds = $scope['programIds'] ?? ScholarshipProgram::active()->pluck('id')->all();
 
         return view('admin.reports', array_merge(
-            $this->layoutData($request, 'reports', 'Reports', 'Compare locations and generate system reports.'),
+            $this->layoutData($request, 'reports', 'Reports', 'Compare City and Province Scholarship Program records separately.'),
             [
                 'stats' => $this->admin->dashboardStats($scope['programIds']),
-                'locationSummaries' => $this->admin->locationSummaries($scope['locationKey']),
-                'attendanceReport' => $this->staff->attendanceReport($programIds),
-                'completionReport' => $this->staff->completionReport($programIds),
-                'participationReport' => $this->staff->participationReport($programIds),
+                'locationSummaries' => $this->admin->locationSummaries($scope['locationKey'], $scope['programType']),
+                'attendanceReport' => $this->staff->attendanceReport($scope['programIds']),
+                'completionReport' => $this->staff->completionReport($scope['programIds']),
+                'participationReport' => $this->staff->participationReport($scope['programIds']),
             ]
         ));
     }
@@ -313,5 +409,14 @@ class AdminController extends Controller
         $request->session()->regenerate();
 
         return back()->with('success', 'Password changed successfully.');
+    }
+
+    public function sidebarBadges(Request $request)
+    {
+        $scope = $this->scope($request);
+
+        return response()->json([
+            'staff' => $this->admin->pendingStaffQuery($scope['programIds'])->count(),
+        ]);
     }
 }

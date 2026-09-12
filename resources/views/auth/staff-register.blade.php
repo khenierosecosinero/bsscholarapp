@@ -5,7 +5,7 @@
     <div class="auth-container">
         <div class="auth-card">
             <h1>City's Scholar Registration</h1>
-            <p class="lead">Register as scholar staff to manage scholars in your assigned province and municipality/city.</p>
+            <p class="lead">Register as scholar staff to manage scholars in your assigned City or Province Scholarship Program. New accounts require administrator approval before you can log in or access the Scholar Staff section.</p>
 
             @if($errors->any())
                 <div class="errors">{{ implode(' ', $errors->all()) }}</div>
@@ -16,11 +16,13 @@
                 <div class="auth-form-body">
                     <input class="form-input" type="text" name="full_name" placeholder="Name of Scholar Staff" value="{{ old('full_name') }}" required autocomplete="name" />
                     <input class="form-input" type="text" name="scholar_id" placeholder="Scholar Staff Number" value="{{ old('scholar_id') }}" required />
-                    @include('partials.location-select', [
-                        'programGroups' => $programGroups,
-                        'placeholder' => 'Select scholar program...',
-                        'helpText' => 'City and province scholar programs are listed alphabetically in separate groups. Example: Surigao City — City Scholar Program, Surigao del Norte — Province Scholar Program.',
+                    @include('partials.staff-location-select', [
+                        'locationTree' => $locationTree,
+                        'requireCity' => false,
                     ])
+                    <p class="muted small" style="margin:-4px 0 12px;padding-left:4px">
+                        Select the province and city/province scholarship program area you will manage. Your account will be linked to that designated program only.
+                    </p>
                     <input class="form-input" type="email" name="email" placeholder="Email" value="{{ old('email') }}" required autocomplete="email" />
                     <input class="form-input" type="password" name="password" placeholder="Password" required autocomplete="new-password" minlength="8" />
                     <input class="form-input" type="password" name="password_confirmation" placeholder="Confirm Password" required autocomplete="new-password" minlength="8" />

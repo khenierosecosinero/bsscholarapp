@@ -23,6 +23,12 @@ class DocumentActionController extends Controller
         $user = Auth::user();
         $type = DocumentType::findOrFail($request->document_type_id);
 
+        abort_unless(
+            $type->scholarship_program_id && (int) $type->scholarship_program_id === (int) $user->scholarship_program_id,
+            403,
+            'This document requirement belongs to a different scholarship program.'
+        );
+
         $path = $request->file('file')->store("documents/{$user->id}", 'public');
 
         $existing = Document::where('user_id', $user->id)

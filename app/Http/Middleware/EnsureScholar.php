@@ -18,6 +18,26 @@ class EnsureScholar
         }
 
         if ($user && $user->isScholarStaff()) {
+            if ($user->isStaffRejected()) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return redirect()
+                    ->route('login')
+                    ->with('error', 'Your scholar staff account has been rejected and can no longer access the system. Please contact the system administrator for assistance.');
+            }
+
+            if ($user->isStaffPendingApproval()) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return redirect()
+                    ->route('login')
+                    ->with('warning', 'Your scholar staff account is pending administrator approval. You cannot log in until your registration has been approved.');
+            }
+
             return redirect()->route('staff.dashboard');
         }
 

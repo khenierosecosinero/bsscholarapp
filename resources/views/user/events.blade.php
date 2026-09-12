@@ -6,6 +6,8 @@
 
 @section('page-content')
 
+@include('partials.user-attendance-status', ['sessions' => $attendanceSessions ?? collect(), 'compact' => true])
+
 <form method="GET" action="{{ route('user.events') }}" class="filter-bar">
     <div class="search-box">
         <span class="search-icon">&#128269;</span>
@@ -34,7 +36,10 @@
                         <div class="event-details">
                             <div class="event-title">{{ $ev['title'] }}</div>
                             <div class="event-meta">{{ $ev['time'] }} · {{ $ev['location'] }}</div>
-                            <div class="event-footer"><span class="hours">Service Hours: {{ $ev['hours'] }}</span></div>
+                            <div class="event-footer">
+                                <span class="hours">Service Hours: {{ $ev['hours'] }}</span>
+                                <span class="badge {{ !empty($ev['attendance_open']) ? 'attendance-open' : 'attendance-closed' }}">{{ $ev['attendance_status'] ?? 'CLOSED' }}</span>
+                            </div>
                         </div>
                         <div class="event-action">
                             <span class="badge {{ $ev['status_class'] }}">{{ $ev['status_label'] }}</span>
@@ -51,7 +56,10 @@
         @if($selected)
             <div class="card event-detail">
                 <a href="{{ route('user.events', request()->only('search', 'status')) }}" class="back-link">&lt; Back to Events</a>
-                <span class="badge {{ $selected['status_class'] }} float-right">{{ $selected['status_label'] }}</span>
+                <div class="event-detail-flags">
+                    <span class="badge {{ $selected['status_class'] }}">{{ $selected['status_label'] }}</span>
+                    <span class="badge {{ !empty($selected['attendance_open']) ? 'attendance-open' : 'attendance-closed' }} attendance-status-flag" data-attendance-event-badge>{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
+                </div>
 
                 <div class="event-hero">
                     @if($selected['image_url'])<img src="{{ $selected['image_url'] }}" alt="{{ $selected['title'] }}">@endif
@@ -69,11 +77,16 @@
                     <div class="about-section"><h3>About this event</h3><p>{{ $selected['description'] }}</p></div>
                 @endif
 
-                @if($selected['registration_status'] === 'not_joined' && !$selected['is_past'])
+                @if($selected['registration_status'] === 'not_joined' && (! $selected['is_past'] || !empty($selected['attendance_open'])))
                     <form method="POST" action="{{ route('user.events.register', $selected['id']) }}">@csrf<button type="submit" class="btn full">Attend / Register</button></form>
                 @endif
 
-                @if($selected['failed_to_check_in'])
+                <div class="reminder-box {{ !empty($selected['attendance_open']) ? 'attendance-open-box' : 'attendance-closed-box' }}" data-attendance-event-message>
+                    <strong>Attendance {{ $selected['attendance_status'] ?? 'CLOSED' }}:</strong>
+                    {{ $selected['attendance_message'] }}
+                </div>
+
+                @if($selected['failed_to_check_in'] && empty($selected['attendance_open']))
                     <div class="reminder-box failed">
                         <strong>Failed to Check In:</strong> You registered for this event but did not check in through the attendance system. No service hours were credited.
                     </div>
@@ -89,27 +102,31 @@
                             </tr></tbody>
                         </table>
                     </div>
-                @elseif($selected['registration_status'] === 'confirmed')
-                    <div class="reminder-box"><strong>Reminder:</strong> Check in during the event, then attach a photo of your participation so Scholar Staff can verify your attendance.</div>
+                @elseif(in_array($selected['registration_status'], ['confirmed', 'failed_to_check_in'], true))
+                    <div class="reminder-box"><strong>Reminder:</strong> Check in after Scholar Staff opens attendance, then attach a photo of your participation so they can verify your hours.</div>
                     <div class="card inner-card">
                         <div class="card-header">Attendance</div>
                         @php $att = $selected['attendance']; @endphp
                         @if(!$att || !$att->check_in)
-                            <form method="POST" action="{{ route('user.events.check-in', $selected['id']) }}">@csrf<button type="submit" class="btn full checkin-btn" {{ !$selected['can_check_in'] ? 'disabled' : '' }}>&#128247; Check In</button></form>
-                            <p class="muted center small">You can only check in during the event.</p>
+                            <form method="POST" action="{{ route('user.events.check-in', $selected['id']) }}">@csrf<button type="submit" class="btn full checkin-btn" {{ empty($selected['can_check_in']) ? 'disabled' : '' }}>&#128247; Check In</button></form>
+                            <p class="muted center small">{{ !empty($selected['attendance_open']) ? 'Attendance is OPEN. You can check in now.' : 'Attendance is CLOSED. You can no longer submit or modify your attendance.' }}</p>
                         @else
-                            @if(!$att->check_out)
+                            @if(!empty($selected['can_check_out']))
                                 <form method="POST" action="{{ route('user.events.check-out', $selected['id']) }}">@csrf<button type="submit" class="btn full">Check Out</button></form>
+                            @elseif(!$att->check_out)
+                                <p class="muted center small">Attendance is CLOSED. You can no longer submit or modify your attendance.</p>
                             @endif
-                            @include('partials.attendance-photo-upload', ['attendance' => $att, 'eventId' => $selected['id']])
+                            @include('partials.attendance-photo-upload', ['attendance' => $att, 'eventId' => $selected['id'], 'canModify' => !empty($selected['can_modify_attendance'])])
                         @endif
                     </div>
                     <div class="card inner-card">
                         <div class="card-header">Your Attendance Record
-                        @if($att && $att->status === 'pending' && $att->check_in)
-                            <span class="badge pending">{{ $att->hasPhoto() && $att->check_out ? 'Pending Verification' : ($att->hasPhoto() ? 'Pending Check Out' : 'Photo Required') }}</span>
-                        @elseif($att && $att->status === 'approved')<span class="badge participated">Participated</span>
-                        @elseif($att && $att->status === 'rejected')<span class="badge rejected">Rejected</span>
+                        @if($att && $att->status === 'approved')
+                            <span class="badge participated">Approved</span>
+                        @elseif($att && $att->status === 'rejected')
+                            <span class="badge rejected">Rejected</span>
+                        @elseif($att && $att->status === 'pending')
+                            <span class="badge pending">Pending</span>
                         @endif
                         </div>
                         <table class="table compact">
@@ -118,7 +135,17 @@
                                 <td>{{ $att?->check_in?->format('g:i A') ?? '—' }}</td>
                                 <td>{{ $att?->check_out?->format('g:i A') ?? '—' }}</td>
                                 <td>{{ $att ? $att->hoursLabel() : '—' }}</td>
-                                <td>{{ $att ? ($att->status === 'approved' ? 'Participated' : $att->statusLabel()) : '—' }}</td>
+                                <td>
+                                    @if($att && $att->status === 'approved')
+                                        <span class="badge participated">Approved</span>
+                                    @elseif($att && $att->status === 'rejected')
+                                        <span class="badge rejected">Rejected</span>
+                                    @elseif($att && $att->status === 'pending')
+                                        <span class="badge pending">Pending</span>
+                                    @else
+                                        —
+                                    @endif
+                                </td>
                             </tr></tbody>
                         </table>
                         @if($att && $att->hasPhoto())

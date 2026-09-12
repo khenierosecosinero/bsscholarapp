@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\User;
+use App\Services\ProgramScopeService;
 use App\Services\ScholarService;
 use App\Services\StaffDashboardService;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ class StaffDocumentController extends Controller
     public function __construct(
         private ScholarService $scholar,
         private StaffDashboardService $staffData,
+        private ProgramScopeService $programScope,
     ) {}
 
     public function index(Request $request)
@@ -27,6 +29,7 @@ class StaffDocumentController extends Controller
         $scholarScope = $this->scholarScope($programIds);
 
         $types = DocumentType::query()
+            ->whereIn('scholarship_program_id', $programIds ?: [0])
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($inner) use ($search) {
                     $inner->where('name', 'like', "%{$search}%")
@@ -45,7 +48,7 @@ class StaffDocumentController extends Controller
         $docsQuery = Document::query()->whereHas('user', $scholarScope);
 
         $stats = [
-            'types' => DocumentType::count(),
+            'types' => DocumentType::query()->whereIn('scholarship_program_id', $programIds ?: [0])->count(),
             'submitted' => (clone $docsQuery)->whereNotNull('file_path')->where('file_path', '!=', '')->count(),
             'pending' => (clone $docsQuery)->whereNotNull('file_path')->whereIn('status', ['pending', 'submitted'])->count(),
             'approved' => (clone $docsQuery)->where('status', 'approved')->count(),
@@ -70,6 +73,11 @@ class StaffDocumentController extends Controller
 
     public function store(Request $request)
     {
+        $staff = Auth::user();
+        $programId = $staff->scholarship_program_id;
+
+        abort_unless($programId, 403, 'Your staff account is not linked to a scholarship program.');
+
         $data = $request->validate([
             'name' => 'required|string|max:120',
             'description' => 'nullable|string|max:500',
@@ -81,13 +89,11 @@ class StaffDocumentController extends Controller
             'slug' => $this->uniqueSlug($data['name']),
             'description' => $data['description'] ?? null,
             'required' => $request->boolean('required'),
+            'scholarship_program_id' => $programId,
         ]);
 
         $this->scholar->provisionDocumentType($type);
-        $notified = $this->scholar->notifyScholarsOfDocumentType(
-            $type,
-            $this->staffData->programIds(Auth::user())
-        );
+        $notified = $this->scholar->notifyScholarsOfDocumentType($type);
 
         return redirect()
             ->route('staff.documents.show', $type)
@@ -97,6 +103,7 @@ class StaffDocumentController extends Controller
     public function show(Request $request, DocumentType $documentType)
     {
         $staff = Auth::user();
+        $this->programScope->assertDocumentTypeManagedByStaff($documentType, $staff);
         $programIds = $this->staffData->programIds($staff);
         $search = trim((string) $request->get('search', ''));
         $statusFilter = $request->get('status', 'submitted');
@@ -156,6 +163,8 @@ class StaffDocumentController extends Controller
 
     public function edit(DocumentType $documentType)
     {
+        $this->programScope->assertDocumentTypeManagedByStaff($documentType, Auth::user());
+
         return view('staff.documents.edit', array_merge(
             $this->layoutData(
                 'documents',
@@ -169,6 +178,8 @@ class StaffDocumentController extends Controller
 
     public function update(Request $request, DocumentType $documentType)
     {
+        $this->programScope->assertDocumentTypeManagedByStaff($documentType, Auth::user());
+
         $data = $request->validate([
             'name' => 'required|string|max:120',
             'description' => 'nullable|string|max:500',
@@ -188,6 +199,8 @@ class StaffDocumentController extends Controller
 
     public function destroy(DocumentType $documentType)
     {
+        $this->programScope->assertDocumentTypeManagedByStaff($documentType, Auth::user());
+
         $name = $documentType->name;
 
         $documentType->documents()

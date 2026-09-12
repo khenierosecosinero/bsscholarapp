@@ -38,6 +38,8 @@ class User extends Authenticatable
         'course_year_level',
         'year_level',
         'cellphone_number',
+        'city',
+        'province',
         'date_of_birth',
         'guardian_name',
         'guardian_relationship',
@@ -90,14 +92,29 @@ class User extends Authenticatable
         return $this->isScholar() && $this->status === self::STATUS_PENDING;
     }
 
+    public function isStaffPendingApproval(): bool
+    {
+        return $this->isScholarStaff() && $this->status === self::STATUS_PENDING;
+    }
+
     public function isRejected(): bool
     {
         return $this->isScholar() && $this->status === self::STATUS_REJECTED;
     }
 
+    public function isStaffRejected(): bool
+    {
+        return $this->isScholarStaff() && $this->status === self::STATUS_REJECTED;
+    }
+
     public function hasScholarPortalAccess(): bool
     {
         return $this->isScholar() && $this->status === self::STATUS_APPROVED;
+    }
+
+    public function hasStaffPortalAccess(): bool
+    {
+        return $this->isScholarStaff() && $this->status === self::STATUS_APPROVED;
     }
 
     public function canLogin(): bool
@@ -107,7 +124,7 @@ class User extends Authenticatable
         }
 
         if ($this->isScholarStaff()) {
-            return true;
+            return $this->status === self::STATUS_APPROVED;
         }
 
         if ($this->isScholar()) {
@@ -127,6 +144,10 @@ class User extends Authenticatable
 
     public function municipalityName(): ?string
     {
+        if ($this->city) {
+            return $this->city;
+        }
+
         $program = $this->scholarshipProgram;
 
         if (! $program) {
@@ -138,6 +159,10 @@ class User extends Authenticatable
 
     public function provinceName(): ?string
     {
+        if ($this->province) {
+            return $this->province;
+        }
+
         $program = $this->scholarshipProgram;
 
         if (! $program) {
@@ -191,7 +216,7 @@ class User extends Authenticatable
 
     public function canManageScholar(User $scholar): bool
     {
-        if (! $scholar->isScholar()) {
+        if (! $scholar->isScholar() || $scholar->isScholarStaff() || $scholar->isStaffPendingApproval()) {
             return false;
         }
 
@@ -199,6 +224,34 @@ class User extends Authenticatable
 
         return $scholar->scholarship_program_id
             && in_array((int) $scholar->scholarship_program_id, array_map('intval', $managed), true);
+    }
+
+    /**
+     * Pending scholar staff accounts are visible only to administrators.
+     * Approved staff may see other approved staff in the same program scope.
+     */
+    public function canViewStaffAccount(User $staffMember): bool
+    {
+        if (! $staffMember->isScholarStaff()) {
+            return false;
+        }
+
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        if (! $this->isScholarStaff() || ! $this->hasStaffPortalAccess()) {
+            return false;
+        }
+
+        if (! $staffMember->hasStaffPortalAccess()) {
+            return false;
+        }
+
+        $managed = $this->managedLocationIds();
+
+        return $staffMember->scholarship_program_id
+            && in_array((int) $staffMember->scholarship_program_id, array_map('intval', $managed), true);
     }
 
     public function scholarshipProgram(): BelongsTo
@@ -224,6 +277,8 @@ class User extends Authenticatable
             'school_university',
             'course_year_level',
             'cellphone_number',
+            'city',
+            'province',
         ])->all());
 
         $user->email = strtolower(trim($attributes['email']));
@@ -232,6 +287,11 @@ class User extends Authenticatable
         $user->status = $attributes['status'] ?? 'approved';
         $user->role = $attributes['role'] ?? self::ROLE_SCHOLAR;
         $user->scholarship_program_id = $attributes['scholarship_program_id'] ?? null;
+
+        if (in_array($user->role, [self::ROLE_SCHOLAR, self::ROLE_SCHOLAR_STAFF], true) && ! $user->scholarship_program_id) {
+            throw new InvalidArgumentException('Scholars and scholar staff must be linked to a scholarship program.');
+        }
+
         $user->save();
 
         return $user->fresh(['scholarshipProgram']);
@@ -269,6 +329,11 @@ class User extends Authenticatable
     public function scholarNotifications(): HasMany
     {
         return $this->hasMany(ScholarNotification::class);
+    }
+
+    public function unreadNotificationCount(): int
+    {
+        return $this->scholarNotifications()->where('is_read', false)->count();
     }
 
     public function announcementReads(): HasMany

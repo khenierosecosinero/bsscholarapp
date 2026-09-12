@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initProfileTabs();
     initFileUpload();
     initFlashDismiss();
+    initAttendanceLive();
 });
 
 function initSidebar() {
@@ -95,6 +96,140 @@ function initFileUpload() {
             }
         });
     }
+}
+
+function initAttendanceLive() {
+    const root = document.getElementById('attendance-live-root');
+    if (!root?.dataset.attendanceLive) return;
+
+    const url = root.dataset.attendanceLive;
+    const eventsUrl = root.dataset.eventsUrl || '/user/events';
+    const page = root.dataset.attendancePage || '';
+    const eventId = String(root.dataset.attendanceEvent || '');
+    let lastSignature = '';
+    let lastEventStatus = root.dataset.attendanceStatus || '';
+    let lastNotificationId = Number(root.dataset.latestNotification || 0);
+    let primed = false;
+
+    const poll = async () => {
+        try {
+            const response = await fetch(url, {
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+
+            if (typeof data.unread_notifications !== 'undefined') {
+                updateUnreadNotificationBadge(data.unread_notifications);
+            }
+
+            if (!primed) {
+                lastSignature = data.signature || '';
+                lastNotificationId = Number(data.latest_notification_id || 0);
+                if (eventId && data.events?.[eventId]?.status) {
+                    lastEventStatus = data.events[eventId].status;
+                }
+                primed = true;
+                renderAttendanceSessions(data.sessions || [], eventsUrl);
+                return;
+            }
+
+            if (eventId && data.events?.[eventId]?.status && data.events[eventId].status !== lastEventStatus) {
+                window.location.reload();
+                return;
+            }
+
+            if (page === 'notifications' && Number(data.latest_notification_id || 0) > lastNotificationId) {
+                window.location.reload();
+                return;
+            }
+
+            if (data.signature && data.signature !== lastSignature) {
+                lastSignature = data.signature;
+                renderAttendanceSessions(data.sessions || [], eventsUrl);
+                updateEventAttendanceBadge(data.events?.[eventId]);
+            }
+
+            lastNotificationId = Number(data.latest_notification_id || lastNotificationId);
+        } catch (error) {
+            // Keep polling even if one request fails.
+        }
+    };
+
+    poll();
+    setInterval(poll, 5000);
+}
+
+function renderAttendanceSessions(sessions, eventsUrl) {
+    const list = document.querySelector('[data-attendance-session-list]');
+    if (!list) return;
+
+    if (!sessions.length) {
+        list.innerHTML = '<p class="muted" data-attendance-empty>No attendance session has been opened yet. Scholar Staff will open attendance when scholars can mark it.</p>';
+        return;
+    }
+
+    const base = eventsUrl || '/user/events';
+    list.innerHTML = sessions.map((session) => `
+        <article class="attendance-status-item ${session.is_open ? 'is-open' : 'is-closed'}" data-event-id="${session.event_id}">
+            <div class="attendance-status-top">
+                <strong>${escapeHtml(session.title)}</strong>
+                <span class="badge ${session.is_open ? 'attendance-open' : 'attendance-closed'}">${escapeHtml(session.status)}</span>
+            </div>
+            <div class="muted">${escapeHtml(session.full_date || '')} · ${escapeHtml(session.time || '')}</div>
+            <p>${escapeHtml(session.message)}</p>
+            <a href="${base}?event=${encodeURIComponent(session.event_id)}" class="link small">View Event</a>
+        </article>
+    `).join('');
+}
+
+function updateUnreadNotificationBadge(count) {
+    const nav = document.querySelector('[data-nav="notifications"]');
+    if (!nav) return;
+
+    count = Number(count) || 0;
+    let badge = nav.querySelector('[data-unread-notifications]');
+
+    if (count > 0) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'nav-notif-badge';
+            badge.setAttribute('data-unread-notifications', '');
+            nav.appendChild(badge);
+        }
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.setAttribute('aria-label', `${count} unread notifications`);
+        return;
+    }
+
+    if (badge) {
+        badge.remove();
+    }
+}
+
+function updateEventAttendanceBadge(session) {
+    if (!session) return;
+    const badge = document.querySelector('[data-attendance-event-badge]');
+    const message = document.querySelector('[data-attendance-event-message]');
+    if (badge) {
+        badge.textContent = session.status;
+        badge.classList.toggle('attendance-open', !!session.is_open);
+        badge.classList.toggle('attendance-closed', !session.is_open);
+    }
+    if (message) {
+        message.classList.toggle('attendance-open-box', !!session.is_open);
+        message.classList.toggle('attendance-closed-box', !session.is_open);
+        message.innerHTML = `<strong>Attendance ${escapeHtml(session.status)}:</strong> ${escapeHtml(session.message)}`;
+    }
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }
 
 function initFlashDismiss() {

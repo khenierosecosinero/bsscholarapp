@@ -36,6 +36,7 @@
                     <th>Date &amp; Time</th>
                     <th>Service Hours</th>
                     <th>Status</th>
+                    <th>Attendance</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -69,12 +70,13 @@
                         </td>
                         <td>{{ number_format((float) $event->service_hours, 1) }} hrs</td>
                         <td><span class="staff-badge {{ $statusClass }}">{{ ucfirst(str_replace('_', ' ', $event->status ?? 'upcoming')) }}</span></td>
+                        <td><span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}">{{ $event->attendanceStatusLabel() }}</span></td>
                         <td>
                             <a href="{{ route('staff.events.show', $event) }}" class="staff-action-btn" title="View">👁</a>
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5">No events found. <a href="{{ route('staff.events.create') }}">Create your first event</a>.</td></tr>
+                    <tr><td colspan="6">No events found. <a href="{{ route('staff.events.create') }}">Create your first event</a>.</td></tr>
                 @endforelse
             </tbody>
         </table>

@@ -13,14 +13,7 @@
         </div>
     </div>
     <div class="staff-topbar-right">
-        <div class="staff-breadcrumb">Dashboard / {{ $breadcrumb ?? $pageTitle }}</div>
         <div class="staff-topbar-actions">
-            <button type="button" class="staff-icon-btn" aria-label="Notifications">
-                &#128276;
-                @if(($pendingApprovalsCount ?? 0) > 0)
-                    <span class="staff-notif-badge">{{ $pendingApprovalsCount }}</span>
-                @endif
-            </button>
             <div class="staff-profile-chip">
                 <div class="staff-profile-avatar">{{ strtoupper(substr($staffName, 0, 1)) }}</div>
                 <span>{{ $staffName }}</span>

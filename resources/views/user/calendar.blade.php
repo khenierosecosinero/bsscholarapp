@@ -74,7 +74,11 @@
                 <div class="card event-detail-card">
                     @if($selected['image_url'])<img src="{{ $selected['image_url'] }}" alt="">@endif
                     @include('partials.event-status-badge', ['statusClass' => $selected['status_class'], 'statusLabel' => $selected['status_label']])
+                    <span class="badge {{ !empty($selected['attendance_open']) ? 'attendance-open' : 'attendance-closed' }}">{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
                     <h3>{{ $selected['title'] }}</h3>
+                    @if(!empty($selected['attendance_message']))
+                        <p class="muted" style="margin:0 0 10px">{{ $selected['attendance_message'] }}</p>
+                    @endif
                     <div class="info-row"><span class="info-icon">&#128197;</span> {{ $selected['starts_at']->format('M d, Y') }}</div>
                     <div class="info-row"><span class="info-icon">&#128336;</span> {{ $selected['time'] }}</div>
                     <div class="info-row"><span class="info-icon">&#128205;</span> {{ $selected['location'] }}</div>

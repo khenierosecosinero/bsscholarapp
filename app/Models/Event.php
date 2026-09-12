@@ -3,16 +3,20 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 use Carbon\CarbonInterface;
 
 class Event extends Model
 {
     protected $fillable = [
         'title', 'description', 'location', 'starts_at', 'ends_at',
-        'service_hours', 'organizer', 'image_url', 'status', 'scholarship_program_id',
+        'service_hours', 'organizer', 'image_url', 'image_path', 'status', 'scholarship_program_id',
+        'attendance_is_open', 'attendance_opened_at', 'attendance_closed_at',
+        'attendance_opened_by', 'attendance_closed_by',
     ];
 
     protected function casts(): array
@@ -21,6 +25,9 @@ class Event extends Model
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'service_hours' => 'decimal:2',
+            'attendance_is_open' => 'boolean',
+            'attendance_opened_at' => 'datetime',
+            'attendance_closed_at' => 'datetime',
         ];
     }
 
@@ -34,9 +41,85 @@ class Event extends Model
         return $this->hasMany(Attendance::class);
     }
 
+    public function attendanceSessionLogs(): HasMany
+    {
+        return $this->hasMany(AttendanceSessionLog::class);
+    }
+
     public function scholarshipProgram(): BelongsTo
     {
         return $this->belongsTo(ScholarshipProgram::class);
+    }
+
+    protected function imageUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function (?string $value) {
+                if ($this->hasStoredImage() && $this->id) {
+                    return route('events.image', $this);
+                }
+
+                return $value;
+            },
+        );
+    }
+
+    public function hasStoredImage(): bool
+    {
+        return filled($this->image_path)
+            && Storage::disk('public')->exists($this->image_path);
+    }
+
+    public function imageResponse()
+    {
+        if (! $this->hasStoredImage()) {
+            abort(404, 'Event image not found.');
+        }
+
+        return Storage::disk('public')->response($this->image_path);
+    }
+
+    public function attendanceOpenedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'attendance_opened_by');
+    }
+
+    public function attendanceClosedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'attendance_closed_by');
+    }
+
+    public function isAttendanceOpen(): bool
+    {
+        return (bool) $this->attendance_is_open;
+    }
+
+    public function attendanceSessionClosed(): bool
+    {
+        return ! $this->isAttendanceOpen()
+            && $this->attendance_opened_at
+            && $this->attendance_closed_at
+            && $this->attendance_closed_at->gte($this->attendance_opened_at);
+    }
+
+    public function attendanceStatusLabel(): string
+    {
+        return $this->isAttendanceOpen() ? 'OPEN' : 'CLOSED';
+    }
+
+    public function attendanceStatusBadgeClass(): string
+    {
+        return $this->isAttendanceOpen() ? 'green' : 'gray';
+    }
+
+    public function attendanceOpenedAtLabel(): ?string
+    {
+        return $this->attendance_opened_at?->format('M j, Y g:i A');
+    }
+
+    public function attendanceClosedAtLabel(): ?string
+    {
+        return $this->attendance_closed_at?->format('M j, Y g:i A');
     }
 
     public function isHappeningNow(): bool

@@ -25,13 +25,13 @@ class AccountService
 
         $this->scholar->logActivity($user, 'account', 'Account created');
 
-        $programName = $user->scholarshipProgram?->name ?? 'your assigned scholarship program';
+        $programLabel = $user->scholarshipProgram?->programLabel() ?? 'your assigned scholarship program';
 
         if ($user->isPendingApproval()) {
             $this->scholar->notify(
                 $user,
                 'Account Pending Approval',
-                "Your account has been created and linked to {$programName}. Scholar Staff will review your registration before full access is granted.",
+                "Your account has been created and linked to {$programLabel}. Scholar Staff will review your registration before full access is granted.",
                 'system'
             );
 
@@ -41,7 +41,7 @@ class AccountService
         $this->scholar->notify(
             $user,
             'Welcome to BSSA',
-            "Your scholar account has been created and linked to {$programName}. Your profile, documents, and activity records are saved permanently. You may log in at any time, even after a long period of inactivity.",
+            "Your scholar account has been created and linked to {$programLabel}. Your profile, documents, and activity records are saved permanently. You may log in at any time, even after a long period of inactivity.",
             'system'
         );
     }
@@ -56,13 +56,25 @@ class AccountService
             $user->save();
         }
 
-        $programName = $user->scholarshipProgram?->name ?? 'your assigned scholarship program';
+        $programLabel = $user->scholarshipProgram?->programLabel() ?? 'your assigned scholarship program';
 
         $this->scholar->logActivity($user, 'account', 'Scholar staff account created');
+
+        if ($user->isStaffPendingApproval()) {
+            $this->scholar->notify(
+                $user,
+                'Scholar Staff Account Pending Approval',
+                "Your account has been created and linked to {$programLabel}. An administrator must approve your registration before you can log in or access the Scholar Staff section.",
+                'system'
+            );
+
+            return;
+        }
+
         $this->scholar->notify(
             $user,
             'Scholar Staff Account Created',
-            "Your account is now linked to {$programName}. You may log in at any time to manage scholars in your assigned location, even after a long period of inactivity.",
+            "Your account is now linked to {$programLabel}. You may log in at any time to manage scholars in your assigned location, even after a long period of inactivity.",
             'system'
         );
     }

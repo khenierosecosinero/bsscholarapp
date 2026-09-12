@@ -2,6 +2,9 @@
 
 @section('page-content')
 
+@include('partials.admin-location-filter')
+@include('partials.admin-scope-banner')
+
 <div class="admin-settings-tabs">
     <div class="staff-card">
         <div class="staff-card-header"><h2>Account Information</h2></div>

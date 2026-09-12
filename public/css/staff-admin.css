@@ -817,6 +817,13 @@ body:has(.staff-shell) {
     color: #0f2744;
 }
 
+.staff-attendance-card-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
 .staff-doc-type-body p {
     margin: 0 0 12px;
     font-size: 13px;
@@ -1039,12 +1046,12 @@ body:has(.staff-shell) {
 
 .staff-confirm-dialog {
     position: relative;
-    width: min(100%, 420px);
+    width: min(100%, 440px);
     background: #fff;
-    border-radius: 14px;
+    border-radius: 16px;
     border: 1px solid var(--staff-border);
-    box-shadow: 0 20px 50px rgba(15, 39, 68, 0.18);
-    padding: 28px 24px 22px;
+    box-shadow: 0 24px 60px rgba(15, 39, 68, 0.2);
+    padding: 32px 28px 24px;
     text-align: center;
     animation: staffConfirmIn 0.2s ease;
 }
@@ -1108,3 +1115,51 @@ body:has(.staff-shell) {
     min-width: 96px;
     font-weight: 700;
 }
+
+.staff-attendance-session {
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+}
+
+.staff-attendance-session.is-open {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.staff-attendance-session.is-closed {
+    background: #f8fafc;
+    border-color: #e5e7eb;
+}
+
+.staff-attendance-session-status {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    flex: 1;
+    min-width: 240px;
+}
+
+.staff-attendance-status-badge {
+    font-size: 13px;
+    letter-spacing: 0.04em;
+}
+
+.staff-attendance-session-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.staff-attendance-session-actions button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+

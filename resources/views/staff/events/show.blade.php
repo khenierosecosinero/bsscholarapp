@@ -24,6 +24,7 @@
 
         <h3 style="margin:0 0 8px">{{ $event->title }}</h3>
         <span class="staff-badge {{ $statusClass }}">{{ ucfirst(str_replace('_', ' ', $event->status ?? 'upcoming')) }}</span>
+        <span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}">Attendance {{ $event->attendanceStatusLabel() }}</span>
 
         @if($event->description)
             <p class="staff-muted" style="margin:16px 0">{{ $event->description }}</p>
@@ -42,7 +43,8 @@
             <div class="value">{{ $event->registrations_count ?? 0 }}</div>
             <div class="sub">Registered scholars</div>
         </div>
-        <p class="staff-muted" style="margin-top:16px">Scholars who clicked Attend but did not check in after the event ends are marked Failed to Check In and receive 0 service hours.</p>
+        <p class="staff-muted" style="margin-top:16px">Open or close attendance from Staff &gt; Attendance. The session stays open until you close it and does not follow the event schedule. Scholars who registered but did not check in before the session closed are marked Failed to Check In and receive 0 service hours.</p>
+        <a href="{{ route('staff.attendance', ['event' => $event->id]) }}" class="staff-btn staff-btn-primary" style="margin-top:12px">Manage Attendance</a>
     </div>
 </div>
 

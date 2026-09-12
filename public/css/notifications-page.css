@@ -49,6 +49,25 @@
     margin-top: 12px;
 }
 
+.page-notifications .notifications-see-more-wrap {
+    margin-top: 16px;
+}
+
+.page-notifications .notifications-see-more {
+    display: block;
+    width: 100%;
+    text-align: center;
+    text-decoration: none;
+    font-weight: 700;
+    padding: 10px 14px;
+    cursor: pointer;
+}
+
+.page-notifications .notification-item[hidden],
+.page-notifications .notification-item[data-notification-extra][hidden] {
+    display: none !important;
+}
+
 .page-notifications .sidebar-help-text {
     margin: 0 0 18px;
     padding: 0;

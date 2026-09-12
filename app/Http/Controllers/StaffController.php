@@ -8,11 +8,16 @@ use App\Models\EventRegistration;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
 use App\Services\AccountService;
+use App\Services\AttendanceSessionService;
 use App\Services\ScholarService;
 use App\Services\StaffDashboardService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 
 class StaffController extends Controller
 {
@@ -20,6 +25,7 @@ class StaffController extends Controller
         private ScholarService $scholar,
         private StaffDashboardService $staffData,
         private AccountService $accounts,
+        private AttendanceSessionService $attendanceSessions,
     ) {}
 
     private function layoutData(string $active, string $title, string $subtitle = '', ?string $breadcrumb = null): array
@@ -43,6 +49,8 @@ class StaffController extends Controller
     public function dashboard()
     {
         $staff = Auth::user();
+        abort_unless($staff->hasStaffPortalAccess(), 403);
+
         $programIds = $this->staffData->programIds($staff);
         $this->scholar->syncMissedCheckInsForPrograms($programIds);
         $this->scholar->syncCompletedEventHoursForPrograms($programIds);
@@ -65,11 +73,9 @@ class StaffController extends Controller
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
         $search = trim((string) $request->get('search', ''));
-        $locationId = (int) $request->get('location', 0);
 
         $scholars = $this->staffData->scholarsQuery($programIds)
             ->with('scholarshipProgram')
-            ->when($locationId > 0, fn ($query) => $query->where('scholarship_program_id', $locationId))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('full_name', 'like', "%{$search}%")
@@ -82,15 +88,10 @@ class StaffController extends Controller
             ->withQueryString();
 
         $stats = $this->staffData->dashboardStats($programIds);
-        $locationFilters = ScholarshipProgram::sortAlphabetically(
-            ScholarshipProgram::query()
-                ->whereIn('id', $programIds ?: [0])
-                ->get(['id', 'location_name', 'province_name', 'location_type', 'display_name'])
-        );
 
         return view('staff.scholars', array_merge(
             $this->layoutData('scholars', 'Scholars', 'Scholars registered in '.$staff->locationLabel().'.'),
-            compact('scholars', 'search', 'stats', 'locationFilters', 'locationId')
+            compact('scholars', 'search', 'stats')
         ));
     }
 
@@ -184,9 +185,16 @@ class StaffController extends Controller
             'ends_at' => ['required', 'date', 'after:starts_at'],
             'service_hours' => ['required', 'numeric', 'min:0', 'max:999'],
             'organizer' => ['nullable', 'string', 'max:255'],
-            'image_url' => ['nullable', 'url', 'max:500'],
-            'status' => ['required', 'in:confirmed,upcoming,pending'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:5120'],
+        ], [
+            'image.image' => 'The event image must be a photo (JPG or PNG).',
+            'image.mimes' => 'The event image must be a JPG or PNG file.',
+            'image.max' => 'The event image must not be larger than 5MB.',
         ]);
+
+        $imagePath = $request->hasFile('image')
+            ? $request->file('image')->store('event_images', 'public')
+            : null;
 
         $event = Event::create([
             'title' => $data['title'],
@@ -196,8 +204,8 @@ class StaffController extends Controller
             'ends_at' => Carbon::parse($data['ends_at']),
             'service_hours' => $data['service_hours'],
             'organizer' => $data['organizer'] ?? $staff->full_name,
-            'image_url' => $data['image_url'] ?? null,
-            'status' => $data['status'],
+            'image_path' => $imagePath,
+            'status' => 'confirmed',
             'scholarship_program_id' => $staff->scholarship_program_id,
         ]);
 
@@ -223,10 +231,10 @@ class StaffController extends Controller
         $staff = Auth::user();
 
         abort_unless(
-            $event->scholarship_program_id === null
-                || in_array((int) $event->scholarship_program_id, array_map('intval', $staff->managedLocationIds()), true),
+            $event->scholarship_program_id
+                && in_array((int) $event->scholarship_program_id, array_map('intval', $staff->managedLocationIds()), true),
             403,
-            'You can only manage events for your assigned municipality, city, or province.'
+            'You can only manage events for your assigned City or Province Scholarship Program.'
         );
 
         $event->loadCount('registrations');
@@ -247,7 +255,7 @@ class StaffController extends Controller
 
         $participants = $event->registrations->map(function ($registration) use ($event) {
             $attendance = $event->attendances->firstWhere('user_id', $registration->user_id);
-            $failed = $event->hasEnded() && ! $attendance?->check_in;
+            $failed = ($event->hasEnded() || $event->attendanceSessionClosed()) && ! $attendance?->check_in;
             $status = $failed
                 ? Attendance::STATUS_FAILED_CHECK_IN
                 : ($attendance?->status ?? $registration->status);
@@ -328,12 +336,7 @@ class StaffController extends Controller
         $gridEnd = $monthDate->copy()->endOfMonth()->endOfWeek(Carbon::SATURDAY)->endOfDay();
 
         $monthEvents = Event::query()
-            ->where(function ($q) use ($programIds) {
-                $q->whereNull('scholarship_program_id');
-                if ($programIds) {
-                    $q->orWhereIn('scholarship_program_id', $programIds);
-                }
-            })
+            ->whereIn('scholarship_program_id', $programIds ?: [0])
             ->overlappingDates($gridStart, $gridEnd)
             ->orderBy('starts_at')
             ->get();
@@ -353,6 +356,57 @@ class StaffController extends Controller
     public function settings()
     {
         return view('staff.settings', $this->layoutData('settings', 'Settings', 'Manage system preferences and configurations.'));
+    }
+
+    public function changePassword(Request $request)
+    {
+        $this->ensurePasswordChangeIsNotRateLimited($request);
+
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'confirmed', 'different:current_password', Password::min(8)->letters()->numbers()],
+        ], [
+            'current_password.required' => 'Current password is required.',
+            'password.required' => 'New password is required.',
+            'password.confirmed' => 'New password and confirm new password must match.',
+            'password.different' => 'New password must be different from your current password.',
+            'password.min' => 'New password must be at least 8 characters.',
+            'password.letters' => 'New password must include at least one letter.',
+            'password.numbers' => 'New password must include at least one number.',
+        ]);
+
+        $staff = Auth::user();
+
+        if (! Hash::check($validated['current_password'], $staff->password)) {
+            RateLimiter::hit($this->passwordThrottleKey($request), 300);
+
+            throw ValidationException::withMessages([
+                'current_password' => 'Current password is incorrect.',
+            ]);
+        }
+
+        $staff->updatePassword($validated['password']);
+
+        RateLimiter::clear($this->passwordThrottleKey($request));
+        $request->session()->regenerate();
+
+        return back()->with('success', 'Password changed successfully. You can now log in with your new password.');
+    }
+
+    private function passwordThrottleKey(Request $request): string
+    {
+        return 'staff-password-change|'.Auth::id().'|'.$request->ip();
+    }
+
+    private function ensurePasswordChangeIsNotRateLimited(Request $request): void
+    {
+        if (RateLimiter::tooManyAttempts($this->passwordThrottleKey($request), 5)) {
+            $seconds = RateLimiter::availableIn($this->passwordThrottleKey($request));
+
+            throw ValidationException::withMessages([
+                'current_password' => "Too many attempts. Please try again in {$seconds} seconds.",
+            ]);
+        }
     }
 
     public function serviceHoursReports()
@@ -437,6 +491,36 @@ class StaffController extends Controller
         return back()->with('success', "{$scholarName}'s account has been rejected and permanently removed from the system.");
     }
 
+    public function pendingApproval(Request $request)
+    {
+        $staff = Auth::user();
+
+        if ($staff->hasStaffPortalAccess()) {
+            return redirect()->route('staff.dashboard');
+        }
+
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        $message = $staff->isStaffRejected()
+            ? 'Your scholar staff account has been rejected and can no longer access the system. Please contact the system administrator for assistance.'
+            : 'Your scholar staff account is pending administrator approval. You cannot log in until your registration has been approved.';
+
+        return redirect()
+            ->route('login')
+            ->with($staff->isStaffRejected() ? 'error' : 'warning', $message);
+    }
+
+    public function dismissPendingStaffModal(Request $request)
+    {
+        abort_unless(Auth::user()->isStaffPendingApproval(), 403);
+
+        $request->session()->forget('show_pending_staff_approval_modal');
+
+        return response()->noContent();
+    }
+
     public function viewAttendancePhoto(Attendance $attendance)
     {
         $this->assertManagesAttendance($attendance);
@@ -455,6 +539,34 @@ class StaffController extends Controller
         }
 
         return back()->with('success', "Attendance for {$attendance->user?->full_name} was verified and service hours were approved.");
+    }
+
+    public function openAttendance(Event $event)
+    {
+        $this->assertManagesEvent($event);
+        abort_unless(Auth::user()->hasStaffPortalAccess(), 403);
+
+        try {
+            $this->attendanceSessions->open($event, Auth::user());
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', "Attendance for {$event->title} is now OPEN. Scholars can mark their attendance until you close the session.");
+    }
+
+    public function closeAttendance(Event $event)
+    {
+        $this->assertManagesEvent($event);
+        abort_unless(Auth::user()->hasStaffPortalAccess(), 403);
+
+        try {
+            $this->attendanceSessions->close($event, Auth::user());
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', "Attendance for {$event->title} is now CLOSED. Scholars can no longer submit or modify their attendance.");
     }
 
     public function rejectAttendance(Request $request, Attendance $attendance)
@@ -487,16 +599,21 @@ class StaffController extends Controller
         );
     }
 
+    private function assertManagesEvent(Event $event): void
+    {
+        abort_unless(
+            $event->scholarship_program_id
+                && in_array((int) $event->scholarship_program_id, array_map('intval', Auth::user()->managedLocationIds()), true),
+            403,
+            'You can only manage attendance for your assigned scholarship program.'
+        );
+    }
+
     private function attendanceEventPanel(array $programIds, int $selectedEventId, string $search = ''): array
     {
         $events = Event::query()
             ->with(['registrations.user', 'attendances.user'])
-            ->where(function ($q) use ($programIds) {
-                $q->whereNull('scholarship_program_id');
-                if ($programIds) {
-                    $q->orWhereIn('scholarship_program_id', $programIds);
-                }
-            })
+            ->whereIn('scholarship_program_id', $programIds ?: [0])
             ->when($search !== '' && $selectedEventId <= 0, function ($q) use ($search) {
                 $q->where(function ($inner) use ($search) {
                     $inner->where('title', 'like', "%{$search}%")
@@ -514,7 +631,7 @@ class StaffController extends Controller
                 $event->setAttribute('failed_count', $event->registrations->filter(function ($registration) use ($event) {
                     $attendance = $event->attendances->firstWhere('user_id', $registration->user_id);
 
-                    return $event->hasEnded() && ! $attendance?->hasCheckedIn();
+                    return ($event->hasEnded() || $event->attendanceSessionClosed()) && ! $attendance?->hasCheckedIn();
                 })->count());
             });
 
@@ -550,6 +667,7 @@ class StaffController extends Controller
                     $checkedIn->push($row);
                 } elseif (
                     $selected->hasEnded()
+                    || $selected->attendanceSessionClosed()
                     || $attendance?->status === Attendance::STATUS_FAILED_CHECK_IN
                     || $registration->status === EventRegistration::STATUS_FAILED_CHECK_IN
                 ) {

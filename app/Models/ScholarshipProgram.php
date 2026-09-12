@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -36,7 +37,16 @@ class ScholarshipProgram extends Model
 
     public function staff(): HasMany
     {
-        return $this->hasMany(User::class)->where('role', User::ROLE_SCHOLAR_STAFF);
+        return $this->hasMany(User::class)
+            ->where('role', User::ROLE_SCHOLAR_STAFF)
+            ->where('status', User::STATUS_APPROVED);
+    }
+
+    public function pendingStaff(): HasMany
+    {
+        return $this->hasMany(User::class)
+            ->where('role', User::ROLE_SCHOLAR_STAFF)
+            ->where('status', User::STATUS_PENDING);
     }
 
     public function events(): HasMany
@@ -52,6 +62,26 @@ class ScholarshipProgram extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    public function scopeCities(Builder $query): Builder
+    {
+        return $query->where('location_type', 'city_municipality');
+    }
+
+    public function scopeProvinces(Builder $query): Builder
+    {
+        return $query->where('location_type', 'province');
+    }
+
+    public function isCityProgram(): bool
+    {
+        return $this->isCityOrMunicipality();
+    }
+
+    public function isProvinceProgram(): bool
+    {
+        return $this->isProvince();
     }
 
     public static function slugForLocation(string $locationName): string
@@ -78,6 +108,21 @@ class ScholarshipProgram extends Model
         $name = $this->display_name ?: $this->location_name;
 
         return "{$name} — {$this->programTypeLabel()}";
+    }
+
+    /**
+     * Derive saved city/province values from this program for user records.
+     *
+     * @return array{city: ?string, province: string}
+     */
+    public function registrationLocation(): array
+    {
+        return [
+            'city' => $this->isCityOrMunicipality() ? $this->location_name : null,
+            'province' => $this->isProvince()
+                ? $this->location_name
+                : ($this->province_name ?: ''),
+        ];
     }
 
     /**

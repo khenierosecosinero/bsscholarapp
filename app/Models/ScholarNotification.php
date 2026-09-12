@@ -10,7 +10,7 @@ class ScholarNotification extends Model
     protected $table = 'scholar_notifications';
 
     protected $fillable = [
-        'user_id', 'announcement_id', 'title', 'body', 'category',
+        'user_id', 'announcement_id', 'event_id', 'title', 'body', 'category',
         'is_read', 'is_important',
     ];
 
@@ -30,5 +30,10 @@ class ScholarNotification extends Model
     public function announcement(): BelongsTo
     {
         return $this->belongsTo(Announcement::class);
+    }
+
+    public function event(): BelongsTo
+    {
+        return $this->belongsTo(Event::class);
     }
 }

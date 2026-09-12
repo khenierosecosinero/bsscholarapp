@@ -3,6 +3,7 @@
 @section('page-content')
 
 @include('partials.admin-location-filter')
+@include('partials.admin-scope-banner')
 
 <section class="staff-stat-grid">
     <div class="staff-stat-card"><div class="staff-stat-icon blue">📝</div><div class="staff-stat-body"><h3>Registered</h3><div class="value">{{ $report['registered'] }}</div></div></div>
@@ -18,6 +19,8 @@
             <thead>
                 <tr>
                     <th>Event</th>
+                    <th>Scholar Program</th>
+                    <th>Program Type</th>
                     <th>Date</th>
                     <th>Registered</th>
                     <th>Checked In</th>
@@ -29,6 +32,8 @@
                 @forelse($report['events'] as $event)
                     <tr>
                         <td>{{ $event->title }}</td>
+                        <td>{{ $event->scholarshipProgram?->programLabel() ?? '—' }}</td>
+                        <td>{{ $event->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>
                         <td>{{ $event->starts_at?->format('M j, Y') ?? '—' }}</td>
                         <td>{{ $event->registrations_count }}</td>
                         <td>{{ $event->checked_in_count }}</td>
@@ -36,7 +41,7 @@
                         <td>{{ number_format((float) $event->service_hours, 2) }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">No events found for this scope.</td></tr>
+                    <tr><td colspan="8">No events found for this scope.</td></tr>
                 @endforelse
             </tbody>
         </table>

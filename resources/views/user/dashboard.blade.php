@@ -51,6 +51,9 @@
 
 <section class="content-grid">
     <div class="left-col">
+        @if(!$accountPending)
+            @include('partials.user-attendance-status', ['sessions' => $attendanceSessions ?? collect()])
+        @endif
         <div class="card events dashboard-upcoming-events">
             <div class="card-header">UPCOMING EVENTS @if(!$accountPending)<a class="view-all" href="{{ route('user.events') }}">View All</a>@endif</div>
             <div class="event-list">
@@ -67,6 +70,7 @@
                             <div class="event-meta">{{ $ev['time'] }} · {{ $ev['location'] }}</div>
                             <div class="event-footer">
                                 <span class="badge {{ $ev['status_class'] }}">{{ $ev['status_label'] }}</span>
+                                <span class="badge {{ !empty($ev['attendance_open']) ? 'attendance-open' : 'attendance-closed' }}">{{ $ev['attendance_status'] ?? 'CLOSED' }}</span>
                                 <span class="hours">Service Hours: {{ $ev['hours'] }}</span>
                             </div>
                         </div>
@@ -97,7 +101,7 @@
                                 <td>{{ $att->check_in?->format('g:i A') ?? '—' }}</td>
                                 <td>{{ $att->check_out?->format('g:i A') ?? '—' }}</td>
                                 <td>{{ $att->hoursLabel() }}</td>
-                                <td><span class="badge pending">{{ $att->hasPhoto() && $att->check_out ? 'Pending Verification' : 'Incomplete' }}</span></td>
+                                <td><span class="badge pending">Pending</span></td>
                                 <td>@if(!$accountPending)<a href="{{ route('user.events', ['event' => $att->event_id]) }}" class="btn outline small">View Details</a>@endif</td>
                             </tr>
                         @endforeach

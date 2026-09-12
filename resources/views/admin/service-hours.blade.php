@@ -3,6 +3,7 @@
 @section('page-content')
 
 @include('partials.admin-location-filter')
+@include('partials.admin-scope-banner')
 
 @php
     $overview = $report['overview'];
@@ -23,7 +24,8 @@
             <thead>
                 <tr>
                     <th>Scholar</th>
-                    <th>Location</th>
+                    <th>Scholar Program</th>
+                    <th>Program Type</th>
                     <th>Approved</th>
                     <th>Pending</th>
                     <th>Remaining</th>
@@ -35,13 +37,14 @@
                     <tr>
                         <td>{{ $row['scholar']->full_name }}</td>
                         <td>{{ $row['scholar']->scholarshipProgram?->programLabel() ?? '—' }}</td>
+                        <td>{{ $row['scholar']->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>
                         <td>{{ number_format($row['approved'], 2) }}</td>
                         <td>{{ number_format($row['pending'], 2) }}</td>
                         <td>{{ number_format($row['remaining'], 2) }}</td>
                         <td><span class="staff-badge {{ $row['status'] === 'Completed' ? 'green' : ($row['status'] === 'In Progress' ? 'orange' : 'gray') }}">{{ $row['status'] }}</span></td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">No service hour records found.</td></tr>
+                    <tr><td colspan="7">No service hour records found.</td></tr>
                 @endforelse
             </tbody>
         </table>

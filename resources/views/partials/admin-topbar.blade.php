@@ -14,7 +14,6 @@
         </div>
     </div>
     <div class="staff-topbar-right">
-        <div class="staff-breadcrumb">Admin / {{ $breadcrumb ?? $pageTitle }}</div>
         <div class="staff-topbar-actions">
             <span class="admin-location-pill">📍 {{ $locationLabel ?? 'Overall / All Locations' }}</span>
             <div class="staff-profile-chip">

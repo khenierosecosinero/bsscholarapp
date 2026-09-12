@@ -3,9 +3,10 @@
 @section('page-content')
 
 @include('partials.admin-location-filter')
+@include('partials.admin-scope-banner')
 
 <form method="GET" class="staff-filter-bar">
-    <input type="hidden" name="location" value="{{ $locationKey }}">
+    @include('partials.admin-scope-fields')
     <div class="staff-search">
         <span>🔍</span>
         <input type="search" name="search" value="{{ $search }}" placeholder="Search by name, scholar ID, or email...">
@@ -21,6 +22,7 @@
                     <th>Scholar</th>
                     <th>Scholar ID</th>
                     <th>Scholar Program</th>
+                    <th>Program Type</th>
                     <th>School</th>
                     <th>Status</th>
                 </tr>
@@ -39,11 +41,12 @@
                         </td>
                         <td>{{ $scholar->scholar_id }}</td>
                         <td>{{ $scholar->scholarshipProgram?->programLabel() ?? '—' }}</td>
+                        <td>{{ $scholar->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>
                         <td>{{ $scholar->school_university ?? '—' }}</td>
                         <td><span class="staff-badge {{ $scholar->status === 'approved' ? 'green' : ($scholar->status === 'pending' ? 'orange' : 'red') }}">{{ ucfirst($scholar->status) }}</span></td>
                     </tr>
                 @empty
-                    <tr><td colspan="5">No scholars found for this scope.</td></tr>
+                    <tr><td colspan="6">No scholars found for this scope.</td></tr>
                 @endforelse
             </tbody>
         </table>
