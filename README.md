@@ -1,8 +1,49 @@
 # Batang Surigaonon Scholar's App (BSSA)
 
-A Laravel web application for managing the **Batang Surigaonon scholarship program**. It connects **scholars**, **scholar staff**, and **system administrators** around events, attendance, service hours, documents, approvals, and location-scoped scholarship programs (city vs province).
+<p align="center">
+  <img src="https://ui-avatars.com/api/?name=BS&background=2fa76a&color=fff&size=96&bold=true&font-size=0.45" width="72" height="72" alt="BSSA logo mark using the scholar portal green from resources/css/styles.css --green" />
+</p>
 
-This README describes the **current codebase** in this repository. It is written from the routes, controllers, models, migrations, seeders, views, and configuration files that exist today.
+<h1 align="center">Batang Surigaonon Scholar's App</h1>
+
+<p align="center">
+  <img alt="Scholar portal" src="https://img.shields.io/badge/Scholar-%232fa76a?style=flat-square&labelColor=e7f7ef&color=2fa76a" />
+  <img alt="Staff portal" src="https://img.shields.io/badge/Scholar%20Staff-%231890ff?style=flat-square&labelColor=99ccff&color=1890ff" />
+  <img alt="Admin portal" src="https://img.shields.io/badge/Admin-%23c2410c?style=flat-square&labelColor=fff2f1&color=c2410c" />
+  <img alt="Laravel" src="https://img.shields.io/badge/Laravel-12-red?style=flat-square" />
+</p>
+
+A Laravel **web** application for managing the **Batang Surigaonon scholarship program**. It connects **scholars**, **scholar staff**, and **system administrators** around events, attendance, service hours, documents, approvals, and location-scoped scholarship programs (city vs province).
+
+This README describes the **current codebase** in this repository. It is written from the routes, controllers, models, migrations, seeders, views, CSS, and configuration files that exist today.
+
+The visual language below is taken from the live stylesheets — not a new theme.
+
+<table>
+  <tr>
+    <td width="33%" bgcolor="#e7f7ef" valign="top">
+      <p><strong>Scholar</strong> &nbsp; <code>/user</code></p>
+      <p>Sidebar <code>#e7f7ef</code> → <code>#eaf9ef</code><br />
+      Active / buttons <code>#2fa76a</code><br />
+      Page <code>#f6f8fb</code> · cards white, 12px<br />
+      Typeface Inter · <code>styles.css</code></p>
+    </td>
+    <td width="33%" bgcolor="#99ccff" valign="top">
+      <p><strong>Scholar Staff</strong> &nbsp; <code>/staff</code></p>
+      <p>Sidebar <code>#99ccff</code><br />
+      Active / buttons <code>#1890ff</code><br />
+      Page <code>#f0f4f8</code> · cards white<br />
+      <code>staff-admin.css</code></p>
+    </td>
+    <td width="34%" bgcolor="#fff2f1" valign="top">
+      <p><strong>Admin</strong> &nbsp; <code>/admin</code></p>
+      <p>Sidebar <code>#fff2f1</code><br />
+      Active / buttons <code>#c2410c</code><br />
+      Page <code>#faf6f5</code> · shared staff cards<br />
+      <code>admin.css</code></p>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -17,21 +58,22 @@ This README describes the **current codebase** in this repository. It is written
 7. [Notifications](#7-notifications)
 8. [Backend architecture](#8-backend-architecture)
 9. [Frontend architecture](#9-frontend-architecture)
-10. [Database](#10-database)
-11. [Routes](#11-routes)
-12. [Project structure](#12-project-structure)
-13. [Technologies, languages, and packages](#13-technologies-languages-and-packages)
-14. [System requirements](#14-system-requirements)
-15. [Installation and setup](#15-installation-and-setup)
-16. [Environment configuration](#16-environment-configuration)
-17. [Database setup](#17-database-setup)
-18. [How to run the application](#18-how-to-run-the-application)
-19. [Build and production notes](#19-build-and-production-notes)
-20. [Seeded administrator account](#20-seeded-administrator-account)
-21. [Security features](#21-security-features)
-22. [Validation and error handling](#22-validation-and-error-handling)
-23. [Troubleshooting](#23-troubleshooting)
-24. [Development guide](#24-development-guide)
+10. [Visual identity (existing CSS)](#10-visual-identity-existing-css)
+11. [Database](#11-database)
+12. [Routes](#12-routes)
+13. [Project structure](#13-project-structure)
+14. [Technologies, languages, and packages](#14-technologies-languages-and-packages)
+15. [System requirements](#15-system-requirements)
+16. [Installation and setup](#16-installation-and-setup)
+17. [Environment configuration](#17-environment-configuration)
+18. [Database setup](#18-database-setup)
+19. [How to run the application](#19-how-to-run-the-application)
+20. [Build and production notes](#20-build-and-production-notes)
+21. [Seeded administrator account](#21-seeded-administrator-account)
+22. [Security features](#22-security-features)
+23. [Validation and error handling](#23-validation-and-error-handling)
+24. [Troubleshooting](#24-troubleshooting)
+25. [Development guide](#25-development-guide)
 
 ---
 
@@ -373,9 +415,81 @@ Layouts:
 - `layouts.staff` — staff sidebar + topbar + confirm modal.
 - `layouts.admin` — admin sidebar + topbar + staff-badge poll.
 
+Scholar pages use white `.card` blocks (12px radius, light shadow), green `.btn` fills, outline green buttons, and uppercase 12px `.card-header` labels. Staff/admin pages use `.staff-card`, `.staff-btn` / `.staff-btn-primary`, `.staff-table`, and `.staff-stat-card` from `staff-admin.css`, with admin recoloring those tokens in `admin.css`.
+
 ---
 
-## 10. Database
+## 10. Visual identity (existing CSS)
+
+This documentation follows the **same tokens the app already uses**. Do not introduce a separate brand for docs or new screens.
+
+### Scholar portal — `resources/css/styles.css`
+
+```css
+:root {
+    --green: #2fa76a;
+    --green-2: #e7f7ef;
+    --muted: #8a8f98;
+    --card-bg: #ffffff;
+    --radius: 12px;
+    --shadow: 0 6px 18px rgba(24, 39, 75, 0.06);
+}
+```
+
+| Token / class | Value in the app |
+|---------------|------------------|
+| Page background | `#f6f8fb` |
+| Body text | `#1f2937` |
+| Typeface | **Inter** (300–800), loaded in `layouts/app.blade.php` |
+| Sidebar | Gradient `#e7f7ef` → `#eaf9ef`; active nav `#2fa76a` + white text |
+| Logo mark | Gradient `#0ea96d` → `#2fa76a`, 12px radius |
+| Cards | White, 12px radius, `--shadow` |
+| Primary button `.btn` | `#2fa76a` fill, white text, 8px radius |
+| Outline button `.btn.outline` | Transparent fill, `#2fa76a` border |
+| Program badge | White card, `#b6ebb9` border, `#166534` text |
+| Notification badge `.nav-notif-badge` | `#ef4444` pill, white count (`user-nav.css` + `styles.css`) |
+| Status badges | Pending `#c27a00`; approved green; rejected `#fee2e2` / `#dc2626` |
+
+### Scholar staff portal — `public/css/staff-admin.css`
+
+| Token | Value |
+|-------|--------|
+| `--staff-sidebar` | `#99ccff` |
+| `--staff-sidebar-text` | `#0b2d4d` |
+| `--staff-sidebar-active` / `--staff-primary` | `#1890ff` |
+| `--staff-bg` | `#f0f4f8` |
+| `--staff-card` | `#ffffff` |
+| `--staff-border` | `#e5e7eb` |
+| `--staff-text` | `#1f2937` |
+| `--staff-muted` | `#6b7280` |
+
+Primary staff actions use `.staff-btn-primary` (blue `#1890ff`). Confirm dialogs use the existing `.staff-confirm-modal`: white `.staff-confirm-dialog` (16px radius), backdrop `rgba(15, 39, 68, 0.45)`.
+
+### Admin portal — `public/css/admin.css`
+
+Admin **reuses** staff components and only overrides colors:
+
+| Token | Value |
+|-------|--------|
+| `--admin-sidebar` | `#fff2f1` |
+| `--admin-sidebar-text` | `#5c1a14` |
+| `--admin-sidebar-active` / `--admin-primary` | `#c2410c` |
+| Page background | `#faf6f5` |
+| Location banner / pills | `#fff2f1` fill, `#f5d0c8` border |
+
+### UI patterns to keep
+
+- **Navigation:** rounded 10px items; active item is a solid brand color (green / blue / orange).
+- **Cards:** white surface, 12px corners, light border or shadow — not heavy drop shadows.
+- **Tables:** `.staff-table` on staff/admin; compact headers, muted secondary text.
+- **Spacing:** 16–24px gaps between cards (`gap` / `margin-bottom` already used in the CSS).
+- **Badges:** pill (`border-radius: 999px`) for counts and OPEN/CLOSED attendance.
+
+When adding README screenshots or UI notes, use these hex values. Do not switch the scholar portal to staff blue or admin orange.
+
+---
+
+## 11. Database
 
 **Default connection in `.env.example`:** SQLite (`DB_CONNECTION=sqlite`). MySQL variables are present but commented out.
 
@@ -421,7 +535,7 @@ Layouts:
 ### Seeders
 
 - `ScholarshipProgramSeeder` — imports nationwide locations via `ScholarshipProgramImportService` from `database/data/psgc-locations.json`.
-- `AdminSeeder` — creates/updates the administrator user (see [§20](#20-seeded-administrator-account)).
+- `AdminSeeder` — creates/updates the administrator user (see [§21](#21-seeded-administrator-account)).
 - `DatabaseSeeder` — runs both seeders, then creates current `academic_settings` (this year → next year, `2nd Semester`).
 
 ### Factories
@@ -430,7 +544,7 @@ Layouts:
 
 ---
 
-## 11. Routes
+## 12. Routes
 
 All application routes are in `routes/web.php`. Health check: `GET /up`.
 
@@ -448,7 +562,7 @@ There is no versioned REST API for third-party clients.
 
 ---
 
-## 12. Project structure
+## 13. Project structure
 
 ```
 scholar/
@@ -490,7 +604,7 @@ Uploads used by the app:
 
 ---
 
-## 13. Technologies, languages, and packages
+## 14. Technologies, languages, and packages
 
 ### Languages
 
@@ -538,7 +652,7 @@ Uploads used by the app:
 
 ---
 
-## 14. System requirements
+## 15. System requirements
 
 - PHP **8.2 or newer** with common Laravel extensions (openssl, pdo, mbstring, tokenizer, xml, ctype, json, fileinfo)
 - Composer 2
@@ -548,7 +662,7 @@ Uploads used by the app:
 
 ---
 
-## 15. Installation and setup
+## 16. Installation and setup
 
 From the application directory (the folder that contains `artisan`):
 
@@ -578,7 +692,7 @@ composer setup
 
 ---
 
-## 16. Environment configuration
+## 17. Environment configuration
 
 Copy `.env.example` to `.env`. Do not commit `.env`.
 
@@ -603,7 +717,7 @@ If you switch to MySQL, uncomment and set `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `
 
 ---
 
-## 17. Database setup
+## 18. Database setup
 
 ```bash
 php artisan migrate
@@ -618,7 +732,7 @@ php artisan migrate:fresh --seed
 
 ---
 
-## 18. How to run the application
+## 19. How to run the application
 
 **PHP server only** (use built Vite assets from `npm run build`):
 
@@ -644,9 +758,19 @@ npm run dev
 
 Log in at `/login`. Register scholars at `/register` and staff at `/register/staff`.
 
+The UI you see is the existing web design: scholar green sidebar (`#2fa76a`), staff blue sidebar (`#99ccff` / `#1890ff`), admin peach/orange sidebar (`#fff2f1` / `#c2410c`).
+
+### Mobile / Expo Go
+
+This repository is a **Laravel web application only**. There is no Expo, React Native, or `app.json` mobile project in the tree, so **Expo Go cannot load this app**.
+
+Scholars, staff, and admins use a browser (desktop or mobile web). To try the UI on a phone, run `php artisan serve` so it is reachable on your LAN (for example `http://YOUR_LAN_IP:8000`) and open that URL in the phone browser. That is still the same web CSS, not a native Expo build.
+
+If a separate mobile client is added later, document it here only after those files exist.
+
 ---
 
-## 19. Build and production notes
+## 20. Build and production notes
 
 ```bash
 npm run build
@@ -661,7 +785,7 @@ Laravel Sail is listed as a Composer dev dependency; this README does not assume
 
 ---
 
-## 20. Seeded administrator account
+## 21. Seeded administrator account
 
 `AdminSeeder` creates or updates an administrator with:
 
@@ -676,7 +800,7 @@ No other demo scholar or staff passwords are defined in seeders.
 
 ---
 
-## 21. Security features
+## 22. Security features
 
 - Passwords hashed with Laravel’s `hashed` cast (bcrypt; `BCRYPT_ROUNDS=12` in `.env.example`).
 - CSRF tokens on forms (`@csrf`).
@@ -692,7 +816,7 @@ No other demo scholar or staff passwords are defined in seeders.
 
 ---
 
-## 22. Validation and error handling
+## 23. Validation and error handling
 
 - Form requests use Laravel `validate()` with custom messages (registration program required, unique email/scholar ID, password confirmation, etc.).
 - Failed validation returns to the form with `$errors` (shown in flash partial).
@@ -705,7 +829,7 @@ Uncaught exceptions follow Laravel’s default handler (`bootstrap/app.php` has 
 
 ---
 
-## 23. Troubleshooting
+## 24. Troubleshooting
 
 | Problem | What to check |
 |---------|----------------|
@@ -723,7 +847,7 @@ Uncaught exceptions follow Laravel’s default handler (`bootstrap/app.php` has 
 
 ---
 
-## 24. Development guide
+## 25. Development guide
 
 - Keep city and province programs separate. Scope queries with `scholarship_program_id` / `resolveAdminProgramIds()`.
 - Do not open attendance from event start/end times; use `AttendanceSessionService`.
@@ -734,6 +858,7 @@ Uncaught exceptions follow Laravel’s default handler (`bootstrap/app.php` has 
 - New staff pages: `resources/views/staff/` + `scholar.staff.approved` group.
 - After adding Vite entry files, register them in `vite.config.js`.
 - Static CSS that must load without Vite belongs in `public/css/`.
+- Keep new UI on the existing tokens in `styles.css`, `staff-admin.css`, and `admin.css` (see [§10](#10-visual-identity-existing-css)). Do not introduce a fourth color system.
 - Run `vendor/bin/pint` for PHP style if you use Pint.
 - `composer test` runs PHPUnit (currently example tests only).
 
