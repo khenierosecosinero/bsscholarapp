@@ -94,6 +94,50 @@ class Event extends Model
         return (bool) $this->attendance_is_open;
     }
 
+    public function attendanceStatusVisibleUntil(): ?CarbonInterface
+    {
+        return $this->ends_at?->copy()->addHour();
+    }
+
+    public function shouldShowAttendanceStatus(?CarbonInterface $at = null): bool
+    {
+        $at = $at ?? now();
+
+        if (! $this->starts_at || ! $this->ends_at) {
+            return false;
+        }
+
+        return $at->greaterThanOrEqualTo($this->starts_at)
+            && $at->lessThanOrEqualTo($this->attendanceStatusVisibleUntil());
+    }
+
+    public function isScheduleAttendanceOpen(?CarbonInterface $at = null): bool
+    {
+        $at = $at ?? now();
+
+        if (! $this->starts_at || ! $this->ends_at) {
+            return false;
+        }
+
+        return $at->between($this->starts_at, $this->ends_at);
+    }
+
+    public function scheduleAttendanceStatusLabel(?CarbonInterface $at = null): string
+    {
+        return $this->isScheduleAttendanceOpen($at) ? 'OPEN' : 'CLOSED';
+    }
+
+    public function scopeAttendanceStatusVisible(Builder $query, ?CarbonInterface $at = null): Builder
+    {
+        $at = $at ?? now();
+
+        return $query
+            ->whereNotNull('starts_at')
+            ->whereNotNull('ends_at')
+            ->where('starts_at', '<=', $at)
+            ->where('ends_at', '>=', $at->copy()->subHour());
+    }
+
     public function attendanceSessionClosed(): bool
     {
         return ! $this->isAttendanceOpen()

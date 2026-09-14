@@ -29,7 +29,12 @@
 
 <aside class="staff-sidebar" id="sidebar">
     <div class="staff-brand">
-        <div class="staff-brand-text">Batang Surigaonon<br>Scholar's App</div>
+        <div class="staff-brand-lockup">
+            <div class="staff-brand-logo">
+                <img src="{{ asset('images/bssa-logo.png') }}" alt="Batang Surigaonon Scholar's App logo">
+            </div>
+            <div class="staff-brand-text">Batang Surigaonon<br>Scholar's App</div>
+        </div>
         @if(!empty($programName))
             <div class="staff-brand-program">{{ $programName }}</div>
         @endif

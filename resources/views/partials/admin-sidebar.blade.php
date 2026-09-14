@@ -27,10 +27,12 @@
 
 <aside class="staff-sidebar" id="sidebar">
     <div class="staff-brand">
-        <div class="staff-brand-logo">
-            <img src="https://ui-avatars.com/api/?name=AD&background=c2410c&color=fff&size=56" alt="BSSA Admin">
+        <div class="staff-brand-lockup">
+            <div class="staff-brand-logo">
+                <img src="{{ asset('images/bssa-logo.png') }}" alt="Batang Surigaonon Scholar's App logo">
+            </div>
+            <div class="staff-brand-text">Batang Surigaonon<br>Admin Portal</div>
         </div>
-        <div class="staff-brand-text">Batang Surigaonon<br>Admin Portal</div>
     </div>
 
     <nav class="staff-nav" aria-label="Admin navigation">

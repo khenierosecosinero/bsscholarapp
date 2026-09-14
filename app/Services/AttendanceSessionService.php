@@ -73,16 +73,14 @@ class AttendanceSessionService
     public function sessionsForUser(User $user, int $limit = 8): Collection
     {
         $attendances = $user->attendances()->get()->keyBy('event_id');
+        $now = now();
 
         return $this->scholar->scopeEventsForUser(
             Event::query()
                 ->with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-                ->where(function ($query) {
-                    $query->where('attendance_is_open', true)
-                        ->orWhereNotNull('attendance_opened_at');
-                })
-                ->orderByDesc('attendance_is_open')
-                ->orderByDesc('attendance_opened_at')
+                ->attendanceStatusVisible($now)
+                ->orderByRaw('case when starts_at <= ? and ends_at >= ? then 0 else 1 end', [$now, $now])
+                ->orderBy('ends_at')
                 ->limit($limit),
             $user
         )->get()->map(fn (Event $event) => $this->formatSession(
@@ -111,8 +109,8 @@ class AttendanceSessionService
         ]);
 
         $sessions = $formatted
-            ->filter(fn (array $session, $id) => $session['is_open'] || $events->firstWhere('id', (int) $id)?->attendance_opened_at)
-            ->sortByDesc(fn (array $session) => [$session['is_open'] ? 1 : 0, $session['opened_at'] ?? ''])
+            ->filter(fn (array $session) => ! empty($session['status_visible']))
+            ->sortBy(fn (array $session) => [$session['schedule_open'] ? 0 : 1, $session['ends_at'] ?? ''])
             ->take(12)
             ->values();
 
@@ -149,6 +147,9 @@ class AttendanceSessionService
         ?Attendance $attendance = null,
     ): array {
         $open = $event->isAttendanceOpen();
+        $scheduleOpen = $event->isScheduleAttendanceOpen();
+        $statusVisible = $event->shouldShowAttendanceStatus();
+        $scheduleStatus = $event->scheduleAttendanceStatusLabel();
 
         if ($user && ! $registration) {
             $registration = $event->relationLoaded('registrations')
@@ -179,17 +180,26 @@ class AttendanceSessionService
             'time' => $event->starts_at?->format('g:i A').($event->ends_at ? ' – '.$event->ends_at->format('g:i A') : ''),
             'status' => $event->attendanceStatusLabel(),
             'is_open' => $open,
+            'schedule_status' => $scheduleStatus,
+            'schedule_open' => $scheduleOpen,
+            'status_visible' => $statusVisible,
+            'ends_at' => $event->ends_at?->toIso8601String(),
             'opened_at' => $event->attendanceOpenedAtLabel(),
             'closed_at' => $event->attendanceClosedAtLabel(),
             'can_check_in' => $canMark && ! $attendance?->hasCheckedIn(),
             'can_check_out' => $attendance?->scholarCanCheckOut() ?? false,
             'can_modify' => $attendance?->scholarCanModify() ?? false,
             'message' => $this->sessionMessage($event),
+            'schedule_message' => $this->scheduleStatusMessage($event),
             'signature' => implode('|', [
                 $event->id,
                 $event->attendanceStatusLabel(),
+                $scheduleStatus,
+                $statusVisible ? '1' : '0',
                 $event->attendance_opened_at?->timestamp ?? 0,
                 $event->attendance_closed_at?->timestamp ?? 0,
+                $event->starts_at?->timestamp ?? 0,
+                $event->ends_at?->timestamp ?? 0,
             ]),
         ];
     }
@@ -216,6 +226,26 @@ class AttendanceSessionService
         }
 
         return "Attendance for {$eventStamp} is CLOSED. Scholars can mark attendance only after Scholar Staff opens the session.";
+    }
+
+    public function scheduleStatusMessage(Event $event): string
+    {
+        $eventStamp = sprintf(
+            '%s on %s at %s',
+            $event->title,
+            $event->starts_at?->format('M j, Y') ?? 'the scheduled date',
+            $event->starts_at?->format('g:i A') ?? 'the scheduled time'
+        );
+
+        if ($event->isScheduleAttendanceOpen()) {
+            $until = $event->ends_at?->format('g:i A') ?? 'the scheduled end time';
+
+            return "Attendance for {$eventStamp} is OPEN until {$until}.";
+        }
+
+        $ended = $event->ends_at?->format('M j, Y g:i A') ?? 'the scheduled end time';
+
+        return "Attendance for {$eventStamp} is CLOSED. The event ended at {$ended}.";
     }
 
     private function notifyScholars(Event $event, string $action): void

@@ -162,26 +162,38 @@ function initAttendanceLive() {
 }
 
 function renderAttendanceSessions(sessions, eventsUrl) {
+    const card = document.querySelector('[data-attendance-sessions]');
     const list = document.querySelector('[data-attendance-session-list]');
     if (!list) return;
 
-    if (!sessions.length) {
-        list.innerHTML = '<p class="muted" data-attendance-empty>No attendance session has been opened yet. Scholar Staff will open attendance when scholars can mark it.</p>';
+    const visible = (sessions || []).filter((session) => session.status_visible !== false);
+
+    if (!visible.length) {
+        list.innerHTML = '';
+        if (card) card.hidden = true;
         return;
     }
 
+    if (card) card.hidden = false;
+
     const base = eventsUrl || '/user/events';
-    list.innerHTML = sessions.map((session) => `
-        <article class="attendance-status-item ${session.is_open ? 'is-open' : 'is-closed'}" data-event-id="${session.event_id}">
+    list.innerHTML = visible.map((session) => {
+        const isOpen = !!session.schedule_open;
+        const status = session.schedule_status || session.status || (isOpen ? 'OPEN' : 'CLOSED');
+        const message = session.schedule_message || session.message || '';
+
+        return `
+        <article class="attendance-status-item ${isOpen ? 'is-open' : 'is-closed'}" data-event-id="${session.event_id}">
             <div class="attendance-status-top">
                 <strong>${escapeHtml(session.title)}</strong>
-                <span class="badge ${session.is_open ? 'attendance-open' : 'attendance-closed'}">${escapeHtml(session.status)}</span>
+                <span class="badge ${isOpen ? 'attendance-open' : 'attendance-closed'}">${escapeHtml(status)}</span>
             </div>
             <div class="muted">${escapeHtml(session.full_date || '')} · ${escapeHtml(session.time || '')}</div>
-            <p>${escapeHtml(session.message)}</p>
+            <p>${escapeHtml(message)}</p>
             <a href="${base}?event=${encodeURIComponent(session.event_id)}" class="link small">View Event</a>
         </article>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function updateUnreadNotificationBadge(count) {

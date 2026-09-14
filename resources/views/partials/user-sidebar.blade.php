@@ -38,7 +38,12 @@
 
     <div class="brand">
 
-        <div class="title">Batang Surigaonon<br>Scholar's App</div>
+        <div class="brand-lockup">
+            <div class="logo">
+                <img src="{{ asset('images/bssa-logo.png') }}" alt="Batang Surigaonon Scholar's App logo">
+            </div>
+            <div class="title">Batang Surigaonon<br>Scholar's App</div>
+        </div>
 
         @if(!empty($scholarshipProgram))
 

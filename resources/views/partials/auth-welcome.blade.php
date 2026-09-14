@@ -5,6 +5,17 @@
         width: 100%;
     }
 
+    .auth-page .welcome-logo {
+        width: 104px;
+        height: 104px;
+        max-width: 104px;
+        border-radius: 50%;
+        object-fit: cover;
+        display: block;
+        flex-shrink: 0;
+        margin: 0 auto 4px;
+    }
+
     .auth-page .welcome-actions {
         display: flex;
         flex-direction: column;
@@ -64,6 +75,12 @@
             max-width: 100%;
         }
 
+        .auth-page .welcome-logo {
+            width: 76px;
+            height: 76px;
+            max-width: 76px;
+        }
+
         .auth-page .welcome-action-btn {
             font-size: 14px;
             padding: 12px 14px;
@@ -74,6 +91,7 @@
 
 <div class="right-panel">
     <div class="welcome-section">
+        <img class="welcome-logo" src="{{ asset('images/bssa-logo.png') }}" alt="Batang Surigaonon Scholar's App logo">
         <h4>Hello, Welcome to</h4>
         <h2>BATANG<br>SURIGAONON<br>SCHOLAR'S APP!</h2>
         <p>Manage your service hours, join events, submit documents, and stay updated.</p>
