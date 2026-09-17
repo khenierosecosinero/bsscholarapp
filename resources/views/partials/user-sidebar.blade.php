@@ -2,9 +2,10 @@
 
     $active = $active ?? 'dashboard';
 
-    $hs = $hourStats ?? ['approved' => 0, 'pending' => 0, 'required' => 30, 'remaining' => 30];
+    $requiredFallback = \App\Services\ScholarService::REQUIRED_HOURS;
+    $hs = $hourStats ?? ['approved' => 0, 'pending' => 0, 'required' => $requiredFallback, 'remaining' => $requiredFallback];
 
-    $pct = $hs['required'] > 0 ? round(($hs['approved'] / $hs['required']) * 100) : 0;
+    $pct = $hs['required'] > 0 ? min(100, (int) round(($hs['approved'] / $hs['required']) * 100)) : 0;
 
     $accountPending = auth()->user()?->isPendingApproval() ?? false;
 
@@ -49,6 +50,19 @@
 
             <div class="scholar-program-badge">{{ auth()->user()->locationLabel() }}</div>
 
+        @endif
+
+        @php $sidebarUser = auth()->user(); @endphp
+        @if($sidebarUser)
+            <div class="sidebar-user-chip">
+                <x-user-avatar :user="$sidebarUser" class="sidebar-user-avatar" />
+                <div class="sidebar-user-meta">
+                    <div class="sidebar-user-name" title="{{ $sidebarUser->full_name }}">{{ $sidebarUser->full_name }}</div>
+                    @if($sidebarUser->scholar_id)
+                        <div class="sidebar-user-id">{{ $sidebarUser->scholar_id }}</div>
+                    @endif
+                </div>
+            </div>
         @endif
 
     </div>

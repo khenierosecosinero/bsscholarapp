@@ -1,7 +1,7 @@
 @extends('layouts.user')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/profile-page.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/profile-page.css') }}?v={{ filemtime(public_path('css/profile-page.css')) }}">
 @endpush
 
 @section('page-content')
@@ -22,12 +22,32 @@
 
                 <div class="profile-header">
                     <div class="profile-avatar-wrap">
-                        <div class="profile-avatar">{{ strtoupper(substr($user->full_name, 0, 1)) }}</div>
+                        <x-user-avatar :user="$user" class="profile-avatar" />
+                        <form method="POST" action="{{ route('user.profile.avatar') }}" enctype="multipart/form-data" class="profile-avatar-form">
+                            @csrf
+                            <label class="avatar-edit" for="profile-avatar-input" title="Change/Upload Profile Photo">
+                                <span class="sr-only">Change or upload profile photo</span>
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path fill="currentColor" d="M9 3 7.17 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.17L15 3H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2.2A2.8 2.8 0 1 0 12 8.2a2.8 2.8 0 0 0 0 5.6z"/>
+                                </svg>
+                            </label>
+                            <input
+                                id="profile-avatar-input"
+                                type="file"
+                                name="avatar"
+                                accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                                hidden
+                                onchange="this.form.submit()"
+                            >
+                        </form>
                     </div>
                     <div class="profile-header-body">
                         <h2>{{ $user->full_name }}</h2>
                         <span class="badge confirmed">{{ ucfirst($user->status ?? 'Active') }} Scholar</span>
                         <span class="muted">Scholar ID: {{ $user->scholar_id }}</span>
+                        @error('avatar')
+                            <span class="muted" style="color:#dc2626">{{ $message }}</span>
+                        @enderror
                     </div>
                 </div>
 

@@ -78,11 +78,24 @@
                                 <td>{{ $request->created_at->format('M j, Y') }}</td>
                                 <td>
                                     <a href="{{ route('staff.scholars.show', $request) }}" class="staff-action-btn" title="View">👁</a>
-                                    <form method="POST" action="{{ route('staff.scholars.approve', $request) }}" style="display:inline">
+                                    <form method="POST" action="{{ route('staff.scholars.approve', $request) }}" style="display:inline" data-ajax-approval="approve" data-no-loading="true">
                                         @csrf
                                         <button type="submit" class="staff-action-btn" title="Approve">✓</button>
                                     </form>
-                                    <form method="POST" action="{{ route('staff.scholars.reject', $request) }}" style="display:inline" onsubmit="return confirm('Reject and permanently delete this account? This cannot be undone.');">
+                                    <form
+                                        method="POST"
+                                        action="{{ route('staff.scholars.reject', $request) }}"
+                                        style="display:inline"
+                                        data-confirm="Reject and permanently delete this account?"
+                                        data-confirm-title="Reject this account?"
+                                        data-confirm-name="{{ $request->full_name }}"
+                                        data-confirm-note="This cannot be undone. The scholar account and related records will be permanently removed from the database."
+                                        data-confirm-yes="Reject & Delete"
+                                        data-confirm-no="Cancel"
+                                        data-confirm-variant="danger"
+                                        data-ajax-approval="reject"
+                                        data-no-loading="true"
+                                    >
                                         @csrf
                                         <button type="submit" class="staff-action-btn" title="Reject and delete">✕</button>
                                     </form>

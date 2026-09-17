@@ -65,3 +65,29 @@
     border: 1px solid #2fa76a;
     border-radius: 999px;
 }
+
+@media (max-width: 800px) {
+    .dashboard-upcoming-events .event-item {
+        grid-template-columns: 56px 64px minmax(0, 1fr);
+    }
+    .dashboard-upcoming-events .event-action {
+        grid-column: 1 / -1;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        justify-content: stretch;
+    }
+    .dashboard-upcoming-events .event-view-btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 430px) {
+    .dashboard-upcoming-events .event-item {
+        grid-template-columns: 48px minmax(0, 1fr);
+    }
+    .dashboard-upcoming-events .event-thumb,
+    .dashboard-upcoming-events .event-thumb-placeholder {
+        display: none;
+    }
+}

@@ -49,7 +49,9 @@
                         <span class="staff-nav-icon staff-icon-{{ $item['icon'] }}"></span>
                         <span class="staff-nav-label">{{ $item['label'] }}</span>
                         @if(!empty($item['badge']) && $item['badge'] > 0)
-                            <span class="staff-nav-badge">{{ $item['badge'] }}</span>
+                            <span class="staff-nav-badge" data-nav-badge="{{ $item['key'] }}">{{ $item['badge'] }}</span>
+                        @elseif(($item['key'] ?? '') === 'approval-requests')
+                            <span class="staff-nav-badge" data-nav-badge="approval-requests" hidden>0</span>
                         @endif
                     </a>
                 @endforeach

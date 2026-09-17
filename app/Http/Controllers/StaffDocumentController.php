@@ -313,19 +313,6 @@ class StaffDocumentController extends Controller
 
     private function layoutData(string $active, string $title, string $subtitle = '', ?string $breadcrumb = null): array
     {
-        $staff = Auth::user()->load('scholarshipProgram');
-        $program = $staff->scholarshipProgram;
-        $programIds = $this->staffData->programIds($staff);
-
-        return [
-            'staff' => $staff,
-            'program' => $program,
-            'programIds' => $programIds,
-            'active' => $active,
-            'pageTitle' => $title,
-            'pageSubtitle' => $subtitle ?: ($program ? 'Managing '.$staff->locationLabel().'.' : 'Manage your assigned scholarship program.'),
-            'breadcrumb' => $breadcrumb ?? $title,
-            'pendingApprovalsCount' => $this->staffData->scholarsQuery($programIds)->where('status', 'pending')->count(),
-        ];
+        return $this->staffData->layoutPayload(Auth::user(), $active, $title, $subtitle, $breadcrumb);
     }
 }

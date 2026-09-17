@@ -43,6 +43,26 @@ class ProfileActionController extends Controller
         return back()->with('success', 'Profile updated successfully.');
     }
 
+    public function updateAvatar(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user->isScholar(), 403);
+
+        $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
+        ], [
+            'avatar.required' => 'Please choose a profile photo.',
+            'avatar.image' => 'The profile photo must be an image.',
+            'avatar.mimes' => 'The profile photo must be a JPG, JPEG, or PNG file.',
+            'avatar.max' => 'The profile photo must not be larger than 2MB.',
+        ]);
+
+        $this->accounts->storeAvatar($user, $request->file('avatar'));
+        $this->scholar->logActivity($user, 'profile', 'Profile photo updated');
+
+        return back()->with('success', 'Profile photo updated.');
+    }
+
     public function updateGuardian(Request $request)
     {
         $user = Auth::user();

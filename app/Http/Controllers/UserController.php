@@ -26,10 +26,17 @@ class UserController extends Controller
 
     private function layoutData(string $active, string $title, string $subtitle = ''): array
     {
-        $user = Auth::user()->load('scholarshipProgram');
-        $this->scholar->ensureUserDocuments($user);
-        $this->scholar->syncMissedCheckInsForUser($user);
-        $this->scholar->syncCompletedEventHoursForUser($user);
+        $user = Auth::user()->loadMissing('scholarshipProgram');
+        $hasPortalAccess = $user->hasScholarPortalAccess();
+        $needsHours = $active !== 'notifications';
+        $needsDocuments = $hasPortalAccess && in_array($active, ['dashboard', 'documents'], true);
+        $needsCalendar = $active === 'profile';
+        $needsSync = $hasPortalAccess && in_array($active, ['dashboard', 'events', 'calendar', 'service-hours'], true);
+
+        if ($needsSync) {
+            $this->scholar->syncMissedCheckInsForUser($user);
+            $this->scholar->syncCompletedEventHoursForUser($user);
+        }
 
         $year = (int) request()->get('year', now()->year);
         $month = (int) request()->get('month', now()->month);
@@ -44,14 +51,25 @@ class UserController extends Controller
         $documents = collect();
         $documentTypes = collect();
 
-        if ($user->hasScholarPortalAccess()) {
+        if ($needsDocuments) {
             $documents = $this->scholar->documentsForUser($user);
-            $documentOverview = $this->scholar->documentOverviewStats($user);
-            $documentTypes = DocumentType::query()
-                ->where('scholarship_program_id', $user->scholarship_program_id)
-                ->orderBy('name')
-                ->get();
+            $documentOverview = $this->scholar->documentOverviewStats($user, $documents);
+            if ($active === 'documents') {
+                $documentTypes = DocumentType::query()
+                    ->where('scholarship_program_id', $user->scholarship_program_id)
+                    ->orderBy('name')
+                    ->get();
+            }
         }
+
+        $hourStats = $needsHours
+            ? $this->scholar->serviceHourStats($user)
+            : [
+                'approved' => 0,
+                'pending' => 0,
+                'required' => ScholarService::REQUIRED_HOURS,
+                'remaining' => ScholarService::REQUIRED_HOURS,
+            ];
 
         return [
             'user' => $user,
@@ -59,12 +77,16 @@ class UserController extends Controller
             'active' => $active,
             'pageTitle' => $title,
             'pageSubtitle' => $resolvedSubtitle,
-            'hourStats' => $this->scholar->serviceHourStats($user),
-            'semesterInfo' => $this->scholar->currentSemesterInfo($user),
+            'hourStats' => $hourStats,
+            'semesterInfo' => $needsHours
+                ? $this->scholar->currentSemesterInfo($user, $hourStats)
+                : [],
             'globalAcademicSettings' => $this->academic->current(),
             'academicYearOptions' => $this->academic->yearOptions(),
             'semesterOptions' => AcademicSettingsService::SEMESTERS,
-            'sidebarCalendarEvents' => $this->scholar->calendarEvents($user, $year, $month),
+            'sidebarCalendarEvents' => $needsCalendar
+                ? $this->scholar->calendarEvents($user, $year, $month)
+                : collect(),
             'sidebarMonthDate' => $sidebarMonthDate,
             'sidebarPrevMonth' => $sidebarMonthDate->copy()->subMonth(),
             'sidebarNextMonth' => $sidebarMonthDate->copy()->addMonth(),
@@ -78,13 +100,18 @@ class UserController extends Controller
     public function dashboard(Request $request)
     {
         $user = Auth::user();
-
-        return view('user.dashboard', array_merge($this->layoutData(
+        $layout = $this->layoutData(
             'dashboard',
             'Welcome, ' . $user->full_name . '!',
             'Thank you for continuing to serve our community.'
-        ), [
-            'stats' => $this->scholar->dashboardStats($user),
+        );
+
+        return view('user.dashboard', array_merge($layout, [
+            'stats' => $this->scholar->dashboardStats(
+                $user,
+                $layout['hourStats'],
+                $layout['unreadNotificationsCount']
+            ),
             'events' => $this->scholar->upcomingEvents($user, 5),
             'activities' => UserActivity::where('user_id', $user->id)->latest()->limit(5)->get(),
             'announcements' => $this->announcements->forUser($user, 5),
@@ -93,7 +120,7 @@ class UserController extends Controller
                 $user->attendances()->with('event')->where('status', 'pending')->whereNotNull('check_in'),
                 $this->academic->forUser($user)
             )->get(),
-            'dashboardDocuments' => $this->dashboardDocuments($user),
+            'dashboardDocuments' => $layout['documents'],
             'calendarEvents' => $this->scholar->calendarEvents($user, now()->year, now()->month),
             'attendanceSessions' => $user->hasScholarPortalAccess()
                 ? $this->attendanceSessions->sessionsForUser($user)
@@ -209,10 +236,9 @@ class UserController extends Controller
 
         $baseQuery = $user->scholarNotifications();
         $query = $this->filteredNotificationQuery($user, $filter);
-        $allFiltered = $query->get();
-        $filteredTotal = $allFiltered->count();
-        $notifications = $allFiltered->take($pageSize)->values();
-        $extraNotifications = $allFiltered->slice($pageSize)->values();
+        $filteredTotal = (clone $query)->count();
+        $notifications = (clone $query)->limit($pageSize)->get();
+        $hasMoreNotifications = $filteredTotal > $pageSize;
 
         return view('user.notifications', array_merge($this->layoutData(
             'notifications',
@@ -220,9 +246,9 @@ class UserController extends Controller
             'Stay updated with the latest announcements, reminders, and updates.'
         ), [
             'notifications' => $notifications,
-            'extraNotifications' => $extraNotifications,
+            'extraNotifications' => collect(),
             'filteredTotal' => $filteredTotal,
-            'hasMoreNotifications' => $extraNotifications->isNotEmpty(),
+            'hasMoreNotifications' => $hasMoreNotifications,
             'notificationPreviewCount' => $pageSize,
             'notifStats' => [
                 'unread' => (clone $baseQuery)->where('is_read', false)->count(),
@@ -323,11 +349,13 @@ class UserController extends Controller
         ]));
     }
 
-    public function attendanceStatus()
+    public function attendanceStatus(Request $request)
     {
         $user = Auth::user();
         abort_unless($user->hasScholarPortalAccess(), 403);
 
-        return response()->json($this->attendanceSessions->liveStatusForUser($user));
+        $eventId = (int) $request->get('event', 0);
+
+        return response()->json($this->attendanceSessions->liveStatusForUser($user, $eventId ?: null));
     }
 }

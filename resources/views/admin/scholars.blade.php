@@ -32,7 +32,7 @@
                     <tr>
                         <td>
                             <div class="staff-scholar-cell">
-                                <div class="staff-scholar-avatar">{{ strtoupper(substr($scholar->full_name, 0, 1)) }}</div>
+                                <x-user-avatar :user="$scholar" class="staff-scholar-avatar" />
                                 <div class="staff-scholar-meta">
                                     <strong>{{ $scholar->full_name }}</strong>
                                     <small>{{ $scholar->email }}</small>

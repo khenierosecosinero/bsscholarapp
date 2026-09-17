@@ -1,12 +1,13 @@
 @extends('layouts.app')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/staff-admin.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/staff-admin.css') }}?v={{ filemtime(public_path('css/staff-admin.css')) }}">
+    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v={{ filemtime(public_path('css/admin.css')) }}">
 @endpush
 
 @section('content')
 <div class="staff-shell admin-shell" id="app-shell">
+    <button type="button" class="nav-overlay" id="nav-overlay" hidden aria-label="Close menu"></button>
     @include('partials.admin-sidebar')
     <div class="staff-main-wrap">
         @include('partials.admin-topbar')
@@ -22,13 +23,6 @@
     @vite(['resources/js/user-app.js'])
     <script>
     document.addEventListener('DOMContentLoaded', function () {
-        var toggle = document.getElementById('sidebar-toggle');
-        var shell = document.getElementById('app-shell');
-        if (!toggle || !shell) return;
-        toggle.addEventListener('click', function () {
-            shell.classList.toggle('sidebar-open');
-        });
-
         var locationSelect = document.getElementById('admin-location-select');
         if (locationSelect) {
             locationSelect.addEventListener('change', function () {
@@ -69,6 +63,8 @@
                 }
             };
             var pollStaffBadge = function () {
+                if (document.hidden || staffBadgeInFlight) return;
+                staffBadgeInFlight = true;
                 fetch(badgesUrl, {
                     headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                     credentials: 'same-origin'
@@ -79,9 +75,15 @@
                     if (data && typeof data.staff !== 'undefined') {
                         updateStaffBadge(data.staff);
                     }
-                }).catch(function () {});
+                }).catch(function () {}).finally(function () {
+                    staffBadgeInFlight = false;
+                });
             };
-            setInterval(pollStaffBadge, 8000);
+            var staffBadgeInFlight = false;
+            setInterval(pollStaffBadge, 20000);
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden) pollStaffBadge();
+            });
         }
     });
     </script>

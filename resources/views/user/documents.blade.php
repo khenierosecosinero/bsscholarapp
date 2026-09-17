@@ -71,6 +71,7 @@
                     @endforeach
                 </div>
             </div>
+            <div class="table-wrap">
             <table class="table doc-table">
                 <thead><tr><th>Document Type</th><th>Description</th><th>Status</th><th>Date Uploaded</th><th>Action</th></tr></thead>
                 <tbody>
@@ -114,6 +115,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
             <p class="table-footer muted">Showing {{ $filtered->count() }} document(s)</p>
         </div>
 

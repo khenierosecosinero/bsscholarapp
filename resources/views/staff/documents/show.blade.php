@@ -58,7 +58,7 @@
                     <tr>
                         <td>
                             <div class="staff-scholar-cell">
-                                <div class="staff-scholar-avatar">{{ strtoupper(substr($document->user?->full_name ?? 'S', 0, 1)) }}</div>
+                                <x-user-avatar :user="$document->user" class="staff-scholar-avatar" />
                                 <div class="staff-scholar-meta">
                                     <strong>{{ $document->user?->full_name ?? '—' }}</strong>
                                     <small>{{ $document->user?->scholar_id }} · {{ $document->user?->locationLabel() }}</small>

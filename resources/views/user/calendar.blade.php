@@ -110,6 +110,7 @@
                         @php $att = $selected['attendance']; @endphp
                         <div class="card inner-card calendar-attendance-card">
                             <div class="card-header">Your Participation Record</div>
+                            <div class="table-wrap">
                             <table class="table compact">
                                 <thead><tr><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th></tr></thead>
                                 <tbody><tr>
@@ -119,6 +120,7 @@
                                     <td>{{ $selected['status_label'] }}</td>
                                 </tr></tbody>
                             </table>
+                            </div>
                             @if($att?->hasPhoto())
                                 <div class="attendance-record-photo">
                                     <span>Participation photo</span>

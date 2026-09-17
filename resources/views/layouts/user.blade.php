@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/user-nav.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/user-nav.css') }}?v={{ filemtime(public_path('css/user-nav.css')) }}">
     @if(Auth::check() && Auth::user()->isPendingApproval())
         <link rel="stylesheet" href="{{ asset('css/pending-approval-modal.css') }}">
     @endif
@@ -9,6 +9,7 @@
 
 @section('content')
 <div class="app-shell" id="app-shell">
+    <button type="button" class="nav-overlay" id="nav-overlay" hidden aria-label="Close menu"></button>
     @include('partials.user-sidebar', ['active' => $active ?? 'dashboard'])
     <main class="main">
         <div class="inner">

@@ -77,7 +77,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/scholars', [AdminController::class, 'scholars'])->name('scholars');
     Route::get('/staff', [AdminController::class, 'staff'])->name('staff');
     Route::get('/events', [AdminController::class, 'events'])->name('events');
-    Route::get('/attendance', [AdminController::class, 'attendance'])->name('attendance');
     Route::get('/service-hours', [AdminController::class, 'serviceHours'])->name('service-hours');
     Route::get('/documents', [AdminController::class, 'documents'])->name('documents');
     Route::get('/participation', [AdminController::class, 'participation'])->name('participation');
@@ -163,6 +162,7 @@ Route::middleware(['auth', 'scholar'])->prefix('user')->name('user.')->group(fun
         Route::post('/notifications/settings', [NotificationActionController::class, 'updateSettings'])->name('notifications.settings');
 
         Route::put('/profile', [ProfileActionController::class, 'update'])->name('profile.update');
+        Route::post('/profile/avatar', [ProfileActionController::class, 'updateAvatar'])->name('profile.avatar');
         Route::put('/profile/guardian', [ProfileActionController::class, 'updateGuardian'])->name('profile.guardian');
         Route::put('/profile/academic', [ProfileActionController::class, 'updateAcademicPreference'])->name('profile.academic');
         Route::put('/profile/academic/global', [ProfileActionController::class, 'updateGlobalAcademicSettings'])->name('profile.academic.global');

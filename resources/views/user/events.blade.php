@@ -65,11 +65,11 @@
                     @if($selected['image_url'])<img src="{{ $selected['image_url'] }}" alt="{{ $selected['title'] }}">@endif
                     <div class="event-hero-info">
                         <h2>{{ $selected['title'] }}</h2>
-                        <div class="info-row"><span class="info-icon">&#128197;</span> {{ $selected['full_date'] }}</div>
-                        <div class="info-row"><span class="info-icon">&#128336;</span> {{ $selected['time'] }}</div>
-                        <div class="info-row"><span class="info-icon">&#128205;</span> {{ $selected['location'] }}</div>
-                        <div class="info-row"><span class="info-icon">&#9201;</span> Service Hours: {{ $selected['hours'] }}</div>
-                        @if($selected['organizer'])<div class="info-row"><span class="info-icon">&#128101;</span> Organized by: {{ $selected['organizer'] }}</div>@endif
+                        <div class="info-row"><span class="info-icon">&#128197;</span><span class="info-text">{{ $selected['full_date'] }}</span></div>
+                        <div class="info-row"><span class="info-icon">&#128336;</span><span class="info-text">{{ $selected['time'] }}</span></div>
+                        <div class="info-row"><span class="info-icon">&#128205;</span><span class="info-text">{{ $selected['location'] }}</span></div>
+                        <div class="info-row"><span class="info-icon">&#9201;</span><span class="info-text">Service Hours: {{ $selected['hours'] }}</span></div>
+                        @if($selected['organizer'])<div class="info-row"><span class="info-icon">&#128101;</span><span class="info-text">Organized by: {{ $selected['organizer'] }}</span></div>@endif
                     </div>
                 </div>
 
@@ -92,15 +92,17 @@
                     </div>
                     <div class="card inner-card">
                         <div class="card-header">Your Attendance Record <span class="badge failed-to-check-in">Failed to Check In</span></div>
-                        <table class="table compact">
+                        <div class="table-wrap attendance-record-wrap">
+                        <table class="table compact attendance-record-table">
                             <thead><tr><th>Check In</th><th>Check Out</th><th>Total Hours</th><th>Status</th></tr></thead>
                             <tbody><tr>
-                                <td>—</td>
-                                <td>—</td>
-                                <td>0 hrs</td>
-                                <td>Failed to Check In</td>
+                                <td data-label="Check In">—</td>
+                                <td data-label="Check Out">—</td>
+                                <td data-label="Total Hours">0 hrs</td>
+                                <td data-label="Status">Failed to Check In</td>
                             </tr></tbody>
                         </table>
+                        </div>
                     </div>
                 @elseif(in_array($selected['registration_status'], ['confirmed', 'failed_to_check_in'], true))
                     <div class="reminder-box"><strong>Reminder:</strong> Check in after Scholar Staff opens attendance, then attach a photo of your participation so they can verify your hours.</div>
@@ -129,13 +131,14 @@
                             <span class="badge pending">Pending</span>
                         @endif
                         </div>
-                        <table class="table compact">
+                        <div class="table-wrap attendance-record-wrap">
+                        <table class="table compact attendance-record-table">
                             <thead><tr><th>Check In</th><th>Check Out</th><th>Total Hours</th><th>Status</th></tr></thead>
                             <tbody><tr>
-                                <td>{{ $att?->check_in?->format('g:i A') ?? '—' }}</td>
-                                <td>{{ $att?->check_out?->format('g:i A') ?? '—' }}</td>
-                                <td>{{ $att ? $att->hoursLabel() : '—' }}</td>
-                                <td>
+                                <td data-label="Check In">{{ $att?->check_in?->format('g:i A') ?? '—' }}</td>
+                                <td data-label="Check Out">{{ $att?->check_out?->format('g:i A') ?? '—' }}</td>
+                                <td data-label="Total Hours">{{ $att ? $att->hoursLabel() : '—' }}</td>
+                                <td data-label="Status">
                                     @if($att && $att->status === 'approved')
                                         <span class="badge participated">Approved</span>
                                     @elseif($att && $att->status === 'rejected')
@@ -148,6 +151,7 @@
                                 </td>
                             </tr></tbody>
                         </table>
+                        </div>
                         @if($att && $att->hasPhoto())
                             <div class="attendance-record-photo">
                                 <span>Participation photo</span>

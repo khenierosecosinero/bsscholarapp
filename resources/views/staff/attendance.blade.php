@@ -19,7 +19,7 @@
         </div>
         <div class="staff-doc-type-counts">
             <span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span>
-            <span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}">{{ $event->attendanceStatusLabel() }}</span>
+            <span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}" data-attendance-status-badge>{{ $event->attendanceStatusLabel() }}</span>
             <span>Service Hours: {{ number_format((float) $event->service_hours, 2) }}</span>
             <span class="approved">{{ $panel['checkedIn']->count() }} checked in</span>
             <span class="rejected">{{ $panel['failed']->count() }} failed to check in</span>
@@ -35,7 +35,7 @@
                 @php $attendance = $row['attendance']; @endphp
                 <article class="staff-attendance-record">
                     <div class="staff-scholar-cell">
-                        <div class="staff-scholar-avatar">{{ strtoupper(substr($row['user']?->full_name ?? 'S', 0, 1)) }}</div>
+                        <x-user-avatar :user="$row['user'] ?? null" class="staff-scholar-avatar" />
                         <div class="staff-scholar-meta">
                             <strong>{{ $row['user']?->full_name ?? '—' }}</strong>
                             <small>{{ $row['user']?->scholar_id }}</small>
@@ -92,7 +92,7 @@
             @forelse($panel['failed'] as $row)
                 <article class="staff-attendance-record">
                     <div class="staff-scholar-cell">
-                        <div class="staff-scholar-avatar">{{ strtoupper(substr($row['user']?->full_name ?? 'S', 0, 1)) }}</div>
+                        <x-user-avatar :user="$row['user'] ?? null" class="staff-scholar-avatar" />
                         <div class="staff-scholar-meta">
                             <strong>{{ $row['user']?->full_name ?? '—' }}</strong>
                             <small>{{ $row['user']?->scholar_id }}</small>

@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFileUpload();
     initFlashDismiss();
     initAttendanceLive();
+    initAvatarPreview();
 });
 
 function initSidebar() {
@@ -12,23 +13,35 @@ function initSidebar() {
     const shell = document.getElementById('app-shell');
     if (!toggle || !shell) return;
 
-    const mq = window.matchMedia('(max-width: 1000px)');
-    const sync = () => {
-        if (mq.matches) {
-            shell.classList.remove('sidebar-open');
-            toggle.setAttribute('aria-expanded', 'false');
-        } else {
-            shell.classList.add('sidebar-open');
-            toggle.setAttribute('aria-expanded', 'true');
-        }
+    const isStaff = shell.classList.contains('staff-shell');
+    const mq = window.matchMedia(isStaff ? '(max-width: 900px)' : '(max-width: 1000px)');
+    const overlay = document.getElementById('nav-overlay');
+    const sidebar = document.getElementById('sidebar');
+
+    const setOpen = (open) => {
+        shell.classList.toggle('sidebar-open', open);
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        document.body.classList.toggle('nav-locked', open && mq.matches);
+        if (overlay) overlay.hidden = !(open && mq.matches);
+        if (open && mq.matches && sidebar) sidebar.scrollTop = 0;
     };
+
+    const sync = () => setOpen(!mq.matches);
     sync();
     mq.addEventListener('change', sync);
 
     toggle.addEventListener('click', () => {
-        shell.classList.toggle('sidebar-open');
-        toggle.setAttribute('aria-expanded', shell.classList.contains('sidebar-open') ? 'true' : 'false');
+        setOpen(!shell.classList.contains('sidebar-open'));
     });
+
+    overlay?.addEventListener('click', () => setOpen(false));
+
+    document.addEventListener('touchmove', (event) => {
+        if (!document.body.classList.contains('nav-locked')) return;
+        if (!event.target.closest('.sidebar, .staff-sidebar')) {
+            event.preventDefault();
+        }
+    }, { passive: false });
 }
 
 function initProfileDropdown() {
@@ -102,7 +115,7 @@ function initAttendanceLive() {
     const root = document.getElementById('attendance-live-root');
     if (!root?.dataset.attendanceLive) return;
 
-    const url = root.dataset.attendanceLive;
+    let pollUrl = root.dataset.attendanceLive;
     const eventsUrl = root.dataset.eventsUrl || '/user/events';
     const page = root.dataset.attendancePage || '';
     const eventId = String(root.dataset.attendanceEvent || '');
@@ -110,10 +123,19 @@ function initAttendanceLive() {
     let lastEventStatus = root.dataset.attendanceStatus || '';
     let lastNotificationId = Number(root.dataset.latestNotification || 0);
     let primed = false;
+    let inFlight = false;
+
+    if (eventId) {
+        const separator = pollUrl.includes('?') ? '&' : '?';
+        pollUrl = `${pollUrl}${separator}event=${encodeURIComponent(eventId)}`;
+    }
 
     const poll = async () => {
+        if (document.hidden || inFlight) return;
+
+        inFlight = true;
         try {
-            const response = await fetch(url, {
+            const response = await fetch(pollUrl, {
                 headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 credentials: 'same-origin',
             });
@@ -154,11 +176,16 @@ function initAttendanceLive() {
             lastNotificationId = Number(data.latest_notification_id || lastNotificationId);
         } catch (error) {
             // Keep polling even if one request fails.
+        } finally {
+            inFlight = false;
         }
     };
 
     poll();
-    setInterval(poll, 5000);
+    setInterval(poll, 12000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) poll();
+    });
 }
 
 function renderAttendanceSessions(sessions, eventsUrl) {
@@ -251,5 +278,51 @@ function initFlashDismiss() {
             el.style.transition = 'opacity .4s';
             setTimeout(() => el.remove(), 400);
         }, 5000);
+    });
+}
+
+function initAvatarPreview() {
+    const modal = document.getElementById('avatar-preview-modal');
+    const image = document.getElementById('avatar-preview-image');
+    const caption = document.getElementById('avatar-preview-title');
+    if (!modal || !image || !caption) return;
+
+    const close = () => {
+        modal.hidden = true;
+        image.removeAttribute('src');
+        caption.textContent = '';
+        document.body.classList.remove('avatar-preview-open');
+    };
+
+    const open = (url, name) => {
+        if (!url) return;
+        image.src = url;
+        image.alt = name ? `Profile photo of ${name}` : 'Profile photo';
+        caption.textContent = name || '';
+        modal.hidden = false;
+        document.body.classList.add('avatar-preview-open');
+        modal.querySelector('.avatar-preview-close')?.focus();
+    };
+
+    document.addEventListener('click', (event) => {
+        if (event.target.closest('.avatar-edit, .profile-avatar-form')) return;
+
+        const trigger = event.target.closest('.user-avatar-preview-trigger');
+        if (!trigger) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        open(trigger.getAttribute('data-avatar-preview'), trigger.getAttribute('data-avatar-name') || '');
+    });
+
+    modal.querySelectorAll('[data-avatar-preview-close]').forEach((el) => {
+        el.addEventListener('click', (event) => {
+            event.preventDefault();
+            close();
+        });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !modal.hidden) close();
     });
 }

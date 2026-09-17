@@ -67,22 +67,6 @@
         </div>
     </div>
     <div class="staff-stat-card">
-        <div class="staff-stat-icon orange">✓</div>
-        <div class="staff-stat-body">
-            <h3>Attendance</h3>
-            <div class="value">{{ $stats['total_attendance'] ?? 0 }}</div>
-            <div class="sub">Pending: {{ $stats['pending_attendances'] ?? 0 }}</div>
-        </div>
-    </div>
-    <div class="staff-stat-card">
-        <div class="staff-stat-icon purple">⏱</div>
-        <div class="staff-stat-body">
-            <h3>Service Hours</h3>
-            <div class="value">{{ $stats['total_service_hours'] ?? '0.00' }}</div>
-            <div class="sub">Approved hours</div>
-        </div>
-    </div>
-    <div class="staff-stat-card">
         <div class="staff-stat-icon red">📄</div>
         <div class="staff-stat-body">
             <h3>Documents</h3>

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -90,6 +91,19 @@ class AccountService
         });
     }
 
+    public function storeAvatar(User $user, UploadedFile $file): void
+    {
+        $disk = Storage::disk('public');
+        $oldPath = $user->avatar_path;
+        $path = $file->store('avatars/'.$user->id, 'public');
+
+        $user->forceFill(['avatar_path' => $path])->save();
+
+        if ($oldPath && $oldPath !== $path && $disk->exists($oldPath)) {
+            $disk->delete($oldPath);
+        }
+    }
+
     private function deleteStoredFiles(User $user): void
     {
         $disk = Storage::disk('public');
@@ -110,7 +124,10 @@ class AccountService
             $disk->deleteDirectory($photoDirectory);
         }
 
-        if ($user->avatar_path && $disk->exists($user->avatar_path)) {
+        $avatarDirectory = "avatars/{$user->id}";
+        if ($disk->exists($avatarDirectory)) {
+            $disk->deleteDirectory($avatarDirectory);
+        } elseif ($user->avatar_path && $disk->exists($user->avatar_path)) {
             $disk->delete($user->avatar_path);
         }
     }

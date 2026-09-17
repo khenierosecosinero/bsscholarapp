@@ -1,6 +1,7 @@
 @php
-    $hs = $hourStats ?? ['approved' => 0, 'pending' => 0, 'required' => 30, 'remaining' => 30];
-    $pct = $hs['required'] > 0 ? round(($hs['approved'] / $hs['required']) * 100) : 0;
+    $requiredFallback = \App\Services\ScholarService::REQUIRED_HOURS;
+    $hs = $hourStats ?? ['approved' => 0, 'pending' => 0, 'required' => $requiredFallback, 'remaining' => $requiredFallback];
+    $pct = $hs['required'] > 0 ? min(100, (int) round(($hs['approved'] / $hs['required']) * 100)) : 0;
     $showButton = $showButton ?? true;
 @endphp
 

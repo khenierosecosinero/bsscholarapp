@@ -91,6 +91,7 @@
             @if($pendingAttendances->isEmpty())
                 <p class="muted">No pending attendances.</p>
             @else
+                <div class="table-wrap">
                 <table class="table">
                     <thead><tr><th>Event</th><th>Date</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th><th>Action</th></tr></thead>
                     <tbody>
@@ -107,6 +108,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                </div>
             @endif
         </div>
 

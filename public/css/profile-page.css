@@ -5,6 +5,75 @@
     gap: 24px;
 }
 
+.page-profile .profile-avatar-wrap {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    flex-shrink: 0;
+}
+
+.page-profile .profile-avatar-form {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    margin: 0;
+    z-index: 2;
+}
+
+.page-profile .avatar-edit {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid #dbe4ea;
+    box-shadow: 0 2px 8px rgba(15, 23, 33, 0.16);
+    color: #334155;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.page-profile .avatar-edit svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
+.page-profile .avatar-edit:hover,
+.page-profile .avatar-edit:focus {
+    background: #f8fafc;
+    color: #0f1721;
+    outline: none;
+}
+
+.page-profile .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (max-width: 600px) {
+    .page-profile .avatar-edit {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        min-height: 36px;
+    }
+}
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
 .page-profile .profile-section-card {
     padding: 20px;
     margin: 0;
@@ -193,4 +262,10 @@
 
 body.delete-account-modal-open {
     overflow: hidden;
+}
+
+@media (max-width: 480px) {
+    .delete-account-modal {
+        padding: 12px;
+    }
 }

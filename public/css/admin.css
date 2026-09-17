@@ -51,6 +51,20 @@ body:has(.admin-shell) {
     border-radius: 12px;
     padding: 14px 18px;
     margin-bottom: 20px;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.admin-location-banner > div {
+    min-width: 0;
+    flex: 1 1 220px;
+}
+
+.admin-location-banner strong,
+.admin-location-banner .staff-muted {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
 }
 
 .admin-location-banner strong {
@@ -62,15 +76,19 @@ body:has(.admin-shell) {
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .admin-location-switcher select {
     min-width: 220px;
+    max-width: 100%;
     padding: 10px 12px;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     font-size: 14px;
     background: #fff;
+    box-sizing: border-box;
 }
 
 .admin-location-pill {
@@ -83,6 +101,11 @@ body:has(.admin-shell) {
     color: #5c1a14;
     font-size: 13px;
     font-weight: 600;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    white-space: normal;
+    line-height: 1.35;
 }
 
 .admin-badge-admin {
@@ -139,8 +162,37 @@ body:has(.admin-shell) {
 .admin-form-actions {
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 10px;
     margin-top: 16px;
+}
+
+.admin-scope-banner {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: break-word;
+}
+
+.admin-locations-page,
+.admin-staff-page {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.admin-staff-notice {
+    background: #fff2f1;
+    border-color: #fecaca;
+}
+
+.admin-staff-pending-card {
+    margin-bottom: 20px;
+    border-color: #fed7aa;
+}
+
+.admin-staff-page .staff-action-group form {
+    display: inline-flex;
+    margin: 0;
 }
 
 .flash-alert {
@@ -167,4 +219,167 @@ body:has(.admin-shell) {
     font-size: 14px;
     color: #6b7280;
     font-weight: 600;
+}
+
+.admin-report-pies {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+    width: 100%;
+    min-width: 0;
+}
+
+.admin-pie-card {
+    min-width: 0;
+}
+
+.admin-pie-body {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.admin-pie-chart {
+    width: min(160px, 100%);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1px solid #f1f5f9;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
+.admin-pie-legend {
+    flex: 1;
+    min-width: 160px;
+}
+
+.admin-pie-legend li {
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.admin-pie-legend li span:nth-child(2) {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: break-word;
+}
+
+.admin-pie-empty {
+    margin: 12px 0 0;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.staff-grid-2.admin-reports-lower {
+    grid-template-columns: 1fr;
+}
+
+.admin-pie-legend .staff-dot {
+    flex-shrink: 0;
+}
+
+.admin-pie-legend strong {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .admin-report-pies {
+        grid-template-columns: 1fr;
+    }
+    .admin-pie-body {
+        justify-content: center;
+    }
+    .admin-pie-legend {
+        width: 100%;
+    }
+    .admin-shell .staff-topbar-left,
+    .admin-shell .staff-topbar-right,
+    .admin-shell .staff-topbar-actions {
+        width: 100%;
+        max-width: 100%;
+    }
+    .admin-shell .staff-topbar-actions {
+        justify-content: flex-start;
+    }
+    .admin-shell .staff-profile-chip {
+        min-width: 0;
+        flex-wrap: wrap;
+    }
+    .admin-location-banner,
+    .admin-scope-banner,
+    .admin-locations-page,
+    .admin-staff-page {
+        min-width: 0;
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 800px) {
+    .admin-location-banner {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .admin-location-switcher {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .admin-location-switcher select,
+    .admin-location-switcher .staff-btn {
+        min-width: 0;
+        width: 100%;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+    .admin-form-actions {
+        justify-content: stretch;
+    }
+    .admin-form-actions .staff-btn {
+        width: 100%;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+    .admin-scope-banner {
+        padding: 14px 16px !important;
+    }
+    .admin-scope-banner strong,
+    .admin-scope-banner p {
+        overflow-wrap: break-word;
+        word-wrap: break-word;
+    }
+}
+
+@media (max-width: 600px) {
+    .admin-location-switcher {
+        width: 100%;
+    }
+    .admin-location-switcher select {
+        min-width: 0;
+        width: 100%;
+    }
+    .admin-location-pill {
+        max-width: 100%;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+    }
+    .admin-locations-page .staff-stat-body .value,
+    .admin-staff-page .staff-stat-body .value {
+        font-size: 24px;
+    }
+    .admin-locations-add .staff-form-grid {
+        grid-template-columns: 1fr;
+    }
+    .admin-staff-page .staff-action-group {
+        width: 100%;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .admin-staff-page .staff-action-group .staff-btn {
+        min-height: 40px;
+    }
 }

@@ -16,11 +16,10 @@
         ['key' => 'scholars', 'label' => 'Scholars', 'route' => 'admin.scholars', 'icon' => 'users', 'badgeLabel' => 'pending scholar registrations'],
         ['key' => 'staff', 'label' => 'Scholar Staff', 'route' => 'admin.staff', 'icon' => 'users', 'badgeLabel' => 'pending staff registrations'],
         ['key' => 'events', 'label' => 'Events', 'route' => 'admin.events', 'icon' => 'calendar', 'badgeLabel' => 'pending events'],
-        ['key' => 'attendance', 'label' => 'Attendance', 'route' => 'admin.attendance', 'icon' => 'clock', 'badgeLabel' => 'pending attendance records'],
         ['key' => 'service-hours', 'label' => 'Service Hours', 'route' => 'admin.service-hours', 'icon' => 'clock', 'badgeLabel' => 'scholars with pending service hours'],
         ['key' => 'documents', 'label' => 'Documents', 'route' => 'admin.documents', 'icon' => 'file', 'badgeLabel' => 'pending document submissions'],
         ['key' => 'participation', 'label' => 'Participation', 'route' => 'admin.participation', 'icon' => 'participation', 'badgeLabel' => 'pending or failed participation records'],
-        ['key' => 'reports', 'label' => 'Reports', 'route' => 'admin.reports', 'icon' => 'report', 'badgeLabel' => 'scholars needing completion review'],
+        ['key' => 'reports', 'label' => 'Reports', 'route' => 'admin.reports', 'icon' => 'report', 'badgeLabel' => 'unread report updates'],
         ['key' => 'settings', 'label' => 'Admin Settings', 'route' => 'admin.settings', 'icon' => 'settings', 'badgeLabel' => 'settings items requiring attention'],
     ];
 @endphp
@@ -50,12 +49,8 @@
                 <a href="{{ route($item['route'], $navQuery) }}" class="staff-nav-item {{ $active === $item['key'] ? 'active' : '' }}" @if($item['key'] === 'staff') data-admin-nav="staff" @endif>
                     <span class="staff-nav-icon {{ $iconClass }}"></span>
                     <span class="staff-nav-label">{{ $item['label'] }}</span>
-                    @if($item['key'] === 'staff')
-                        @if($badgeCount > 0)
-                            <span class="staff-nav-badge" data-admin-staff-badge aria-label="{{ $badgeCount }} {{ $item['badgeLabel'] }}">{{ $badgeCount > 99 ? '99+' : $badgeCount }}</span>
-                        @endif
-                    @elseif($badgeCount > 0)
-                        <span class="staff-notif-badge" aria-label="{{ $badgeCount }} {{ $item['badgeLabel'] }}">{{ $badgeCount > 99 ? '99+' : $badgeCount }}</span>
+                    @if($badgeCount > 0)
+                        <span class="staff-nav-badge" @if($item['key'] === 'staff') data-admin-staff-badge @endif aria-label="{{ $badgeCount }} {{ $item['badgeLabel'] }}">{{ $badgeCount > 99 ? '99+' : $badgeCount }}</span>
                     @endif
                 </a>
             @endforeach

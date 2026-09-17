@@ -91,6 +91,7 @@
         <ul>
             <li>You are required to complete {{ $hourStats['required'] }} service hours per semester.</li>
             <li>Service hours are credited only after Scholar Staff verifies your attendance and participation photo.</li>
+            <li>Approved hours beyond the semester requirement are credited to the next semester.</li>
             <li>Scholars who fail to check in receive 0 service hours for that event.</li>
         </ul>
     </div>

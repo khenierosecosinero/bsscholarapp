@@ -9,6 +9,8 @@ use App\Models\EventRegistration;
 use App\Models\ScholarNotification;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class AttendanceSessionService
 {
@@ -44,30 +46,107 @@ class AttendanceSessionService
 
     public function close(Event $event, User $staff): Event
     {
-        if (! $event->isAttendanceOpen()) {
-            throw new \InvalidArgumentException('Attendance is already closed for this event.');
+        $lockKey = 'attendance.close.'.$event->id;
+        if (! Cache::add($lockKey, 1, 15)) {
+            $current = $event->fresh() ?? $event;
+            if (! $current->isAttendanceOpen()) {
+                return $current;
+            }
+
+            throw new \InvalidArgumentException('Attendance is already being closed for this event.');
         }
 
-        $now = now();
+        try {
+            $closed = DB::transaction(function () use ($event, $staff) {
+                $locked = Event::query()->whereKey($event->id)->lockForUpdate()->first();
 
-        $event->update([
-            'attendance_is_open' => false,
-            'attendance_closed_at' => $now,
-            'attendance_closed_by' => $staff->id,
-        ]);
+                if (! $locked) {
+                    throw new \InvalidArgumentException('Event not found.');
+                }
 
-        AttendanceSessionLog::create([
-            'event_id' => $event->id,
-            'staff_id' => $staff->id,
-            'action' => AttendanceSessionLog::ACTION_CLOSED,
-            'acted_at' => $now,
-        ]);
+                if (! $locked->isAttendanceOpen()) {
+                    return $locked;
+                }
 
-        $event = $event->fresh();
+                $now = now();
+
+                $locked->update([
+                    'attendance_is_open' => false,
+                    'attendance_closed_at' => $now,
+                    'attendance_closed_by' => $staff->id,
+                ]);
+
+                AttendanceSessionLog::create([
+                    'event_id' => $locked->id,
+                    'staff_id' => $staff->id,
+                    'action' => AttendanceSessionLog::ACTION_CLOSED,
+                    'acted_at' => $now,
+                ]);
+
+                return $locked->fresh();
+            });
+
+            $eventId = (int) $closed->id;
+            dispatch(function () use ($eventId) {
+                try {
+                    $fresh = Event::query()->find($eventId);
+                    if (! $fresh || $fresh->isAttendanceOpen()) {
+                        return;
+                    }
+
+                    app(AttendanceSessionService::class)->completeClosedSession($fresh);
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            })->afterResponse();
+
+            return $closed;
+        } finally {
+            Cache::forget($lockKey);
+        }
+    }
+
+    public function completeClosedSession(Event $event): void
+    {
+        if ($event->isAttendanceOpen()) {
+            return;
+        }
+
         $this->scholar->syncMissedCheckInsForEvent($event);
         $this->notifyScholars($event, AttendanceSessionLog::ACTION_CLOSED);
+    }
 
-        return $event;
+    public function sessionPayload(Event $event): array
+    {
+        $opened = $event->attendanceOpenedAtLabel();
+        $closed = $event->attendanceClosedAtLabel();
+        $historyParts = [];
+
+        if ($opened) {
+            $historyParts[] = 'Last opened: '.$opened;
+        }
+        if ($closed) {
+            $historyParts[] = 'Last closed: '.$closed;
+        }
+
+        if ($event->isAttendanceOpen()) {
+            $copy = 'Opened '.($opened ?? 'just now').'. Scholars can mark attendance until you click Close Attendance. This session will not close automatically.';
+        } elseif ($event->attendanceSessionClosed()) {
+            $copy = 'Closed '.$closed.'. Scholars can no longer submit or modify their attendance. You can still edit records below.';
+        } else {
+            $copy = 'Closed. Scholars cannot mark attendance until you click Open Attendance. The event schedule does not open or close this session.';
+        }
+
+        return [
+            'event_id' => $event->id,
+            'is_open' => $event->isAttendanceOpen(),
+            'status_label' => $event->attendanceStatusLabel(),
+            'status_badge_class' => $event->attendanceStatusBadgeClass(),
+            'opened_at' => $opened,
+            'closed_at' => $closed,
+            'copy' => $copy,
+            'history' => implode(' · ', $historyParts),
+        ];
     }
 
     public function sessionsForUser(User $user, int $limit = 8): Collection
@@ -91,13 +170,35 @@ class AttendanceSessionService
         ));
     }
 
-    public function liveStatusForUser(User $user): array
+    public function liveStatusForUser(User $user, ?int $focusEventId = null): array
     {
-        $attendances = $user->attendances()->get()->keyBy('event_id');
+        $now = now();
         $events = $this->scholar->scopeEventsForUser(
-            Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)]),
+            Event::query()
+                ->with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
+                ->attendanceStatusVisible($now)
+                ->orderBy('ends_at')
+                ->limit(12),
             $user
         )->get();
+
+        if ($focusEventId && ! $events->contains('id', $focusEventId)) {
+            $focus = $this->scholar->scopeEventsForUser(
+                Event::query()
+                    ->with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
+                    ->whereKey($focusEventId),
+                $user
+            )->first();
+
+            if ($focus) {
+                $events->push($focus);
+            }
+        }
+
+        $attendances = $user->attendances()
+            ->whereIn('event_id', $events->pluck('id')->all() ?: [0])
+            ->get()
+            ->keyBy('event_id');
 
         $formatted = $events->mapWithKeys(fn (Event $event) => [
             (string) $event->id => $this->formatSession(
@@ -117,7 +218,7 @@ class AttendanceSessionService
         $latestNotification = $user->scholarNotifications()
             ->where('category', 'attendance')
             ->latest('id')
-            ->first();
+            ->first(['id', 'title', 'body', 'event_id', 'created_at']);
         $unread = $user->unreadNotificationCount();
 
         return [

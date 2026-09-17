@@ -1,6 +1,7 @@
 @php
-    $hs = $hourStats ?? ['approved' => 0, 'pending' => 0, 'required' => 30, 'remaining' => 30];
-    $pct = $hs['required'] > 0 ? round(($hs['approved'] / $hs['required']) * 100) : 0;
+    $requiredFallback = \App\Services\ScholarService::REQUIRED_HOURS;
+    $hs = $hourStats ?? ['approved' => 0, 'pending' => 0, 'required' => $requiredFallback, 'remaining' => $requiredFallback];
+    $pct = $hs['required'] > 0 ? min(100, (int) round(($hs['approved'] / $hs['required']) * 100)) : 0;
     $selectedYear = old('year_start', $user->academic_year_start ?? $globalAcademicSettings->year_start ?? now()->year);
     $selectedSemester = old('semester', $user->semester ?? $globalAcademicSettings->semester ?? '2nd Semester');
 @endphp

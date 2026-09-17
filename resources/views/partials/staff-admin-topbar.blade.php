@@ -1,24 +1,30 @@
 @php
     $staffName = $staff->full_name ?? 'Scholar Staff';
+    $staffRole = $staff->locationLabel() ?? 'Scholar Staff';
 @endphp
 
 <header class="staff-topbar">
     <div class="staff-topbar-left">
-        <button class="staff-hamburger" id="sidebar-toggle" type="button" aria-label="Toggle menu">&#9776;</button>
-        <div class="staff-topbar-titles">
-            <h1>{{ $pageTitle }}</h1>
-            @if(!empty($pageSubtitle))
-                <p>{{ $pageSubtitle }}</p>
-            @endif
-        </div>
+        <button class="staff-hamburger" id="sidebar-toggle" type="button" aria-label="Toggle menu" aria-expanded="false">&#9776;</button>
+        <h1 class="staff-topbar-title">{{ $pageTitle }}</h1>
     </div>
     <div class="staff-topbar-right">
-        <div class="staff-topbar-actions">
-            <div class="staff-profile-chip">
-                <div class="staff-profile-avatar">{{ strtoupper(substr($staffName, 0, 1)) }}</div>
-                <span>{{ $staffName }}</span>
-                <span class="staff-user-chevron">&#9662;</span>
+        <div class="staff-profile-card" id="profile-dropdown-wrap">
+            <div class="staff-profile-avatar">{{ strtoupper(substr($staffName, 0, 1)) }}</div>
+            <div class="staff-profile-info">
+                <div class="name">{{ $staffName }}</div>
+                <div class="role">{{ $staffRole }}</div>
+            </div>
+            <button type="button" class="staff-profile-toggle" id="profile-toggle" aria-label="Profile menu">&#9662;</button>
+            <div class="profile-menu" id="profile-menu" hidden>
+                <form method="POST" action="{{ route('logout') }}">
+                    @csrf
+                    <button type="submit">Logout</button>
+                </form>
             </div>
         </div>
     </div>
+    @if(!empty($pageSubtitle))
+        <p class="staff-topbar-subtitle">{{ $pageSubtitle }}</p>
+    @endif
 </header>

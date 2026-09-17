@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Announcement;
+use App\Models\AcademicSetting;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\Attendance;
@@ -15,11 +16,15 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class ScholarService
 {
     public const REQUIRED_HOURS = 30;
+
+    /** @var array<int, array<int, array<string, array<string, float>>>> */
+    private array $hourAllocationCache = [];
 
     public function __construct(
         private AcademicSettingsService $academic,
@@ -70,30 +75,114 @@ class ScholarService
         return $end;
     }
 
-    public function currentSemesterInfo(User $user): array
+    public function currentSemesterInfo(User $user, ?array $hours = null): array
     {
-        $hours = $this->serviceHourStats($user);
+        $hours = $hours ?? $this->serviceHourStats($user);
 
         return $this->academic->infoForUser($user, $hours);
     }
 
-    public function serviceHourStats(User $user): array
+    /**
+     * Semester progress after applying the per-semester requirement cap and
+     * carrying leftover approved hours into later semesters.
+     *
+     * Attendance rows are left unchanged; only the credited totals move.
+     */
+    public function serviceHourStats(User $user, ?AcademicSetting $period = null): array
     {
-        $period = $this->academic->forUser($user);
-        $query = $this->academic->scopeAttendancesForPeriod($user->attendances(), $period);
+        $period ??= $this->academic->forUser($user);
 
-        $approved = (float) (clone $query)
-            ->where('status', Attendance::STATUS_APPROVED)
-            ->whereNotNull('check_in')
-            ->sum('hours_earned');
-        $pending = (float) (clone $query)
-            ->where('status', Attendance::STATUS_PENDING)
-            ->whereNotNull('check_in')
-            ->sum('hours_earned');
-        $required = self::REQUIRED_HOURS;
-        $remaining = max(0, $required - $approved);
+        return $this->statsFromSlot(
+            $this->slotFromAllocation($this->allocatedHours($user), $period)
+        );
+    }
 
-        return compact('approved', 'pending', 'required', 'remaining');
+    public function serviceHourStatsFromRecords(Collection $records, AcademicSetting $period): array
+    {
+        return $this->statsFromSlot(
+            $this->slotFromAllocation($this->allocateHoursFromRecords($records), $period)
+        );
+    }
+
+    public function allocatedHours(User $user): array
+    {
+        $cacheKey = (int) $user->id;
+        if (! isset($this->hourAllocationCache[$cacheKey])) {
+            $records = $user->attendances()
+                ->whereNotNull('check_in')
+                ->whereIn('status', [Attendance::STATUS_APPROVED, Attendance::STATUS_PENDING])
+                ->get(['academic_year_start', 'semester', 'status', 'hours_earned']);
+
+            $this->hourAllocationCache[$cacheKey] = $this->allocateHoursFromRecords($records);
+        }
+
+        return $this->hourAllocationCache[$cacheKey];
+    }
+
+    /**
+     * Walk academic years in order and credit at most REQUIRED_HOURS per semester.
+     * Surplus approved hours become carried_in for the following semester.
+     *
+     * @param  iterable<int, object>  $records
+     * @return array<int, array<string, array<string, float>>>
+     */
+    public function allocateHoursFromRecords(iterable $records, ?float $required = null): array
+    {
+        $required = $required ?? (float) self::REQUIRED_HOURS;
+        $buckets = [];
+
+        foreach ($records as $row) {
+            $year = (int) ($row->academic_year_start ?? 0);
+            $semester = (string) ($row->semester ?? '');
+            if ($year < 1 || ! in_array($semester, AcademicSettingsService::SEMESTERS, true)) {
+                continue;
+            }
+
+            $buckets[$year][$semester] ??= ['approved' => 0.0, 'pending' => 0.0];
+            $hours = (float) ($row->hours_earned ?? 0);
+
+            if ($row->status === Attendance::STATUS_APPROVED) {
+                $buckets[$year][$semester]['approved'] += $hours;
+            } elseif ($row->status === Attendance::STATUS_PENDING) {
+                $buckets[$year][$semester]['pending'] += $hours;
+            }
+        }
+
+        if ($buckets === []) {
+            return [];
+        }
+
+        ksort($buckets);
+        $minYear = (int) min(array_keys($buckets));
+        $maxYear = (int) max(array_keys($buckets));
+        $carry = 0.0;
+        $allocated = [];
+
+        for ($year = $minYear; $year <= $maxYear || $carry > 0; $year++) {
+            if ($year - $minYear > 40) {
+                break;
+            }
+
+            foreach (AcademicSettingsService::SEMESTERS as $semester) {
+                $raw = round((float) ($buckets[$year][$semester]['approved'] ?? 0), 2);
+                $pending = round((float) ($buckets[$year][$semester]['pending'] ?? 0), 2);
+                $total = round($raw + $carry, 2);
+                $credited = round(min($total, $required), 2);
+                $carriedOut = round(max(0, $total - $required), 2);
+
+                $allocated[$year][$semester] = [
+                    'raw_approved' => $raw,
+                    'pending' => $pending,
+                    'carried_in' => round($carry, 2),
+                    'credited' => $credited,
+                    'carried_out' => $carriedOut,
+                ];
+
+                $carry = $carriedOut;
+            }
+        }
+
+        return $allocated;
     }
 
     public function semesterSummaryChart(User $user): array
@@ -101,8 +190,8 @@ class ScholarService
         $stats = $this->serviceHourStats($user);
         $required = max(1, $stats['required']);
 
-        $approvedArc = min(100, round(($stats['approved'] / $required) * 100));
-        $pendingArc = min(100 - $approvedArc, round(($stats['pending'] / $required) * 100));
+        $approvedArc = min(100, (int) round(($stats['approved'] / $required) * 100));
+        $pendingArc = min(100 - $approvedArc, (int) round(($stats['pending'] / $required) * 100));
         $remainingArc = max(0, 100 - $approvedArc - $pendingArc);
 
         return [
@@ -110,9 +199,9 @@ class ScholarService
             'pending' => $stats['pending'],
             'remaining' => $stats['remaining'],
             'required' => $stats['required'],
-            'completed_pct' => round(($stats['approved'] / $required) * 100),
-            'pending_pct' => round(($stats['pending'] / $required) * 100),
-            'remaining_pct' => round(($stats['remaining'] / $required) * 100),
+            'completed_pct' => min(100, (int) round(($stats['approved'] / $required) * 100)),
+            'pending_pct' => min(100, (int) round(($stats['pending'] / $required) * 100)),
+            'remaining_pct' => min(100, (int) round(($stats['remaining'] / $required) * 100)),
             'approved_arc' => $approvedArc,
             'pending_arc' => $pendingArc,
             'remaining_arc' => $remainingArc,
@@ -124,25 +213,23 @@ class ScholarService
     public function semesterHoursComparison(User $user): array
     {
         $period = $this->academic->forUser($user);
-        $required = self::REQUIRED_HOURS;
+        $required = (float) self::REQUIRED_HOURS;
         $maxScale = 40;
+        $allocation = $this->allocatedHours($user);
 
-        $semesters = collect(AcademicSettingsService::SEMESTERS)->map(function (string $semester) use ($user, $period, $required, $maxScale) {
-            $approved = (float) $user->attendances()
-                ->where('academic_year_start', $period->year_start)
-                ->where('academic_year_end', $period->year_end)
-                ->where('semester', $semester)
-                ->where('status', Attendance::STATUS_APPROVED)
-                ->whereNotNull('check_in')
-                ->sum('hours_earned');
+        $semesters = collect(AcademicSettingsService::SEMESTERS)->map(function (string $semester) use ($period, $required, $maxScale, $allocation) {
+            $slot = $allocation[$period->year_start][$semester] ?? [
+                'credited' => 0.0,
+            ];
+            $approved = (float) ($slot['credited'] ?? 0);
 
             return [
                 'label' => $semester,
                 'short_label' => str_replace(' Semester', '', $semester),
                 'approved' => $approved,
                 'required' => $required,
-                'bar_height' => min(100, round(($approved / $maxScale) * 100)),
-                'required_line' => round(($required / $maxScale) * 100),
+                'bar_height' => min(100, (int) round(($approved / $maxScale) * 100)),
+                'required_line' => (int) round(($required / $maxScale) * 100),
             ];
         })->all();
 
@@ -150,13 +237,49 @@ class ScholarService
             'required' => $required,
             'max_scale' => $maxScale,
             'semesters' => $semesters,
-            'required_line' => round(($required / $maxScale) * 100),
+            'required_line' => (int) round(($required / $maxScale) * 100),
         ];
     }
 
-    public function dashboardStats(User $user): array
+    /**
+     * @param  array<int, array<string, array<string, float>>>  $allocation
+     * @return array<string, float>
+     */
+    private function slotFromAllocation(array $allocation, AcademicSetting $period): array
     {
-        $hours = $this->serviceHourStats($user);
+        return $allocation[$period->year_start][$period->semester] ?? [
+            'raw_approved' => 0.0,
+            'pending' => 0.0,
+            'carried_in' => 0.0,
+            'credited' => 0.0,
+            'carried_out' => 0.0,
+        ];
+    }
+
+    /**
+     * @param  array<string, float>  $slot
+     * @return array<string, float|int>
+     */
+    private function statsFromSlot(array $slot): array
+    {
+        $required = (float) self::REQUIRED_HOURS;
+        $approved = round(min($required, max(0, (float) ($slot['credited'] ?? 0))), 2);
+        $pending = round(max(0, (float) ($slot['pending'] ?? 0)), 2);
+
+        return [
+            'approved' => $approved,
+            'pending' => $pending,
+            'required' => $required,
+            'remaining' => max(0, round($required - $approved, 2)),
+            'raw_approved' => (float) ($slot['raw_approved'] ?? 0),
+            'carried_in' => (float) ($slot['carried_in'] ?? 0),
+            'carried_out' => (float) ($slot['carried_out'] ?? 0),
+        ];
+    }
+
+    public function dashboardStats(User $user, ?array $hours = null, ?int $unreadNotifications = null): array
+    {
+        $hours = $hours ?? $this->serviceHourStats($user);
 
         return [
             'service_hours' => [
@@ -175,12 +298,14 @@ class ScholarService
                     $this->academic->forUser($user)
                 )
                 ->count(),
-            'notifications' => $user->unreadNotificationCount(),
+            'notifications' => $unreadNotifications ?? $user->unreadNotificationCount(),
         ];
     }
 
     public function upcomingEvents(User $user, int $limit = 10): Collection
     {
+        $attendances = $this->attendancesByEvent($user);
+
         return $this->scopeEventsForUser(
             Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
                 ->where('starts_at', '>=', now()->subDay())
@@ -188,12 +313,12 @@ class ScholarService
                 ->limit($limit),
             $user
         )->get()
-            ->map(fn (Event $event) => $this->formatEvent($event, $user, $user->attendances()->get()->keyBy('event_id')));
+            ->map(fn (Event $event) => $this->formatEvent($event, $user, $attendances));
     }
 
     public function nextUpcomingEvent(User $user): ?array
     {
-        $attendances = $user->attendances()->get()->keyBy('event_id');
+        $attendances = $this->attendancesByEvent($user);
 
         $event = $this->scopeEventsForUser(
             Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
@@ -231,7 +356,7 @@ class ScholarService
         }
 
         $events = $query->get();
-        $attendances = $user->attendances()->get()->keyBy('event_id');
+        $attendances = $this->attendancesByEvent($user);
         $formatted = $events->map(fn (Event $event) => $this->formatEvent($event, $user, $attendances));
 
         if ($status && $status !== 'all') {
@@ -403,6 +528,10 @@ class ScholarService
 
     public function syncMissedCheckInsForUser(User $user): void
     {
+        if (! $this->shouldRunSync('scholar.sync_missed.user.'.$user->id)) {
+            return;
+        }
+
         $registrations = EventRegistration::query()
             ->with('event')
             ->where('user_id', $user->id)
@@ -417,7 +546,7 @@ class ScholarService
             }))
             ->get();
 
-        $attendances = $user->attendances()->get()->keyBy('event_id');
+        $attendances = $this->attendancesByEvent($user);
 
         foreach ($registrations as $registration) {
             if ($registration->event) {
@@ -433,6 +562,10 @@ class ScholarService
 
     public function syncMissedCheckInsForPrograms(array $programIds): void
     {
+        if (! $this->shouldRunSync('scholar.sync_missed.programs.'.$this->programCacheKey($programIds))) {
+            return;
+        }
+
         $registrations = EventRegistration::query()
             ->with(['event', 'user'])
             ->whereIn('status', [EventRegistration::STATUS_CONFIRMED, EventRegistration::STATUS_FAILED_CHECK_IN])
@@ -475,17 +608,27 @@ class ScholarService
             ->whereIn('status', [EventRegistration::STATUS_CONFIRMED, EventRegistration::STATUS_FAILED_CHECK_IN])
             ->get();
 
+        if ($registrations->isEmpty()) {
+            return;
+        }
+
+        $attendances = Attendance::query()
+            ->where('event_id', $event->id)
+            ->whereIn('user_id', $registrations->pluck('user_id')->all())
+            ->get()
+            ->keyBy('user_id');
+
         foreach ($registrations as $registration) {
             if (! $registration->user) {
                 continue;
             }
 
-            $attendance = Attendance::query()
-                ->where('user_id', $registration->user_id)
-                ->where('event_id', $event->id)
-                ->first();
-
-            $this->applyMissedCheckIn($event, $registration->user, $registration, $attendance);
+            $this->applyMissedCheckIn(
+                $event,
+                $registration->user,
+                $registration,
+                $attendances->get($registration->user_id)
+            );
         }
     }
 
@@ -707,6 +850,10 @@ class ScholarService
 
     public function syncCompletedEventHoursForUser(User $user): void
     {
+        if (! $this->shouldRunSync('scholar.sync_hours.user.'.$user->id)) {
+            return;
+        }
+
         $user->attendances()
             ->with('event')
             ->whereNotNull('check_in')
@@ -723,6 +870,10 @@ class ScholarService
 
     public function syncCompletedEventHoursForPrograms(array $programIds): void
     {
+        if (! $this->shouldRunSync('scholar.sync_hours.programs.'.$this->programCacheKey($programIds))) {
+            return;
+        }
+
         Attendance::query()
             ->with('event')
             ->whereNotNull('check_in')
@@ -752,6 +903,7 @@ class ScholarService
         $monthDate = Carbon::create($year, $month, 1);
         $start = $monthDate->copy()->startOfMonth()->startOfWeek(Carbon::SUNDAY)->startOfDay();
         $end = $monthDate->copy()->endOfMonth()->endOfWeek(Carbon::SATURDAY)->endOfDay();
+        $attendances = $this->attendancesByEvent($user);
 
         return $this->scopeEventsForUser(
             Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
@@ -759,7 +911,7 @@ class ScholarService
                 ->orderBy('starts_at'),
             $user
         )->get()
-            ->map(fn (Event $event) => $this->formatEvent($event, $user, $user->attendances()->get()->keyBy('event_id')));
+            ->map(fn (Event $event) => $this->formatEvent($event, $user, $attendances));
     }
 
     public function ensureUserDocuments(User $user): void
@@ -768,16 +920,33 @@ class ScholarService
             return;
         }
 
+        $cacheKey = 'scholar.docs_ensured.'.$user->id.'.'.$user->scholarship_program_id;
+        if (Cache::get($cacheKey)) {
+            return;
+        }
+
         $types = DocumentType::query()
             ->where('scholarship_program_id', $user->scholarship_program_id)
             ->get();
 
+        $existingTypeIds = Document::query()
+            ->where('user_id', $user->id)
+            ->pluck('document_type_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
         foreach ($types as $type) {
+            if (in_array($type->id, $existingTypeIds, true)) {
+                continue;
+            }
+
             Document::firstOrCreate(
                 ['user_id' => $user->id, 'document_type_id' => $type->id],
                 ['status' => 'not_submitted']
             );
         }
+
+        Cache::put($cacheKey, true, 300);
     }
 
     public function documentsForUser(User $user): Collection
@@ -792,9 +961,9 @@ class ScholarService
             ->values();
     }
 
-    public function documentOverviewStats(User $user): array
+    public function documentOverviewStats(User $user, ?Collection $documents = null): array
     {
-        $documents = $this->documentsForUser($user);
+        $documents = $documents ?? $this->documentsForUser($user);
         $total = $documents->count();
 
         $approved = $documents->where('status', 'approved')->count();
@@ -833,6 +1002,7 @@ class ScholarService
                         ['status' => 'not_submitted']
                     );
                     $count++;
+                    Cache::forget('scholar.docs_ensured.'.$scholar->id.'.'.$type->scholarship_program_id);
                 }
             });
 
@@ -968,5 +1138,23 @@ class ScholarService
         });
 
         return $count;
+    }
+
+    private function attendancesByEvent(User $user): Collection
+    {
+        return $user->attendances()->get()->keyBy('event_id');
+    }
+
+    private function shouldRunSync(string $key, int $seconds = 45): bool
+    {
+        return Cache::add($key, 1, $seconds);
+    }
+
+    private function programCacheKey(array $programIds): string
+    {
+        $programIds = array_values(array_unique(array_map('intval', $programIds)));
+        sort($programIds);
+
+        return md5(implode(',', $programIds));
     }
 }

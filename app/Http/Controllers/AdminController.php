@@ -17,6 +17,8 @@ use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
 {
+    private ?array $resolvedScope = null;
+
     public function __construct(
         private AdminDashboardService $admin,
         private StaffDashboardService $staff,
@@ -44,10 +46,14 @@ class AdminController extends Controller
 
     private function scope(Request $request): array
     {
+        if ($this->resolvedScope !== null) {
+            return $this->resolvedScope;
+        }
+
         $locationKey = $this->syncLocation($request);
         $programType = $this->syncProgramType($request);
 
-        return [
+        return $this->resolvedScope = [
             'locationKey' => $locationKey,
             'programType' => $programType,
             'programTypeLabel' => match ($programType) {
@@ -110,13 +116,11 @@ class AdminController extends Controller
     {
         $scope = $this->scope($request);
 
+        $board = $this->admin->locationBoard($scope['locationKey'], $scope['programType']);
+
         return view('admin.locations', array_merge(
             $this->layoutData($request, 'locations', 'Locations', 'Manage City and Province Scholarship Program locations separately.'),
-            [
-                'summaries' => $this->admin->locationSummaries($scope['locationKey'], $scope['programType']),
-                'citySummaries' => $this->admin->locationSummaries('all', 'city_municipality'),
-                'provinceSummaries' => $this->admin->locationSummaries('all', 'province'),
-            ]
+            $board
         ));
     }
 
@@ -142,6 +146,7 @@ class AdminController extends Controller
             'display_name' => $data['display_name'] ?? $location->display_name,
             'is_active' => $request->boolean('is_active'),
         ]);
+        $this->admin->forgetLocationCaches();
 
         return redirect()->route('admin.locations')->with('success', 'Location updated successfully.');
     }
@@ -166,6 +171,7 @@ class AdminController extends Controller
             'slug' => ScholarshipProgram::slugForLocation($data['location_name']).'-'.Str::lower(Str::random(4)),
             'is_active' => true,
         ]);
+        $this->admin->forgetLocationCaches();
 
         return redirect()->route('admin.locations')->with('success', 'Location added successfully.');
     }
@@ -214,6 +220,7 @@ class AdminController extends Controller
         $pendingStaff = $this->admin->pendingStaffQuery($scope['programIds'])
             ->orderBy('created_at')
             ->get();
+        $approvedCount = $this->admin->approvedStaffQuery($scope['programIds'])->count();
 
         return view('admin.staff', array_merge(
             $this->layoutData($request, 'staff', 'Scholar Staff', 'Review scholar staff accounts and approve new registrations.'),
@@ -222,9 +229,9 @@ class AdminController extends Controller
                 'pendingStaff' => $pendingStaff,
                 'search' => $search,
                 'staffStats' => [
-                    'total' => $this->admin->approvedStaffQuery($scope['programIds'])->count(),
+                    'total' => $approvedCount,
                     'pending' => $pendingStaff->count(),
-                    'approved' => $this->admin->approvedStaffQuery($scope['programIds'])->count(),
+                    'approved' => $approvedCount,
                     'rejected' => $this->admin->staffQuery($scope['programIds'])->where('status', User::STATUS_REJECTED)->count(),
                 ],
             ]
@@ -294,25 +301,6 @@ class AdminController extends Controller
         ));
     }
 
-    public function attendance(Request $request)
-    {
-        $scope = $this->scope($request);
-
-        $attendances = $this->admin->attendanceQuery($scope['programIds'])
-            ->whereNotNull('check_in')
-            ->latest()
-            ->paginate(15)
-            ->withQueryString();
-
-        return view('admin.attendance', array_merge(
-            $this->layoutData($request, 'attendance', 'Attendance', 'Review attendance records for the selected scholarship program scope.'),
-            [
-                'attendances' => $attendances,
-                'report' => $this->staff->attendanceReport($scope['programIds']),
-            ]
-        ));
-    }
-
     public function serviceHours(Request $request)
     {
         $scope = $this->scope($request);
@@ -355,15 +343,27 @@ class AdminController extends Controller
     public function reports(Request $request)
     {
         $scope = $this->scope($request);
+        $this->admin->markReportsViewed($scope['programIds']);
+
+        $stats = $this->admin->dashboardStats($scope['programIds']);
+        $completionReport = $this->staff->completionReport($scope['programIds']);
+        $participationReport = $this->staff->participationReport($scope['programIds']);
 
         return view('admin.reports', array_merge(
             $this->layoutData($request, 'reports', 'Reports', 'Compare City and Province Scholarship Program records separately.'),
             [
-                'stats' => $this->admin->dashboardStats($scope['programIds']),
-                'locationSummaries' => $this->admin->locationSummaries($scope['locationKey'], $scope['programType']),
+                'stats' => $stats,
                 'attendanceReport' => $this->staff->attendanceReport($scope['programIds']),
-                'completionReport' => $this->staff->completionReport($scope['programIds']),
-                'participationReport' => $this->staff->participationReport($scope['programIds']),
+                'completionReport' => $completionReport,
+                'participationReport' => $participationReport,
+                'reportCharts' => $scope['isAllLocations']
+                    ? null
+                    : $this->admin->locationReportCharts(
+                        $scope['programIds'],
+                        $stats,
+                        $completionReport,
+                        $participationReport
+                    ),
             ]
         ));
     }

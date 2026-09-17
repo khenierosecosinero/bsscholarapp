@@ -6,7 +6,7 @@
     <div class="staff-card">
         <div class="staff-card-header"><h2>Scholar Profile</h2></div>
         <div class="staff-scholar-cell" style="margin-bottom:20px">
-            <div class="staff-scholar-avatar" style="width:56px;height:56px;font-size:20px">{{ strtoupper(substr($scholar->full_name, 0, 1)) }}</div>
+            <x-user-avatar :user="$scholar" class="staff-scholar-avatar" style="width:56px;height:56px;font-size:20px" />
             <div>
                 <strong style="font-size:18px">{{ $scholar->full_name }}</strong>
                 <div class="staff-muted">{{ $scholar->scholar_id }}</div>
@@ -20,12 +20,24 @@
         <div class="staff-list-item"><div><strong>Course / Year</strong><div class="staff-muted">{{ $scholar->course_year_level ?? '—' }}</div></div></div>
 
         @if($scholar->status === 'pending')
-            <div style="display:flex;gap:10px;margin-top:20px">
-                <form method="POST" action="{{ route('staff.scholars.approve', $scholar) }}">
+            <div style="display:flex;gap:10px;margin-top:20px" data-approval-actions>
+                <form method="POST" action="{{ route('staff.scholars.approve', $scholar) }}" data-ajax-approval="approve" data-no-loading="true">
                     @csrf
                     <button type="submit" class="staff-btn staff-btn-primary">Approve Account</button>
                 </form>
-                <form method="POST" action="{{ route('staff.scholars.reject', $scholar) }}" onsubmit="return confirm('Reject and permanently delete this account? This cannot be undone.');">
+                <form
+                    method="POST"
+                    action="{{ route('staff.scholars.reject', $scholar) }}"
+                    data-confirm="Reject and permanently delete this account?"
+                    data-confirm-title="Reject this account?"
+                    data-confirm-name="{{ $scholar->full_name }}"
+                    data-confirm-note="This cannot be undone. The scholar account and related records will be permanently removed from the database."
+                    data-confirm-yes="Reject & Delete"
+                    data-confirm-no="Cancel"
+                    data-confirm-variant="danger"
+                    data-ajax-approval="reject"
+                    data-no-loading="true"
+                >
                     @csrf
                     <button type="submit" class="staff-btn" style="border-color:#ef4444;color:#ef4444">Reject &amp; Delete Account</button>
                 </form>

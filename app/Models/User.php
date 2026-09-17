@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 class User extends Authenticatable
@@ -334,6 +335,29 @@ class User extends Authenticatable
     public function unreadNotificationCount(): int
     {
         return $this->scholarNotifications()->where('is_read', false)->count();
+    }
+
+    public function initials(): string
+    {
+        return strtoupper(substr($this->full_name ?: 'U', 0, 1));
+    }
+
+    public function hasAvatar(): bool
+    {
+        return filled($this->avatar_path)
+            && Storage::disk('public')->exists($this->avatar_path);
+    }
+
+    public function avatarUrl(): ?string
+    {
+        if (! $this->hasAvatar()) {
+            return null;
+        }
+
+        $url = '/storage/'.ltrim((string) $this->avatar_path, '/');
+        $version = $this->updated_at?->timestamp ?? time();
+
+        return $url.'?v='.$version;
     }
 
     public function announcementReads(): HasMany

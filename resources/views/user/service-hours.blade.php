@@ -7,7 +7,7 @@
 @section('page-content')
 <div class="page-service-hours">
 
-@php $pct = $hourStats['required'] > 0 ? round(($hourStats['approved'] / $hourStats['required']) * 100) : 0; @endphp
+@php $pct = $hourStats['required'] > 0 ? min(100, (int) round(($hourStats['approved'] / $hourStats['required']) * 100)) : 0; @endphp
 
 <section class="stats grid">
     <div class="stat card"><div class="stat-icon blue">&#128337;</div><div class="stat-body"><div class="stat-title">Required Hours</div><div class="stat-value">{{ number_format($hourStats['required'], 2) }} hours</div></div></div>
@@ -32,6 +32,7 @@
             @if($records->isEmpty())
                 <p class="muted">No service hour records found.</p>
             @else
+                <div class="table-wrap">
                 <table class="table service-table">
                     <thead><tr><th>Event / Activity</th><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours Earned</th><th>Status</th><th>Remarks</th><th>Action</th></tr></thead>
                     <tbody>
@@ -49,6 +50,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                </div>
             @endif
         </div>
 

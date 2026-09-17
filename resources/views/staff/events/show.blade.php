@@ -69,7 +69,7 @@
                     <tr>
                         <td>
                             <div class="staff-scholar-cell">
-                                <div class="staff-scholar-avatar">{{ strtoupper(substr($participant['user']?->full_name ?? 'S', 0, 1)) }}</div>
+                                <x-user-avatar :user="$participant['user'] ?? null" class="staff-scholar-avatar" />
                                 <div class="staff-scholar-meta">
                                     <strong>{{ $participant['user']?->full_name ?? '—' }}</strong>
                                     <small>{{ $participant['user']?->scholar_id }}</small>

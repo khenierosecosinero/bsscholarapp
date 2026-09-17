@@ -30,20 +30,7 @@ class StaffController extends Controller
 
     private function layoutData(string $active, string $title, string $subtitle = '', ?string $breadcrumb = null): array
     {
-        $staff = Auth::user()->load('scholarshipProgram');
-        $program = $staff->scholarshipProgram;
-        $programIds = $this->staffData->programIds($staff);
-
-        return [
-            'staff' => $staff,
-            'program' => $program,
-            'programIds' => $programIds,
-            'active' => $active,
-            'pageTitle' => $title,
-            'pageSubtitle' => $subtitle ?: ($program ? 'Managing '.$staff->locationLabel().'.' : 'Manage your assigned scholarship program.'),
-            'breadcrumb' => $breadcrumb ?? $title,
-            'pendingApprovalsCount' => $this->staffData->scholarsQuery($programIds)->where('status', 'pending')->count(),
-        ];
+        return $this->staffData->layoutPayload(Auth::user(), $active, $title, $subtitle, $breadcrumb);
     }
 
     public function dashboard()
@@ -87,7 +74,7 @@ class StaffController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $stats = $this->staffData->dashboardStats($programIds);
+        $stats = $this->staffData->scholarPageStats($programIds);
 
         return view('staff.scholars', array_merge(
             $this->layoutData('scholars', 'Scholars', 'Scholars registered in '.$staff->locationLabel().'.'),
@@ -313,11 +300,7 @@ class StaffController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $stats = [
-            'total' => $this->staffData->scholarsQuery($programIds)->count(),
-            'pending' => $this->staffData->scholarsQuery($programIds)->where('status', 'pending')->count(),
-            'approved' => $this->staffData->scholarsQuery($programIds)->where('status', 'approved')->count(),
-        ];
+        $stats = $this->staffData->approvalRequestStats($programIds);
 
         return view('staff.approval-requests', array_merge(
             $this->layoutData('approval-requests', 'Approval Requests', 'Review and process newly registered scholar accounts.'),
@@ -455,13 +438,16 @@ class StaffController extends Controller
         ));
     }
 
-    public function approveScholar(User $scholar)
+    public function approveScholar(Request $request, User $scholar)
     {
         $staff = Auth::user();
 
         abort_unless($scholar->isScholar(), 404);
         abort_unless($staff->canManageScholar($scholar), 403);
-        abort_unless($scholar->status === 'pending', 422, 'This scholar account is not pending approval.');
+
+        if ($scholar->status !== 'pending') {
+            return $this->approvalActionFailed($request, 'This scholar account is not pending approval.', 422);
+        }
 
         $scholar->update(['status' => 'approved']);
 
@@ -473,22 +459,64 @@ class StaffController extends Controller
             'system'
         );
 
-        return back()->with('success', "{$scholar->full_name}'s account has been approved.");
+        return $this->approvalActionSucceeded(
+            $request,
+            "{$scholar->full_name}'s account has been approved.",
+            ['action' => 'approved', 'scholar_id' => $scholar->id]
+        );
     }
 
-    public function rejectScholar(User $scholar)
+    public function rejectScholar(Request $request, User $scholar)
     {
         $staff = Auth::user();
 
         abort_unless($scholar->isScholar(), 404);
         abort_unless($staff->canManageScholar($scholar), 403);
-        abort_unless($scholar->status === 'pending', 422, 'Only pending scholar accounts can be rejected.');
 
+        if ($scholar->status !== 'pending') {
+            return $this->approvalActionFailed($request, 'Only pending scholar accounts can be rejected.', 422);
+        }
+
+        $scholarId = $scholar->id;
         $scholarName = $scholar->full_name;
 
         $this->accounts->permanentlyDelete($scholar);
 
-        return back()->with('success', "{$scholarName}'s account has been rejected and permanently removed from the system.");
+        return $this->approvalActionSucceeded(
+            $request,
+            "{$scholarName}'s account has been rejected and permanently removed from the system.",
+            ['action' => 'rejected', 'scholar_id' => $scholarId]
+        );
+    }
+
+    private function approvalActionSucceeded(Request $request, string $message, array $extra = [])
+    {
+        $programIds = $this->staffData->programIds(Auth::user());
+        $this->staffData->forgetPendingApprovalsCache($programIds);
+        $stats = $this->staffData->approvalRequestStats($programIds);
+
+        if ($request->expectsJson()) {
+            return response()->json(array_merge([
+                'ok' => true,
+                'message' => $message,
+                'stats' => $stats,
+                'pending_count' => $stats['pending'],
+            ], $extra));
+        }
+
+        return back()->with('success', $message);
+    }
+
+    private function approvalActionFailed(Request $request, string $message, int $status = 422)
+    {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => false,
+                'message' => $message,
+            ], $status);
+        }
+
+        return back()->with('error', $message);
     }
 
     public function pendingApproval(Request $request)
@@ -555,18 +583,35 @@ class StaffController extends Controller
         return back()->with('success', "Attendance for {$event->title} is now OPEN. Scholars can mark their attendance until you close the session.");
     }
 
-    public function closeAttendance(Event $event)
+    public function closeAttendance(Request $request, Event $event)
     {
         $this->assertManagesEvent($event);
         abort_unless(Auth::user()->hasStaffPortalAccess(), 403);
 
         try {
-            $this->attendanceSessions->close($event, Auth::user());
+            $event = $this->attendanceSessions->close($event, Auth::user());
         } catch (\InvalidArgumentException $e) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', "Attendance for {$event->title} is now CLOSED. Scholars can no longer submit or modify their attendance.");
+        $message = "Attendance for {$event->title} is now CLOSED. Scholars can no longer submit or modify their attendance.";
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => $message,
+                'session' => $this->attendanceSessions->sessionPayload($event),
+            ]);
+        }
+
+        return back()->with('success', $message);
     }
 
     public function rejectAttendance(Request $request, Attendance $attendance)
