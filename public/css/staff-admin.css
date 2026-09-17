@@ -1,6 +1,6 @@
 /* Scholar Staff Admin UI */
 :root {
-    --staff-sidebar: #99ccff;
+    --staff-sidebar: #e8f4fc;
     --staff-sidebar-text: #0b2d4d;
     --staff-sidebar-active: #1890ff;
     --staff-bg: #f0f4f8;
@@ -30,6 +30,10 @@ body:has(.staff-shell) {
     flex-direction: column;
     padding: 20px 16px;
     box-sizing: border-box;
+}
+
+.staff-shell:not(.admin-shell) .staff-sidebar {
+    background: linear-gradient(180deg, #e8f4fc, #eef8ff);
 }
 
 .staff-brand {
@@ -135,12 +139,13 @@ body:has(.staff-shell) {
 }
 
 .staff-nav-item:hover {
-    background: rgba(255, 255, 255, 0.35);
+    background: rgba(24, 144, 255, 0.1);
 }
 
 .staff-nav-item.active {
     background: var(--staff-sidebar-active);
     color: #fff;
+    box-shadow: 0 2px 8px rgba(24, 144, 255, 0.28);
 }
 
 .staff-nav-icon {
@@ -224,7 +229,7 @@ body:has(.staff-shell) {
 .staff-logout-btn {
     width: 100%;
     border: 1px solid rgba(11, 45, 77, 0.2);
-    background: rgba(255, 255, 255, 0.45);
+    background: #fff;
     color: var(--staff-sidebar-text);
     border-radius: 8px;
     padding: 8px 12px;
