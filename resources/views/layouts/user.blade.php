@@ -17,8 +17,17 @@
                 'user' => $user ?? Auth::user(),
                 'pageTitle' => $pageTitle ?? 'Dashboard',
                 'pageSubtitle' => $pageSubtitle ?? '',
+                'active' => $active ?? 'dashboard',
             ])
             @include('partials.flash-messages')
+            @if(auth()->user()?->isScholar() && auth()->user()->canLogin())
+                <div
+                    hidden
+                    id="scholar-presence-root"
+                    data-presence-url="{{ route('user.presence') }}"
+                    data-presence-leave-url="{{ route('user.presence.leave') }}"
+                ></div>
+            @endif
             @if(auth()->user()?->hasScholarPortalAccess())
                 <div
                     hidden

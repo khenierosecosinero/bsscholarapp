@@ -151,15 +151,68 @@ class AdminDashboardService
     }
 
     /**
-     * Pie-chart series for a single Admin location, built from reports already loaded
-     * for that program scope so the page does not repeat expensive aggregations.
+     * City and Province each get their own Scholars, Staff, Completed, and Participation pies.
+     *
+     * @return array{city: array<string, mixed>, province: array<string, mixed>}
+     */
+    public function programTypeCategoryCharts(?string $locationKey = null): array
+    {
+        return [
+            'city' => [
+                'title' => 'City Scholarship Program Data',
+                'subtitle' => 'City Scholarship Programs only. Province records are not included.',
+                'charts' => $this->categoryChartsForProgramIds(
+                    $this->programIdsForType('city_municipality', $locationKey)
+                ),
+            ],
+            'province' => [
+                'title' => 'Province Scholarship Program Data',
+                'subtitle' => 'Province Scholarship Programs only. City records are not included.',
+                'charts' => $this->categoryChartsForProgramIds(
+                    $this->programIdsForType('province', $locationKey)
+                ),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function programIdsForType(string $programType, ?string $locationKey = null): array
+    {
+        if ($locationKey !== null && $locationKey !== '' && $locationKey !== 'all') {
+            $selected = ScholarshipProgram::find((int) $locationKey);
+
+            if ($selected && $selected->location_type === $programType) {
+                return [(int) $selected->id];
+            }
+        }
+
+        return $this->resolveAdminProgramIds('all', $programType);
+    }
+
+    /**
+     * @param  array<int, int>  $programIds
+     * @return array{scholars: array<string, mixed>, staff: array<string, mixed>, completed: array<string, mixed>, participation: array<string, mixed>}
+     */
+    private function categoryChartsForProgramIds(array $programIds): array
+    {
+        $stats = $this->dashboardStats($programIds);
+        $completion = $this->staff->completionCounts($programIds);
+        $participation = $this->staff->participationCounts($programIds);
+
+        return $this->categoryReportCharts($programIds, $stats, $completion, $participation);
+    }
+
+    /**
+     * Four pie charts, one per report category, for a single program-type ID list.
      *
      * @param  array<string, mixed>  $stats
      * @param  array<string, mixed>  $completionReport
      * @param  array<string, mixed>  $participationReport
-     * @return array<string, array{title: string, total: int|float, slices: array<int, array<string, mixed>>}>
+     * @return array{scholars: array<string, mixed>, staff: array<string, mixed>, completed: array<string, mixed>, participation: array<string, mixed>}
      */
-    public function locationReportCharts(array $programIds, array $stats, array $completionReport, array $participationReport): array
+    public function categoryReportCharts(array $programIds, array $stats, array $completionReport, array $participationReport): array
     {
         $staffStatus = User::query()
             ->where('role', User::ROLE_SCHOLAR_STAFF)
@@ -265,31 +318,35 @@ class AdminDashboardService
 
     public function locationBoard(?string $locationKey = null, string $programType = 'all'): array
     {
-        $all = $this->locationSummaries('all', 'all');
-        $citySummaries = $all->filter(
-            fn (array $summary) => ($summary['program']->location_type ?? null) === 'city_municipality'
-        )->values();
-        $provinceSummaries = $all->filter(
-            fn (array $summary) => ($summary['program']->location_type ?? null) === 'province'
-        )->values();
+        $listType = $programType === 'province' ? 'province' : 'city_municipality';
+
+        $cityCount = ScholarshipProgram::query()->active()->cities()->count();
+        $provinceCount = ScholarshipProgram::query()->active()->provinces()->count();
+
+        $summaries = $this->locationSummaries($locationKey, $listType);
 
         if ($locationKey !== null && $locationKey !== '' && $locationKey !== 'all') {
-            $summaries = $all->filter(
-                fn (array $summary) => (int) $summary['program']->id === (int) $locationKey
-            )->values();
-
-            if ($summaries->isEmpty()) {
-                $summaries = $this->locationSummaries($locationKey, $programType);
-            }
-        } else {
-            $summaries = match ($programType) {
-                'city_municipality' => $citySummaries,
-                'province' => $provinceSummaries,
-                default => $all,
-            };
+            $summaries = $summaries
+                ->filter(fn (array $summary) => ($summary['program']->location_type ?? null) === $listType)
+                ->values();
         }
 
-        return compact('summaries', 'citySummaries', 'provinceSummaries');
+        $scholarTotals = User::query()
+            ->join('scholarship_programs', 'users.scholarship_program_id', '=', 'scholarship_programs.id')
+            ->where('users.role', User::ROLE_SCHOLAR)
+            ->where('scholarship_programs.is_active', true)
+            ->selectRaw('scholarship_programs.location_type, COUNT(*) as aggregate')
+            ->groupBy('scholarship_programs.location_type')
+            ->pluck('aggregate', 'location_type');
+
+        return [
+            'listType' => $listType,
+            'summaries' => $summaries,
+            'cityCount' => $cityCount,
+            'provinceCount' => $provinceCount,
+            'cityScholarCount' => (int) ($scholarTotals['city_municipality'] ?? 0),
+            'provinceScholarCount' => (int) ($scholarTotals['province'] ?? 0),
+        ];
     }
 
     public function locationSummaries(?string $locationKey = null, string $programType = 'all'): Collection
@@ -306,12 +363,13 @@ class AdminDashboardService
             return collect([$this->buildLocationSummaryFromMaps($program, $maps)]);
         }
 
-        $programs = ScholarshipProgram::sortAlphabetically(
-            $this->filterProgramsByType(
-                ScholarshipProgram::query()->where('is_active', true)->get(),
-                $programType
-            )
-        );
+        $query = ScholarshipProgram::query()->where('is_active', true);
+
+        if (in_array($programType, ['city_municipality', 'province'], true)) {
+            $query->where('location_type', $programType);
+        }
+
+        $programs = ScholarshipProgram::sortAlphabetically($query->get());
 
         $maps = $this->locationMetricMaps($programs->pluck('id')->all());
 
@@ -541,7 +599,6 @@ class AdminDashboardService
                 'events' => $pendingEvents,
                 'service-hours' => $pendingServiceHours,
                 'documents' => $pendingDocuments,
-                'participation' => $pendingAttendances + $failedParticipation,
                 'locations' => $locationsAttention,
                 'reports' => 0,
                 'settings' => 0,

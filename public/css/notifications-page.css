@@ -101,8 +101,141 @@
     flex-shrink: 0;
 }
 
+.page-notifications .tabs-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    margin-bottom: 16px;
+    min-width: 0;
+}
+
+.page-notifications .tabs-row .tabs {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 4px;
+    margin-bottom: 0;
+    border-bottom: none;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.page-notifications .tabs-row .tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.page-notifications .tabs-row .tab {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.page-notifications .mark-read {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.page-notifications .notification-item {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 12px 14px;
+    align-items: start;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.page-notifications .notif-icon {
+    grid-row: 1 / span 2;
+}
+
+.page-notifications .notif-body {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.page-notifications .notif-body strong,
+.page-notifications .notif-body p {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.page-notifications .notif-body p {
+    margin-bottom: 8px;
+}
+
+.page-notifications .notif-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    min-width: 0;
+}
+
+.page-notifications .notif-time {
+    white-space: nowrap;
+}
+
+.page-notifications .notif-view-link {
+    display: inline-block;
+    margin-top: 8px;
+    margin-left: 8px;
+}
+
 @media (max-width: 900px) {
     .page-notifications .notifications-page-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .page-notifications .tabs-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .page-notifications .tabs-row .tabs {
+        width: 100%;
+        padding-bottom: 2px;
+    }
+
+    .page-notifications .mark-read {
+        align-self: flex-start;
+        padding: 4px 0;
+    }
+
+    .page-notifications .notification-item {
+        grid-template-columns: 40px minmax(0, 1fr);
+        padding: 14px 12px;
+        gap: 10px 12px;
+    }
+
+    .page-notifications .notif-icon {
+        grid-row: 1;
+    }
+
+    .page-notifications .notif-body {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .page-notifications .notif-meta {
+        grid-column: 2;
+        grid-row: 2;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 8px 12px;
+    }
+
+    .page-notifications .notif-view-link {
+        margin-left: 0;
+        margin-top: 4px;
     }
 }

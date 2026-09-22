@@ -45,9 +45,9 @@ class StaffController extends Controller
         return view('staff.dashboard', array_merge(
             $this->layoutData('dashboard', 'Dashboard', "Welcome back, {$staff->full_name}! Here's what's happening in {$staff->locationLabel()}."),
             [
-                'stats' => $this->staffData->dashboardStats($programIds),
+                'stats' => $this->staffData->dashboardStats($programIds, $staff),
                 'pendingApprovals' => $this->staffData->pendingApprovals($programIds),
-                'upcomingEvents' => $this->staffData->upcomingEvents($programIds),
+                'upcomingEvents' => $this->staffData->upcomingEvents($programIds, 3, $staff),
                 'recentActivities' => $this->staffData->recentActivities($programIds),
                 'attendanceBreakdown' => $this->staffData->attendanceBreakdown($programIds),
                 'hoursOverview' => $this->staffData->hoursOverview($programIds),
@@ -80,6 +80,26 @@ class StaffController extends Controller
             $this->layoutData('scholars', 'Scholars', 'Scholars registered in '.$staff->locationLabel().'.'),
             compact('scholars', 'search', 'stats')
         ));
+    }
+
+    public function scholarPresence()
+    {
+        $staff = Auth::user();
+        abort_unless($staff->hasStaffPortalAccess(), 403);
+
+        $programIds = $this->staffData->programIds($staff);
+        $presence = [];
+
+        $this->staffData->scholarsQuery($programIds)
+            ->get(['id', 'role', 'last_seen_at'])
+            ->each(function (User $scholar) use (&$presence) {
+                $presence[(string) $scholar->id] = [
+                    'online' => $scholar->isPresentNow(),
+                    'label' => $scholar->presenceLabel(),
+                ];
+            });
+
+        return response()->json(['scholars' => $presence]);
     }
 
     public function showScholar(User $scholar)
@@ -118,7 +138,8 @@ class StaffController extends Controller
         $statusFilter = $request->get('status', 'all');
 
         $baseQuery = Event::query()
-            ->whereIn('scholarship_program_id', $programIds ?: [0]);
+            ->whereIn('scholarship_program_id', $programIds ?: [0])
+            ->visibleToStaff($staff);
 
         $events = (clone $baseQuery)
             ->when($search !== '', fn ($q) => $q->where(function ($scoped) use ($search) {
@@ -218,10 +239,9 @@ class StaffController extends Controller
         $staff = Auth::user();
 
         abort_unless(
-            $event->scholarship_program_id
-                && in_array((int) $event->scholarship_program_id, array_map('intval', $staff->managedLocationIds()), true),
+            $staff->canViewStaffManagedEvent($event),
             403,
-            'You can only manage events for your assigned City or Province Scholarship Program.'
+            'You can only manage events created after your scholar staff account became active for your assigned scholarship program.'
         );
 
         $event->loadCount('registrations');
@@ -320,6 +340,7 @@ class StaffController extends Controller
 
         $monthEvents = Event::query()
             ->whereIn('scholarship_program_id', $programIds ?: [0])
+            ->visibleToStaff($staff)
             ->overlappingDates($gridStart, $gridEnd)
             ->orderBy('starts_at')
             ->get();
@@ -327,7 +348,7 @@ class StaffController extends Controller
         return view('staff.calendar', array_merge(
             $this->layoutData('calendar', 'Calendar', 'Event dates you set are shown here and on scholar calendars.'),
             [
-                'events' => $this->staffData->upcomingEvents($programIds, 20),
+                'events' => $this->staffData->upcomingEvents($programIds, 20, $staff),
                 'monthEvents' => $monthEvents,
                 'monthDate' => $monthDate,
                 'prevMonth' => $monthDate->copy()->subMonth(),
@@ -450,6 +471,7 @@ class StaffController extends Controller
         }
 
         $scholar->update(['status' => 'approved']);
+        $scholar->activateFreshEventList();
 
         $this->scholar->logActivity($scholar, 'account', 'Account approved by scholar staff');
         $this->scholar->notify(
@@ -647,10 +669,9 @@ class StaffController extends Controller
     private function assertManagesEvent(Event $event): void
     {
         abort_unless(
-            $event->scholarship_program_id
-                && in_array((int) $event->scholarship_program_id, array_map('intval', Auth::user()->managedLocationIds()), true),
+            Auth::user()->canViewStaffManagedEvent($event),
             403,
-            'You can only manage attendance for your assigned scholarship program.'
+            'You can only manage attendance for events created after your scholar staff account became active for your assigned scholarship program.'
         );
     }
 
@@ -659,6 +680,7 @@ class StaffController extends Controller
         $events = Event::query()
             ->with(['registrations.user', 'attendances.user'])
             ->whereIn('scholarship_program_id', $programIds ?: [0])
+            ->visibleToStaff(Auth::user())
             ->when($search !== '' && $selectedEventId <= 0, function ($q) use ($search) {
                 $q->where(function ($inner) use ($search) {
                     $inner->where('title', 'like', "%{$search}%")

@@ -5,11 +5,14 @@
 <section class="staff-grid-2">
     <div class="staff-card">
         <div class="staff-card-header"><h2>Scholar Profile</h2></div>
-        <div class="staff-scholar-cell" style="margin-bottom:20px">
-            <x-user-avatar :user="$scholar" class="staff-scholar-avatar" style="width:56px;height:56px;font-size:20px" />
-            <div>
-                <strong style="font-size:18px">{{ $scholar->full_name }}</strong>
-                <div class="staff-muted">{{ $scholar->scholar_id }}</div>
+        <div class="staff-scholar-cell staff-scholar-profile">
+            <x-user-avatar :user="$scholar" class="staff-scholar-avatar staff-scholar-avatar-lg" />
+            <div class="staff-scholar-meta">
+                <div class="staff-scholar-name-row">
+                    <strong>{{ $scholar->full_name }}</strong>
+                    @include('partials.staff-scholar-presence', ['scholar' => $scholar])
+                </div>
+                <small>{{ $scholar->scholar_id }}</small>
                 <span class="staff-badge {{ $scholar->status === 'approved' ? 'green' : ($scholar->status === 'pending' ? 'orange' : 'red') }}">{{ ucfirst($scholar->status) }}</span>
             </div>
         </div>
@@ -20,7 +23,7 @@
         <div class="staff-list-item"><div><strong>Course / Year</strong><div class="staff-muted">{{ $scholar->course_year_level ?? '—' }}</div></div></div>
 
         @if($scholar->status === 'pending')
-            <div style="display:flex;gap:10px;margin-top:20px" data-approval-actions>
+            <div class="staff-scholar-profile-actions" data-approval-actions>
                 <form method="POST" action="{{ route('staff.scholars.approve', $scholar) }}" data-ajax-approval="approve" data-no-loading="true">
                     @csrf
                     <button type="submit" class="staff-btn staff-btn-primary">Approve Account</button>
@@ -176,6 +179,8 @@
 <div style="margin-top:20px">
     <a href="{{ route('staff.scholars') }}" class="staff-card-link">&larr; Back to scholars list</a>
 </div>
+
+<div hidden id="staff-scholar-presence-root" data-presence-url="{{ route('staff.scholars.presence') }}"></div>
 
 @endsection
 

@@ -39,7 +39,9 @@ class ScholarService
             return $query->whereRaw('1 = 0');
         }
 
-        return $this->programScope->scopeByPrograms($query, $user->visibleLocationIds());
+        $this->programScope->scopeByPrograms($query, $user->visibleLocationIds());
+
+        return $query->visibleToAccount($user);
     }
 
     public function scopeAnnouncementsForUser(Builder $query, User $user): Builder
@@ -344,6 +346,7 @@ class ScholarService
     {
         $query = $this->scopeEventsForUser(
             Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
+                ->upcomingForFreshScholar($user)
                 ->orderBy('starts_at'),
             $user
         );
@@ -908,6 +911,7 @@ class ScholarService
         return $this->scopeEventsForUser(
             Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
                 ->overlappingDates($start, $end)
+                ->upcomingForFreshScholar($user)
                 ->orderBy('starts_at'),
             $user
         )->get()

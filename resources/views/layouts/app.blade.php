@@ -104,6 +104,7 @@
         return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
       }
       document.addEventListener('click', function (event) {
+        if (event.defaultPrevented) return;
         var link = event.target.closest('a[href]');
         if (!link || isModifiedClick(event)) return;
         if (link.hasAttribute('download') || link.getAttribute('data-no-loading') === 'true') return;

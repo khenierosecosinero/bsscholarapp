@@ -2,7 +2,6 @@
 
 @section('page-content')
 
-@include('partials.admin-location-filter')
 @include('partials.admin-scope-banner')
 
 <div class="admin-settings-tabs">

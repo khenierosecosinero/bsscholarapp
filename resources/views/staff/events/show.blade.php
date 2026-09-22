@@ -52,10 +52,10 @@
 <div class="staff-card" style="margin-top:20px">
     <div class="staff-card-header"><h2>Registered Scholars</h2></div>
     <div class="staff-table-wrap">
-        <table class="staff-table">
+        <table class="staff-table staff-stack-table">
             <thead>
                 <tr>
-                    <th>Scholar</th>
+                    <th>Scholar Information</th>
                     <th>Check In</th>
                     <th>Check Out</th>
                     <th>Hours</th>
@@ -67,44 +67,52 @@
             <tbody>
                 @forelse($participants as $participant)
                     <tr>
-                        <td>
-                            <div class="staff-scholar-cell">
-                                <x-user-avatar :user="$participant['user'] ?? null" class="staff-scholar-avatar" />
-                                <div class="staff-scholar-meta">
-                                    <strong>{{ $participant['user']?->full_name ?? '—' }}</strong>
-                                    <small>{{ $participant['user']?->scholar_id }}</small>
+                        <td data-label="Scholar Information">
+                            <div class="staff-stack-value">
+                                <div class="staff-scholar-cell">
+                                    <x-user-avatar :user="$participant['user'] ?? null" class="staff-scholar-avatar" />
+                                    <div class="staff-scholar-meta">
+                                        <strong>{{ $participant['user']?->full_name ?? '—' }}</strong>
+                                        <small>{{ $participant['user']?->scholar_id }}</small>
+                                    </div>
                                 </div>
                             </div>
                         </td>
-                        <td>{{ $participant['attendance']?->check_in?->format('g:i A') ?? '—' }}</td>
-                        <td>{{ $participant['attendance']?->check_out?->format('g:i A') ?? '—' }}</td>
-                        <td>{{ $participant['attendance']?->hoursLabel() ?? '0.00 hrs' }}</td>
-                        <td>
-                            @include('partials.staff-attendance-photo', [
-                                'attendance' => $participant['attendance'],
-                                'photoUrl' => $participant['attendance']?->hasPhoto() ? route('staff.attendances.photo', $participant['attendance']) : null,
-                            ])
+                        <td data-label="Check In"><div class="staff-stack-value">{{ $participant['attendance']?->check_in?->format('g:i A') ?? '—' }}</div></td>
+                        <td data-label="Check Out"><div class="staff-stack-value">{{ $participant['attendance']?->check_out?->format('g:i A') ?? '—' }}</div></td>
+                        <td data-label="Hours"><div class="staff-stack-value">{{ $participant['attendance']?->hoursLabel() ?? '0.00 hrs' }}</div></td>
+                        <td data-label="Photo">
+                            <div class="staff-stack-value">
+                                @include('partials.staff-attendance-photo', [
+                                    'attendance' => $participant['attendance'],
+                                    'photoUrl' => $participant['attendance']?->hasPhoto() ? route('staff.attendances.photo', $participant['attendance']) : null,
+                                ])
+                            </div>
                         </td>
-                        <td>
-                            @php
-                                $statusClass = match($participant['status']) {
-                                    'approved', 'confirmed' => 'green',
-                                    'rejected', 'failed_to_check_in' => 'red',
-                                    default => 'orange',
-                                };
-                            @endphp
-                            <span class="staff-badge {{ $statusClass }}">{{ $participant['status_label'] }}</span>
+                        <td data-label="Status">
+                            <div class="staff-stack-value">
+                                @php
+                                    $statusClass = match($participant['status']) {
+                                        'approved', 'confirmed' => 'green',
+                                        'rejected', 'failed_to_check_in' => 'red',
+                                        default => 'orange',
+                                    };
+                                @endphp
+                                <span class="staff-badge {{ $statusClass }}">{{ $participant['status_label'] }}</span>
+                            </div>
                         </td>
-                        <td>
-                            @if($participant['attendance'] && $participant['status'] !== 'failed_to_check_in')
-                                @include('partials.staff-attendance-actions', ['attendance' => $participant['attendance']])
-                            @else
-                                <span class="staff-muted">—</span>
-                            @endif
+                        <td data-label="Actions">
+                            <div class="staff-stack-value">
+                                @if($participant['attendance'] && $participant['status'] !== 'failed_to_check_in')
+                                    @include('partials.staff-attendance-actions', ['attendance' => $participant['attendance']])
+                                @else
+                                    <span class="staff-muted">—</span>
+                                @endif
+                            </div>
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7">No scholars have registered for this event yet.</td></tr>
+                    <tr class="staff-table-empty"><td colspan="7">No scholars have registered for this event yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

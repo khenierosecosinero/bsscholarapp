@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initFlashDismiss();
     initAttendanceLive();
     initAvatarPreview();
+    initScholarPresenceHeartbeat();
+    initStaffScholarPresence();
 });
 
 function initSidebar() {
@@ -61,25 +63,48 @@ function initProfileDropdown() {
 }
 
 function initProfileTabs() {
-    const tabs = document.querySelectorAll('.profile-tabs .tab, .tab-trigger');
+    const root = document.querySelector('.page-profile');
+    if (!root || root.dataset.tabsReady === '1') return;
+
+    const tabs = document.querySelectorAll('.profile-tabs .tab, .tab-trigger, .shortcut-item[data-tab]');
     const panels = document.querySelectorAll('.tab-panel');
     if (!tabs.length) return;
 
+    const activate = (id, scroll) => {
+        if (!id) return;
+
+        document.querySelectorAll('.profile-tabs .tab').forEach((t) => {
+            const isActive = t.dataset.tab === id;
+            t.classList.toggle('active', isActive);
+            t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        panels.forEach((p) => {
+            p.hidden = p.id !== id;
+            p.classList.toggle('active', p.id === id);
+        });
+
+        if (scroll) {
+            const panel = document.getElementById(id);
+            requestAnimationFrame(() => {
+                (panel || document.querySelector('.profile-tabs'))?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                });
+            });
+        }
+    };
+
     tabs.forEach((tab) => {
-        tab.addEventListener('click', () => {
+        tab.addEventListener('click', (event) => {
             const id = tab.dataset.tab;
             if (!id) return;
-
-            document.querySelectorAll('.profile-tabs .tab').forEach((t) => t.classList.remove('active'));
-            const match = document.querySelector(`.profile-tabs .tab[data-tab="${id}"]`);
-            if (match) match.classList.add('active');
-
-            panels.forEach((p) => {
-                p.hidden = p.id !== id;
-                p.classList.toggle('active', p.id === id);
-            });
+            event.preventDefault();
+            activate(id, tab.classList.contains('shortcut-item') || tab.classList.contains('tab-trigger'));
         });
     });
+
+    root.dataset.tabsReady = '1';
 }
 
 function initFileUpload() {
@@ -324,5 +349,113 @@ function initAvatarPreview() {
 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && !modal.hidden) close();
+    });
+}
+
+function csrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+}
+
+function initScholarPresenceHeartbeat() {
+    const root = document.getElementById('scholar-presence-root');
+    if (!root?.dataset.presenceUrl) return;
+
+    const url = root.dataset.presenceUrl;
+    const leaveUrl = root.dataset.presenceLeaveUrl;
+    let inFlight = false;
+
+    const ping = async () => {
+        if (document.hidden || inFlight) return;
+
+        inFlight = true;
+        try {
+            await fetch(url, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': csrfToken(),
+                },
+                credentials: 'same-origin',
+                body: '{}',
+            });
+        } catch (error) {
+            // Keep sending heartbeats even if one request fails.
+        } finally {
+            inFlight = false;
+        }
+    };
+
+    const leave = () => {
+        if (!leaveUrl) return;
+
+        const data = new FormData();
+        data.append('_token', csrfToken());
+
+        if (navigator.sendBeacon) {
+            navigator.sendBeacon(leaveUrl, data);
+            return;
+        }
+
+        fetch(leaveUrl, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            credentials: 'same-origin',
+            keepalive: true,
+            body: data,
+        }).catch(() => {});
+    };
+
+    ping();
+    setInterval(ping, 20000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) ping();
+    });
+    window.addEventListener('pagehide', leave);
+}
+
+function initStaffScholarPresence() {
+    const root = document.getElementById('staff-scholar-presence-root');
+    const items = document.querySelectorAll('[data-scholar-presence]');
+    if (!root?.dataset.presenceUrl || !items.length) return;
+
+    const apply = (scholars) => {
+        document.querySelectorAll('[data-scholar-presence]').forEach((el) => {
+            const row = scholars?.[el.getAttribute('data-scholar-presence')];
+            if (!row) return;
+
+            const online = !!row.online;
+            el.classList.toggle('is-online', online);
+            el.classList.toggle('is-offline', !online);
+            const label = el.querySelector('.staff-presence-label');
+            if (label) {
+                label.textContent = row.label || (online ? 'Active Now' : 'Offline');
+            }
+        });
+    };
+
+    const poll = async () => {
+        try {
+            const response = await fetch(root.dataset.presenceUrl, {
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            apply(data.scholars || {});
+        } catch (error) {
+            // Keep polling even if one request fails.
+        }
+    };
+
+    poll();
+    setInterval(poll, 10000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) poll();
     });
 }

@@ -88,13 +88,14 @@ class StaffDashboardService
             ->whereIn('scholarship_program_id', $programIds ?: [0]);
     }
 
-    public function dashboardStats(array $programIds): array
+    public function dashboardStats(array $programIds, ?User $staff = null): array
     {
         $statusCounts = $this->scholarStatusCounts($programIds);
         $totalScholars = array_sum($statusCounts);
 
         $events = Event::query()
-            ->whereIn('scholarship_program_id', $programIds ?: [0]);
+            ->whereIn('scholarship_program_id', $programIds ?: [0])
+            ->visibleToStaff($staff);
 
         $pendingAttendances = Attendance::query()
             ->where('status', Attendance::STATUS_PENDING)
@@ -158,10 +159,11 @@ class StaffDashboardService
             ->get();
     }
 
-    public function upcomingEvents(array $programIds, int $limit = 3): Collection
+    public function upcomingEvents(array $programIds, int $limit = 3, ?User $staff = null): Collection
     {
         return Event::query()
             ->whereIn('scholarship_program_id', $programIds ?: [0])
+            ->visibleToStaff($staff)
             ->where('starts_at', '>=', now())
             ->orderBy('starts_at')
             ->limit($limit)

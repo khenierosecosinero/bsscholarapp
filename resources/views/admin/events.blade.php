@@ -30,7 +30,7 @@
             <tbody>
                 @forelse($events as $event)
                     <tr>
-                        <td><strong>{{ $event->title }}</strong></td>
+                        <td><a href="{{ route('admin.events.show', $event) }}" class="admin-event-name-link" aria-label="View scholars who attended {{ $event->title }}">{{ $event->title }}</a></td>
                         <td>{{ $event->scholarshipProgram?->programLabel() ?? '—' }}</td>
                         <td>{{ $event->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>
                         <td>{{ $event->starts_at?->format('M j, Y g:i A') ?? '—' }}</td>

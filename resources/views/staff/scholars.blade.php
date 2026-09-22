@@ -19,7 +19,7 @@
 
 <div class="staff-card">
     <div class="staff-table-wrap">
-        <table class="staff-table staff-scholars-table">
+        <table class="staff-table staff-stack-table staff-scholars-table">
             <thead>
                 <tr>
                     <th>Scholar Information</th>
@@ -28,35 +28,40 @@
                     <th>Province</th>
                     <th>School</th>
                     <th>Status</th>
-                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($scholars as $scholar)
                     <tr>
                         <td data-label="Scholar Information">
-                            <div class="staff-scholar-cell">
-                                <x-user-avatar :user="$scholar" class="staff-scholar-avatar" />
-                                <div class="staff-scholar-meta">
-                                    <strong>{{ $scholar->full_name }}</strong>
-                                    <small>{{ $scholar->email }}</small>
+                            <div class="staff-stack-value">
+                                <div class="staff-scholar-cell">
+                                    <x-user-avatar :user="$scholar" class="staff-scholar-avatar" />
+                                    <div class="staff-scholar-meta">
+                                        <div class="staff-scholar-name-row">
+                                            <a href="{{ route('staff.scholars.show', $scholar) }}" class="staff-scholar-name-link" aria-label="View information for {{ $scholar->full_name }}">{{ $scholar->full_name }}</a>
+                                            @include('partials.staff-scholar-presence', ['scholar' => $scholar])
+                                        </div>
+                                        <small>{{ $scholar->email }}</small>
+                                    </div>
                                 </div>
                             </div>
                         </td>
-                        <td data-label="Scholar ID">{{ $scholar->scholar_id }}</td>
-                        <td data-label="Municipality / City">{{ $scholar->municipalityName() ?? '—' }}</td>
-                        <td data-label="Province">{{ $scholar->provinceName() ?? '—' }}</td>
-                        <td data-label="School">{{ $scholar->school_university ?? '—' }}</td>
-                        <td data-label="Status"><span class="staff-badge {{ $scholar->status === 'approved' ? 'green' : ($scholar->status === 'pending' ? 'orange' : 'red') }}">{{ ucfirst($scholar->status) }}</span></td>
-                        <td data-label="Actions"><a href="{{ route('staff.scholars.show', $scholar) }}" class="staff-action-btn" title="View">👁</a></td>
+                        <td data-label="Scholar ID"><div class="staff-stack-value">{{ $scholar->scholar_id }}</div></td>
+                        <td data-label="Municipality / City"><div class="staff-stack-value">{{ $scholar->municipalityName() ?? '—' }}</div></td>
+                        <td data-label="Province"><div class="staff-stack-value">{{ $scholar->provinceName() ?? '—' }}</div></td>
+                        <td data-label="School"><div class="staff-stack-value">{{ $scholar->school_university ?? '—' }}</div></td>
+                        <td data-label="Status"><div class="staff-stack-value"><span class="staff-badge {{ $scholar->status === 'approved' ? 'green' : ($scholar->status === 'pending' ? 'orange' : 'red') }}">{{ ucfirst($scholar->status) }}</span></div></td>
                     </tr>
                 @empty
-                    <tr class="staff-table-empty"><td colspan="7">No scholars found for this location.</td></tr>
+                    <tr class="staff-table-empty"><td colspan="6">No scholars found for this location.</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
     <div class="staff-pagination">{{ $scholars->links() }}</div>
 </div>
+
+<div hidden id="staff-scholar-presence-root" data-presence-url="{{ route('staff.scholars.presence') }}"></div>
 
 @endsection

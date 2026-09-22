@@ -43,10 +43,10 @@
 
 <div class="staff-card">
     <div class="staff-table-wrap">
-        <table class="staff-table">
+        <table class="staff-table staff-stack-table">
             <thead>
                 <tr>
-                    <th>Scholar</th>
+                    <th>Scholar Information</th>
                     <th>File</th>
                     <th>Date Submitted</th>
                     <th>Status</th>
@@ -56,32 +56,40 @@
             <tbody>
                 @forelse($documents as $document)
                     <tr>
-                        <td>
-                            <div class="staff-scholar-cell">
-                                <x-user-avatar :user="$document->user" class="staff-scholar-avatar" />
-                                <div class="staff-scholar-meta">
-                                    <strong>{{ $document->user?->full_name ?? '—' }}</strong>
-                                    <small>{{ $document->user?->scholar_id }} · {{ $document->user?->locationLabel() }}</small>
+                        <td data-label="Scholar Information">
+                            <div class="staff-stack-value">
+                                <div class="staff-scholar-cell">
+                                    <x-user-avatar :user="$document->user" class="staff-scholar-avatar" />
+                                    <div class="staff-scholar-meta">
+                                        <strong>{{ $document->user?->full_name ?? '—' }}</strong>
+                                        <small>{{ $document->user?->scholar_id }} · {{ $document->user?->locationLabel() }}</small>
+                                    </div>
                                 </div>
                             </div>
                         </td>
-                        <td>
-                            @if($document->hasFile())
-                                {{ $document->original_name ?? 'Attached file' }}
-                            @else
-                                <span class="staff-muted">No file attached</span>
-                            @endif
+                        <td data-label="File">
+                            <div class="staff-stack-value">
+                                @if($document->hasFile())
+                                    {{ $document->original_name ?? 'Attached file' }}
+                                @else
+                                    <span class="staff-muted">No file attached</span>
+                                @endif
+                            </div>
                         </td>
-                        <td>{{ $document->uploaded_at?->timezone(config('app.timezone'))->format('M j, Y g:i A') ?? '—' }}</td>
-                        <td>
-                            <span class="staff-badge {{ $document->reviewBadgeClass() }}">{{ ucfirst(str_replace('_', ' ', $document->reviewStatus())) }}</span>
-                            @if($document->status === 'rejected' && $document->review_notes)
-                                <div class="staff-muted" style="margin-top:4px">{{ $document->review_notes }}</div>
-                            @endif
+                        <td data-label="Date Submitted">
+                            <div class="staff-stack-value">{{ $document->uploaded_at?->timezone(config('app.timezone'))->format('M j, Y g:i A') ?? '—' }}</div>
                         </td>
-                        <td>
+                        <td data-label="Status">
+                            <div class="staff-stack-value">
+                                <span class="staff-badge {{ $document->reviewBadgeClass() }}">{{ ucfirst(str_replace('_', ' ', $document->reviewStatus())) }}</span>
+                                @if($document->status === 'rejected' && $document->review_notes)
+                                    <div class="staff-muted" style="margin-top:4px">{{ $document->review_notes }}</div>
+                                @endif
+                            </div>
+                        </td>
+                        <td data-label="Actions">
                             @if($document->hasFile())
-                                <div class="staff-doc-review-actions">
+                                <div class="staff-stack-value staff-doc-review-actions">
                                     <a href="{{ route('staff.documents.view', $document) }}" class="staff-btn staff-btn-sm" target="_blank" rel="noopener">Review</a>
                                     <a href="{{ route('staff.documents.download', $document) }}" class="staff-btn staff-btn-sm">Download</a>
 
@@ -114,12 +122,12 @@
                                     @endif
                                 </div>
                             @else
-                                <span class="staff-muted">Waiting for upload</span>
+                                <div class="staff-stack-value"><span class="staff-muted">Waiting for upload</span></div>
                             @endif
                         </td>
                     </tr>
                 @empty
-                    <tr>
+                    <tr class="staff-table-empty">
                         <td colspan="5">
                             @if($statusFilter === 'submitted')
                                 No scholars have submitted {{ $documentType->name }} yet.

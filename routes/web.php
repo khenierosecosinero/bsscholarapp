@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AnnouncementActionController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\DocumentActionController;
 use App\Http\Controllers\EventActionController;
 use App\Http\Controllers\NotificationActionController;
@@ -19,6 +20,15 @@ Route::get('/', function () {
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+Route::middleware('guest')->group(function () {
+    Route::get('/forgot-password', [PasswordResetController::class, 'showRequestForm'])->name('password.request');
+    Route::post('/forgot-password', [PasswordResetController::class, 'sendCode'])->name('password.email');
+    Route::get('/forgot-password/verify', [PasswordResetController::class, 'showVerifyForm'])->name('password.verify');
+    Route::post('/forgot-password/verify', [PasswordResetController::class, 'verifyCode'])->name('password.verify.post');
+    Route::post('/forgot-password/resend', [PasswordResetController::class, 'resendCode'])->name('password.resend');
+    Route::get('/forgot-password/reset', [PasswordResetController::class, 'showResetForm'])->name('password.reset');
+    Route::post('/forgot-password/reset', [PasswordResetController::class, 'updatePassword'])->name('password.update');
+});
 Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
 Route::post('/register', [AuthController::class, 'register'])->name('register.post');
 Route::get('/register/staff', [AuthController::class, 'showStaffRegister'])->name('register.staff');
@@ -75,11 +85,15 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/locations/{location}/edit', [AdminController::class, 'editLocation'])->name('locations.edit');
     Route::put('/locations/{location}', [AdminController::class, 'updateLocation'])->name('locations.update');
     Route::get('/scholars', [AdminController::class, 'scholars'])->name('scholars');
+    Route::get('/scholars/{scholar}', [AdminController::class, 'showScholar'])->name('scholars.show');
     Route::get('/staff', [AdminController::class, 'staff'])->name('staff');
     Route::get('/events', [AdminController::class, 'events'])->name('events');
+    Route::get('/events/{event}', [AdminController::class, 'showEvent'])->name('events.show');
     Route::get('/service-hours', [AdminController::class, 'serviceHours'])->name('service-hours');
     Route::get('/documents', [AdminController::class, 'documents'])->name('documents');
-    Route::get('/participation', [AdminController::class, 'participation'])->name('participation');
+    Route::get('/documents/scholars/{scholar}', [AdminController::class, 'showScholarDocuments'])->name('documents.scholar');
+    Route::get('/documents/{document}/view', [AdminController::class, 'viewDocument'])->name('documents.view');
+    Route::get('/documents/{document}/download', [AdminController::class, 'downloadDocument'])->name('documents.download');
     Route::get('/reports', [AdminController::class, 'reports'])->name('reports');
     Route::get('/settings', [AdminController::class, 'settings'])->name('settings');
     Route::put('/settings', [AdminController::class, 'updateSettings'])->name('settings.update');
@@ -95,6 +109,7 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
     Route::middleware('scholar.staff.approved')->group(function () {
     Route::get('/dashboard', [StaffController::class, 'dashboard'])->name('dashboard');
     Route::get('/scholars', [StaffController::class, 'scholars'])->name('scholars');
+    Route::get('/scholar-presence', [StaffController::class, 'scholarPresence'])->name('scholars.presence');
     Route::get('/scholars/{scholar}', [StaffController::class, 'showScholar'])->name('scholars.show');
     Route::get('/events', [StaffController::class, 'events'])->name('events');
     Route::get('/events/create', [StaffController::class, 'createEvent'])->name('events.create');
@@ -131,6 +146,8 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
 
 Route::middleware(['auth', 'scholar'])->prefix('user')->name('user.')->group(function () {
     Route::get('/dashboard', [UserController::class, 'dashboard'])->name('dashboard');
+    Route::post('/presence', [UserController::class, 'presenceHeartbeat'])->name('presence');
+    Route::post('/presence/leave', [UserController::class, 'presenceLeave'])->name('presence.leave');
     Route::post('/dismiss-pending-modal', [UserController::class, 'dismissPendingModal'])->name('dismiss-pending-modal');
     Route::get('/announcements', [UserController::class, 'announcements'])->name('announcements');
     Route::get('/announcements/{announcement}', [UserController::class, 'announcementShow'])->name('announcements.show');

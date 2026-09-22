@@ -18,7 +18,6 @@
         ['key' => 'events', 'label' => 'Events', 'route' => 'admin.events', 'icon' => 'calendar', 'badgeLabel' => 'pending events'],
         ['key' => 'service-hours', 'label' => 'Service Hours', 'route' => 'admin.service-hours', 'icon' => 'clock', 'badgeLabel' => 'scholars with pending service hours'],
         ['key' => 'documents', 'label' => 'Documents', 'route' => 'admin.documents', 'icon' => 'file', 'badgeLabel' => 'pending document submissions'],
-        ['key' => 'participation', 'label' => 'Participation', 'route' => 'admin.participation', 'icon' => 'participation', 'badgeLabel' => 'pending or failed participation records'],
         ['key' => 'reports', 'label' => 'Reports', 'route' => 'admin.reports', 'icon' => 'report', 'badgeLabel' => 'unread report updates'],
         ['key' => 'settings', 'label' => 'Admin Settings', 'route' => 'admin.settings', 'icon' => 'settings', 'badgeLabel' => 'settings items requiring attention'],
     ];
@@ -41,7 +40,6 @@
                 @php
                     $iconClass = match ($item['icon']) {
                         'locations' => 'admin-icon-locations',
-                        'participation' => 'admin-icon-participation',
                         default => 'staff-icon-'.$item['icon'],
                     };
                     $badgeCount = (int) ($badges[$item['key']] ?? 0);

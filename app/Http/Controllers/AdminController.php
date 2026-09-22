@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Attendance;
+use App\Models\Document;
+use App\Models\Event;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
 use App\Services\AccountService;
@@ -11,6 +14,7 @@ use App\Services\StaffDashboardService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
@@ -80,6 +84,28 @@ class AdminController extends Controller
         );
     }
 
+    private function assertScholarInAdminScope(Request $request, User $scholar): void
+    {
+        abort_unless($scholar->isScholar(), 404);
+
+        $scope = $this->scope($request);
+
+        abort_unless(
+            $scholar->scholarship_program_id
+                && in_array((int) $scholar->scholarship_program_id, array_map('intval', $scope['programIds']), true),
+            404
+        );
+    }
+
+    private function assertAdminDocument(Request $request, Document $document): void
+    {
+        $document->loadMissing('user');
+
+        abort_unless($document->user, 404);
+
+        $this->assertScholarInAdminScope($request, $document->user);
+    }
+
     private function layoutData(Request $request, string $active, string $title, string $subtitle = ''): array
     {
         $scope = $this->scope($request);
@@ -116,11 +142,27 @@ class AdminController extends Controller
     {
         $scope = $this->scope($request);
 
-        $board = $this->admin->locationBoard($scope['locationKey'], $scope['programType']);
+        if ($scope['programType'] === 'all') {
+            return redirect()->route('admin.locations', [
+                'program_type' => 'city_municipality',
+            ]);
+        }
+
+        $programTypeLabel = $scope['programType'] === 'province'
+            ? 'Province Scholarship Programs'
+            : 'City Scholarship Programs';
+
+        $board = $this->admin->locationBoard('all', $scope['programType']);
 
         return view('admin.locations', array_merge(
             $this->layoutData($request, 'locations', 'Locations', 'Manage City and Province Scholarship Program locations separately.'),
-            $board
+            $board,
+            [
+                'locationKey' => 'all',
+                'selectedLocation' => null,
+                'isAllLocations' => true,
+                'locationLabel' => $programTypeLabel.' — All Locations',
+            ]
         ));
     }
 
@@ -199,6 +241,18 @@ class AdminController extends Controller
         ));
     }
 
+    public function showScholar(User $scholar)
+    {
+        abort_unless($scholar->isScholar(), 404);
+
+        $scholar->load('scholarshipProgram');
+
+        return view('admin.scholar-show', array_merge(
+            $this->layoutData(request(), 'scholars', $scholar->full_name, 'Personal information provided during registration and profile setup.'),
+            ['scholar' => $scholar]
+        ));
+    }
+
     public function staff(Request $request)
     {
         $scope = $this->scope($request);
@@ -248,6 +302,7 @@ class AdminController extends Controller
         $this->assertStaffInScope($scope['programIds'], $staffMember);
 
         $staffMember->update(['status' => User::STATUS_APPROVED]);
+        $staffMember->activateFreshStaffEventList();
 
         $this->scholar->logActivity($staffMember, 'account', 'Scholar staff account approved by administrator');
         $this->scholar->notify(
@@ -301,6 +356,70 @@ class AdminController extends Controller
         ));
     }
 
+    public function showEvent(Request $request, Event $event)
+    {
+        $scope = $this->scope($request);
+
+        abort_unless(
+            in_array((int) $event->scholarship_program_id, array_map('intval', $scope['programIds']), true),
+            404
+        );
+
+        $event->load('scholarshipProgram');
+        $event->syncStatusFromSchedule();
+
+        $attendances = $event->attendances()->with('user')->get()->keyBy('user_id');
+        $seen = [];
+
+        $participants = $event->registrations()->with('user')->get()->map(function ($registration) use ($event, $attendances, &$seen) {
+            $user = $registration->user;
+
+            if (! $user?->isScholar()) {
+                return null;
+            }
+
+            $seen[(int) $user->id] = true;
+            $attendance = $attendances->get($registration->user_id);
+            $missed = ($event->hasEnded() || $event->attendanceSessionClosed()) && ! $attendance?->check_in;
+            $status = $missed
+                ? Attendance::STATUS_FAILED_CHECK_IN
+                : ($attendance?->status ?? $registration->status);
+
+            return [
+                'user' => $user,
+                'attendance' => $attendance,
+                'status' => $status,
+                'status_label' => $missed
+                    ? Attendance::labelFor(Attendance::STATUS_FAILED_CHECK_IN)
+                    : ($attendance ? $attendance->statusLabel() : ucfirst(str_replace('_', ' ', (string) $registration->status))),
+            ];
+        })->filter()->values();
+
+        foreach ($attendances as $attendance) {
+            $user = $attendance->user;
+
+            if (! $user?->isScholar() || isset($seen[(int) $user->id])) {
+                continue;
+            }
+
+            $participants->push([
+                'user' => $user,
+                'attendance' => $attendance,
+                'status' => $attendance->status,
+                'status_label' => $attendance->statusLabel(),
+            ]);
+        }
+
+        $participants = $participants
+            ->sortBy(fn (array $participant) => mb_strtolower((string) $participant['user']->full_name))
+            ->values();
+
+        return view('admin.event-show', array_merge(
+            $this->layoutData($request, 'events', $event->title, 'Scholars associated with this event.'),
+            compact('event', 'participants')
+        ));
+    }
+
     public function serviceHours(Request $request)
     {
         $scope = $this->scope($request);
@@ -330,14 +449,52 @@ class AdminController extends Controller
         ));
     }
 
-    public function participation(Request $request)
+    public function showScholarDocuments(Request $request, User $scholar)
     {
-        $scope = $this->scope($request);
+        $this->assertScholarInAdminScope($request, $scholar);
 
-        return view('admin.participation', array_merge(
-            $this->layoutData($request, 'participation', 'Participation', 'Track event participation for the selected scholarship program scope.'),
-            ['report' => $this->staff->participationReport($scope['programIds'])]
+        $scholar->load('scholarshipProgram');
+
+        $documents = Document::query()
+            ->with('documentType')
+            ->where('user_id', $scholar->id)
+            ->orderByRaw("CASE WHEN file_path IS NULL OR file_path = '' THEN 1 ELSE 0 END")
+            ->orderByDesc('uploaded_at')
+            ->orderBy('id')
+            ->get();
+
+        return view('admin.scholar-documents', array_merge(
+            $this->layoutData($request, 'documents', $scholar->full_name, 'Documents submitted by this scholar.'),
+            compact('scholar', 'documents')
         ));
+    }
+
+    public function viewDocument(Request $request, Document $document)
+    {
+        $this->assertAdminDocument($request, $document);
+
+        if (! $document->file_path || ! Storage::disk('public')->exists($document->file_path)) {
+            abort(404, 'File not found.');
+        }
+
+        return Storage::disk('public')->response(
+            $document->file_path,
+            $document->original_name ?? 'document'
+        );
+    }
+
+    public function downloadDocument(Request $request, Document $document)
+    {
+        $this->assertAdminDocument($request, $document);
+
+        if (! $document->file_path || ! Storage::disk('public')->exists($document->file_path)) {
+            abort(404, 'File not found.');
+        }
+
+        return Storage::disk('public')->download(
+            $document->file_path,
+            $document->original_name ?? 'document'
+        );
     }
 
     public function reports(Request $request)
@@ -346,24 +503,16 @@ class AdminController extends Controller
         $this->admin->markReportsViewed($scope['programIds']);
 
         $stats = $this->admin->dashboardStats($scope['programIds']);
-        $completionReport = $this->staff->completionReport($scope['programIds']);
-        $participationReport = $this->staff->participationReport($scope['programIds']);
+        $completionReport = $this->staff->completionCounts($scope['programIds']);
+        $participationReport = $this->staff->participationCounts($scope['programIds']);
 
         return view('admin.reports', array_merge(
             $this->layoutData($request, 'reports', 'Reports', 'Compare City and Province Scholarship Program records separately.'),
             [
                 'stats' => $stats,
-                'attendanceReport' => $this->staff->attendanceReport($scope['programIds']),
                 'completionReport' => $completionReport,
                 'participationReport' => $participationReport,
-                'reportCharts' => $scope['isAllLocations']
-                    ? null
-                    : $this->admin->locationReportCharts(
-                        $scope['programIds'],
-                        $stats,
-                        $completionReport,
-                        $participationReport
-                    ),
+                'reportCharts' => $this->admin->programTypeCategoryCharts($scope['locationKey']),
             ]
         ));
     }

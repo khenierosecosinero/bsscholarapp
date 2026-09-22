@@ -230,6 +230,49 @@ class Event extends Model
     }
 
     /**
+     * Scholar and staff only see events created after they became active
+     * (events_visible_from, or account created_at). Older program events stay
+     * in the database for other accounts, reports, and admin.
+     */
+    public function scopeVisibleToAccount(Builder $query, ?User $user): Builder
+    {
+        $from = $user?->eventsVisibleFrom();
+        if ($from === null) {
+            return $query;
+        }
+
+        return $query->where($query->getModel()->getQualifiedCreatedAtColumn(), '>=', $from);
+    }
+
+    public function scopeVisibleToStaff(Builder $query, ?User $staff): Builder
+    {
+        return $query->visibleToAccount($staff);
+    }
+
+    /**
+     * New scholar calendars skip completed/past events even if created after
+     * they became active. Existing scholars without events_visible_from keep
+     * those later events on the calendar.
+     */
+    public function scopeUpcomingForFreshScholar(Builder $query, User $user): Builder
+    {
+        if (! $user->hasFreshEventCalendar()) {
+            return $query;
+        }
+
+        return $query
+            ->where(function (Builder $scoped) {
+                $scoped->where('ends_at', '>=', now())
+                    ->orWhere(function (Builder $inner) {
+                        $inner->whereNull('ends_at')->where('starts_at', '>=', now());
+                    });
+            })
+            ->where(function (Builder $scoped) {
+                $scoped->whereNull('status')->orWhere('status', '!=', 'completed');
+            });
+    }
+
+    /**
      * Y-m-d keys for each calendar day this event should appear on.
      */
     public function calendarDateKeys(): array

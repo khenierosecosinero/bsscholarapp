@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ScholarshipProgram;
 use App\Services\AccountService;
 use App\Services\AcademicSettingsService;
 use App\Services\ScholarService;
@@ -9,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -27,6 +29,10 @@ class ProfileActionController extends Controller
     public function update(Request $request)
     {
         $user = Auth::user();
+        $allowedCities = ScholarshipProgram::municipalityOptions(
+            $user->provinceName(),
+            $user->municipalityName()
+        );
 
         $data = $request->validate([
             'full_name' => 'required|string|max:255',
@@ -35,6 +41,7 @@ class ProfileActionController extends Controller
             'course_year_level' => 'nullable|string|max:255',
             'year_level' => 'nullable|string|max:50',
             'date_of_birth' => 'nullable|date|before:today',
+            'city' => ['nullable', 'string', 'max:255', Rule::in($allowedCities)],
         ]);
 
         $user->update($data);
@@ -97,7 +104,9 @@ class ProfileActionController extends Controller
             'system'
         );
 
-        return back()->with('success', 'Your academic period has been updated. Service hours and progress now reflect the selected semester.');
+        return redirect()
+            ->route('user.profile', ['tab' => 'academic-settings'])
+            ->with('success', 'Your academic period has been updated. Service hours and progress now reflect the selected semester.');
     }
 
     public function updateGlobalAcademicSettings(Request $request)
@@ -116,7 +125,9 @@ class ProfileActionController extends Controller
         $setting = $this->academic->updateGlobal($validated, $user);
         $this->scholar->logActivity($user, 'system', 'System academic period updated', $validated);
 
-        return back()->with('success', "System academic period set to {$setting->semester} {$setting->year_start}-{$setting->year_end}. New attendance records will use this period.");
+        return redirect()
+            ->route('user.profile', ['tab' => 'academic-settings'])
+            ->with('success', "System academic period set to {$setting->semester} {$setting->year_start}-{$setting->year_end}. New attendance records will use this period.");
     }
 
     public function changePassword(Request $request)
@@ -135,7 +146,7 @@ class ProfileActionController extends Controller
 
             throw ValidationException::withMessages([
                 'current_password' => 'Current password is incorrect.',
-            ]);
+            ])->redirectTo(route('user.profile', ['tab' => 'security']));
         }
 
         $user->updatePassword($validated['password']);
@@ -146,7 +157,9 @@ class ProfileActionController extends Controller
         $this->scholar->logActivity($user, 'security', 'Password changed');
         $this->scholar->notify($user, 'Password Changed', 'Your account password was updated successfully.', 'system', true);
 
-        return back()->with('success', 'Password changed successfully.');
+        return redirect()
+            ->route('user.profile', ['tab' => 'security'])
+            ->with('success', 'Password changed successfully.');
     }
 
     public function destroy(Request $request)
@@ -158,6 +171,12 @@ class ProfileActionController extends Controller
         ]);
 
         $user = Auth::user();
+
+        if ($user->isPermanentAdmin()) {
+            throw ValidationException::withMessages([
+                'password' => 'The designated administrator account is permanent and cannot be deleted.',
+            ]);
+        }
 
         if (! Hash::check($validated['password'], $user->password)) {
             RateLimiter::hit($this->deleteThrottleKey($request), 300);

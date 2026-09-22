@@ -75,14 +75,6 @@
         </div>
     </div>
     <div class="staff-stat-card">
-        <div class="staff-stat-icon gray">🤝</div>
-        <div class="staff-stat-body">
-            <h3>Participation</h3>
-            <div class="value">{{ $stats['total_participation'] ?? 0 }}</div>
-            <div class="sub">Approved check-ins</div>
-        </div>
-    </div>
-    <div class="staff-stat-card">
         <div class="staff-stat-icon green">🎓</div>
         <div class="staff-stat-body">
             <h3>Completed Scholars</h3>

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
@@ -22,11 +23,17 @@ class User extends Authenticatable
 
     public const ROLE_ADMIN = 'admin';
 
+    public const PERMANENT_ADMIN_EMAIL = 'bssa_admin@gmail.com';
+
+    public const PERMANENT_ADMIN_SCHOLAR_ID = 'ADMIN-001';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_APPROVED = 'approved';
 
     public const STATUS_REJECTED = 'rejected';
+
+    public const PRESENCE_SECONDS = 90;
 
     /**
      * Login username (email), scholar ID, and password are intentionally excluded
@@ -69,13 +76,55 @@ class User extends Authenticatable
             'password' => 'hashed',
             'notification_preferences' => 'array',
             'is_admin' => 'boolean',
+            'is_permanent' => 'boolean',
             'last_login_at' => 'datetime',
+            'last_seen_at' => 'datetime',
+            'events_visible_from' => 'datetime',
         ];
     }
 
     public function isAdmin(): bool
     {
         return (bool) $this->is_admin || $this->role === self::ROLE_ADMIN;
+    }
+
+    public function isPermanentAdmin(): bool
+    {
+        if ((bool) $this->is_permanent) {
+            return true;
+        }
+
+        return strcasecmp((string) $this->email, self::PERMANENT_ADMIN_EMAIL) === 0
+            || strcasecmp((string) $this->scholar_id, self::PERMANENT_ADMIN_SCHOLAR_ID) === 0;
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (User $user) {
+            if (! $user->wasOriginallyPermanentAdmin() && ! $user->isPermanentAdmin()) {
+                return;
+            }
+
+            $user->is_permanent = true;
+            $user->is_admin = true;
+            $user->role = self::ROLE_ADMIN;
+        });
+
+        static::deleting(function (User $user) {
+            if ($user->isPermanentAdmin() || $user->wasOriginallyPermanentAdmin()) {
+                return false;
+            }
+        });
+    }
+
+    private function wasOriginallyPermanentAdmin(): bool
+    {
+        if ((bool) $this->getOriginal('is_permanent')) {
+            return true;
+        }
+
+        return strcasecmp((string) $this->getOriginal('email'), self::PERMANENT_ADMIN_EMAIL) === 0
+            || strcasecmp((string) $this->getOriginal('scholar_id'), self::PERMANENT_ADMIN_SCHOLAR_ID) === 0;
     }
 
     public function isScholar(): bool
@@ -118,6 +167,65 @@ class User extends Authenticatable
         return $this->isScholarStaff() && $this->status === self::STATUS_APPROVED;
     }
 
+    /**
+     * Newly approved/created scholar or staff get a start timestamp so they
+     * only see events created after they became active. Pending accounts use
+     * the approval time, not the registration time.
+     */
+    public function activateFreshEventList(): void
+    {
+        if ((! $this->isScholar() && ! $this->isScholarStaff()) || $this->events_visible_from !== null) {
+            return;
+        }
+
+        $this->forceFill(['events_visible_from' => now()])->save();
+    }
+
+    public function activateFreshStaffEventList(): void
+    {
+        $this->activateFreshEventList();
+    }
+
+    public function eventsVisibleFrom(): ?Carbon
+    {
+        if (! $this->isScholar() && ! $this->isScholarStaff()) {
+            return null;
+        }
+
+        return $this->events_visible_from ?? $this->created_at;
+    }
+
+    public function staffEventsVisibleFrom(): ?Carbon
+    {
+        return $this->isScholarStaff() ? $this->eventsVisibleFrom() : null;
+    }
+
+    public function hasFreshEventCalendar(): bool
+    {
+        return $this->isScholar() && $this->events_visible_from !== null;
+    }
+
+    public function canViewStaffManagedEvent(Event $event): bool
+    {
+        if (! $this->isScholarStaff()) {
+            return false;
+        }
+
+        $programOk = $event->scholarship_program_id
+            && in_array((int) $event->scholarship_program_id, array_map('intval', $this->managedLocationIds()), true);
+
+        if (! $programOk) {
+            return false;
+        }
+
+        $from = $this->staffEventsVisibleFrom();
+        if ($from === null) {
+            return true;
+        }
+
+        return $event->created_at !== null && $event->created_at->gte($from);
+    }
+
     public function canLogin(): bool
     {
         if ($this->isAdmin()) {
@@ -141,6 +249,32 @@ class User extends Authenticatable
     public function markLogin(): void
     {
         $this->forceFill(['last_login_at' => now()])->save();
+    }
+
+    public function markPresence(): void
+    {
+        $this->forceFill(['last_seen_at' => now()])->save();
+    }
+
+    public function clearPresence(): void
+    {
+        if ($this->last_seen_at === null) {
+            return;
+        }
+
+        $this->forceFill(['last_seen_at' => null])->save();
+    }
+
+    public function isPresentNow(): bool
+    {
+        return $this->isScholar()
+            && $this->last_seen_at !== null
+            && $this->last_seen_at->gte(now()->subSeconds(self::PRESENCE_SECONDS));
+    }
+
+    public function presenceLabel(): string
+    {
+        return $this->isPresentNow() ? 'Active Now' : 'Offline';
     }
 
     public function municipalityName(): ?string
@@ -288,6 +422,10 @@ class User extends Authenticatable
         $user->status = $attributes['status'] ?? 'approved';
         $user->role = $attributes['role'] ?? self::ROLE_SCHOLAR;
         $user->scholarship_program_id = $attributes['scholarship_program_id'] ?? null;
+
+        if (($user->isScholar() || $user->isScholarStaff()) && $user->status === self::STATUS_APPROVED) {
+            $user->events_visible_from = now();
+        }
 
         if (in_array($user->role, [self::ROLE_SCHOLAR, self::ROLE_SCHOLAR_STAFF], true) && ! $user->scholarship_program_id) {
             throw new InvalidArgumentException('Scholars and scholar staff must be linked to a scholarship program.');

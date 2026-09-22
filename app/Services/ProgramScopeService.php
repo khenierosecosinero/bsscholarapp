@@ -48,6 +48,11 @@ class ProgramScopeService
     public function assertEventVisibleToScholar(Event $event, User $user): void
     {
         $this->assertScholarCanAccessProgram($user, $event->scholarship_program_id);
+
+        $from = $user->eventsVisibleFrom();
+        if ($from && $event->created_at && $event->created_at->lt($from)) {
+            abort(403, 'This event is not available on your calendar.');
+        }
     }
 
     public function assertAnnouncementVisibleToScholar(Announcement $announcement, User $user): void

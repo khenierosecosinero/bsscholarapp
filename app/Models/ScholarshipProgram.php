@@ -203,6 +203,39 @@ class ScholarshipProgram extends Model
     }
 
     /**
+     * City and municipality names for profile pickers.
+     * Scoped to the scholar's province when that province has city records.
+     *
+     * @return list<string>
+     */
+    public static function municipalityOptions(?string $provinceName, ?string $currentCity = null): array
+    {
+        $query = static::active()->cities();
+
+        if (filled($provinceName)) {
+            $query->where('province_name', $provinceName);
+        }
+
+        $names = $query
+            ->orderBy('location_name')
+            ->pluck('location_name')
+            ->unique()
+            ->filter()
+            ->values()
+            ->all();
+
+        if ($names === [] && filled($provinceName)) {
+            return static::municipalityOptions(null, $currentCity);
+        }
+
+        if (filled($currentCity) && ! in_array($currentCity, $names, true)) {
+            array_unshift($names, $currentCity);
+        }
+
+        return $names;
+    }
+
+    /**
      * Provinces with nested municipalities/cities for registration pickers.
      */
     public static function locationTree(): array

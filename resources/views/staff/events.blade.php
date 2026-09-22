@@ -76,7 +76,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">No events found. <a href="{{ route('staff.events.create') }}">Create your first event</a>.</td></tr>
+                    <tr><td colspan="6">No events found.</td></tr>
                 @endforelse
             </tbody>
         </table>

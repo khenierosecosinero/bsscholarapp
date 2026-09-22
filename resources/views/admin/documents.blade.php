@@ -30,7 +30,13 @@
             <tbody>
                 @forelse($documents as $document)
                     <tr>
-                        <td>{{ $document->user?->full_name ?? '—' }}</td>
+                        <td>
+                            @if($document->user)
+                                <a href="{{ route('admin.documents.scholar', $document->user) }}" class="admin-scholar-name-link" aria-label="View submitted documents for {{ $document->user->full_name }}">{{ $document->user->full_name }}</a>
+                            @else
+                                —
+                            @endif
+                        </td>
                         <td>{{ $document->documentType?->name ?? 'Document' }}</td>
                         <td>{{ $document->user?->scholarshipProgram?->programLabel() ?? '—' }}</td>
                         <td>{{ $document->user?->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>

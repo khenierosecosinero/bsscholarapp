@@ -115,7 +115,6 @@ body:has(.admin-shell) {
 }
 
 .admin-icon-pin::before { content: '📍'; font-size: 14px; }
-.admin-icon-participation::before { content: '🤝'; font-size: 14px; }
 .admin-icon-locations::before { content: '🗺'; font-size: 14px; }
 
 .admin-compare-grid {
@@ -175,9 +174,144 @@ body:has(.admin-shell) {
 }
 
 .admin-locations-page,
-.admin-staff-page {
+.admin-staff-page,
+.admin-scholar-profile,
+.admin-scholar-documents {
     min-width: 0;
     max-width: 100%;
+}
+
+.admin-scholar-name-link,
+.admin-event-name-link {
+    display: inline;
+    max-width: 100%;
+    color: var(--admin-primary, #c2410c);
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.admin-scholar-name-link {
+    display: block;
+}
+
+.admin-scholar-name-link:hover,
+.admin-scholar-name-link:focus-visible,
+.admin-event-name-link:hover,
+.admin-event-name-link:focus-visible {
+    color: #9a3412;
+}
+
+.admin-event-attendance-header,
+.admin-scholar-profile-header,
+.admin-scholar-documents-header {
+    margin-bottom: 20px;
+}
+
+.admin-document-file-name {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #6b7280;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.admin-scholar-profile-avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 20px;
+}
+
+.admin-scholar-profile-header .staff-badge {
+    margin-top: 8px;
+}
+
+.admin-scholar-profile-note {
+    margin: 14px 0 0;
+}
+
+.admin-scholar-profile-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.admin-scholar-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 20px;
+}
+
+.admin-scholar-field {
+    min-width: 0;
+}
+
+.admin-scholar-field-wide {
+    grid-column: 1 / -1;
+}
+
+.admin-scholar-field span {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.admin-scholar-field strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1f2937;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.admin-scholar-back {
+    display: inline-block;
+    margin-top: 16px;
+}
+
+.admin-program-type-card {
+    margin-bottom: 20px;
+}
+
+.admin-program-type-copy {
+    margin: 0 0 14px;
+}
+
+.admin-program-type-switch {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    width: 100%;
+}
+
+.admin-program-type-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    text-decoration: none;
+    box-sizing: border-box;
+    min-height: 44px;
+    width: 100%;
+    cursor: pointer;
+    font-weight: 600;
+    overflow-wrap: break-word;
+    white-space: normal;
+    line-height: 1.3;
+}
+
+.admin-locations-table {
+    margin-bottom: 20px;
 }
 
 .admin-staff-notice {
@@ -221,17 +355,50 @@ body:has(.admin-shell) {
     font-weight: 600;
 }
 
+.admin-report-program-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+    margin-bottom: 20px;
+    width: 100%;
+    min-width: 0;
+}
+
+.admin-report-program-column {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.admin-report-program-header {
+    margin: 0;
+}
+
+.admin-report-program-header .staff-muted {
+    margin: 0;
+}
+
 .admin-report-pies {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 16px;
-    margin-bottom: 20px;
+    align-items: stretch;
+    margin-bottom: 0;
     width: 100%;
     min-width: 0;
 }
 
 .admin-pie-card {
     min-width: 0;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.admin-pie-card .staff-card-header h2 {
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .admin-pie-body {
@@ -286,9 +453,6 @@ body:has(.admin-shell) {
 }
 
 @media (max-width: 900px) {
-    .admin-report-pies {
-        grid-template-columns: 1fr;
-    }
     .admin-pie-body {
         justify-content: center;
     }
@@ -311,9 +475,23 @@ body:has(.admin-shell) {
     .admin-location-banner,
     .admin-scope-banner,
     .admin-locations-page,
-    .admin-staff-page {
+    .admin-staff-page,
+    .admin-scholar-profile,
+    .admin-scholar-documents,
+    .admin-event-attendance,
+    .admin-report-program-split {
         min-width: 0;
         max-width: 100%;
+    }
+    .admin-scholar-profile-grid,
+    .admin-scholar-fields {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 700px) {
+    .admin-report-program-split {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -371,6 +549,9 @@ body:has(.admin-shell) {
         font-size: 24px;
     }
     .admin-locations-add .staff-form-grid {
+        grid-template-columns: 1fr;
+    }
+    .admin-program-type-switch {
         grid-template-columns: 1fr;
     }
     .admin-staff-page .staff-action-group {

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Document;
 use App\Models\Event;
+use App\Models\ScholarshipProgram;
 use App\Models\UserActivity;
 use App\Models\Announcement;
 use App\Models\DocumentType;
@@ -102,8 +103,8 @@ class UserController extends Controller
         $user = Auth::user();
         $layout = $this->layoutData(
             'dashboard',
-            'Welcome, ' . $user->full_name . '!',
-            'Thank you for continuing to serve our community.'
+            'Dashboard',
+            ''
         );
 
         return view('user.dashboard', array_merge($layout, [
@@ -300,11 +301,28 @@ class UserController extends Controller
 
     public function profile(Request $request)
     {
-        return view('user.profile', $this->layoutData(
+        $layout = $this->layoutData(
             'profile',
             'Profile & Settings',
             'Manage your personal information, account settings, and preferences.'
-        ));
+        );
+
+        $user = $layout['user'];
+
+        $allowedTabs = ['profile-info', 'academic-settings', 'account-settings', 'security'];
+        $activeProfileTab = (string) $request->query('tab', session('profile_tab', 'profile-info'));
+
+        if (! in_array($activeProfileTab, $allowedTabs, true)) {
+            $activeProfileTab = 'profile-info';
+        }
+
+        return view('user.profile', array_merge($layout, [
+            'municipalityOptions' => ScholarshipProgram::municipalityOptions(
+                $user->provinceName(),
+                $user->municipalityName()
+            ),
+            'activeProfileTab' => $activeProfileTab,
+        ]));
     }
 
     public function announcements(Request $request)
@@ -357,5 +375,28 @@ class UserController extends Controller
         $eventId = (int) $request->get('event', 0);
 
         return response()->json($this->attendanceSessions->liveStatusForUser($user, $eventId ?: null));
+    }
+
+    public function presenceHeartbeat(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user?->isScholar() && $user->canLogin(), 403);
+
+        $user->markPresence();
+
+        return response()->json([
+            'ok' => true,
+            'online' => true,
+        ]);
+    }
+
+    public function presenceLeave(Request $request)
+    {
+        $user = Auth::user();
+        if ($user?->isScholar()) {
+            $user->clearPresence();
+        }
+
+        return response()->json(['ok' => true, 'online' => false]);
     }
 }

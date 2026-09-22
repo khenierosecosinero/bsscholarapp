@@ -31,7 +31,7 @@
                         <input class="form-input" type="password" name="password" placeholder="Password" id="password" required autocomplete="current-password" />
                         <button type="button" id="togglePassword" aria-label="Show password">&#128065;</button>
                     </div>
-                    <a class="forgot" href="#">Forgot Password?</a>
+                    <a class="forgot" href="{{ route('password.request') }}">Forgot Password?</a>
                 </div>
                 <div class="auth-form-footer">
                     <button class="btn login-btn" type="submit">Login</button>

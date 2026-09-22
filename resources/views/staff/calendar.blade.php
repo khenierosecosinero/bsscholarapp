@@ -41,7 +41,8 @@
                             <span class="staff-cal-day-num">{{ $gridStart->day }}</span>
                             @foreach($dayEvents as $event)
                                 <a href="{{ route('staff.events.show', $event) }}" class="staff-cal-event" title="{{ $event->title }} — {{ $event->starts_at->format('g:i A') }}">
-                                    {{ $event->title }} · {{ $event->starts_at->format('g:i A') }}
+                                    <span class="staff-cal-event-title">{{ $event->title }}</span>
+                                    <span class="staff-cal-event-time">{{ $event->starts_at->format('g:i A') }}</span>
                                 </a>
                             @endforeach
                         </div>
@@ -65,7 +66,7 @@
                         <div class="month">{{ $event->starts_at->format('M') }}</div>
                         <div class="day">{{ $event->starts_at->format('d') }}</div>
                     </div>
-                    <div>
+                    <div class="staff-list-item-body">
                         <strong>{{ $event->title }}</strong>
                         <div class="staff-muted">{{ $event->starts_at->format('M j, Y · g:i A') }} · {{ $event->location ?? 'TBA' }}</div>
                     </div>
@@ -86,27 +87,3 @@
 </section>
 
 @endsection
-
-@push('styles')
-<style>
-.staff-muted{color:#6b7280;font-size:13px}
-.staff-cal-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
-.staff-cal-month-nav{display:flex;align-items:center;gap:12px;font-size:18px}
-.staff-cal-arrow{color:#1d4ed8;text-decoration:none;padding:4px 8px}
-.staff-cal-layout{grid-template-columns:minmax(0,1.6fr) minmax(280px,0.9fr);align-items:start}
-.staff-cal-card{padding:16px}
-.staff-cal-grid{border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#fff}
-.staff-cal-header{display:grid;grid-template-columns:repeat(7,1fr);background:#f8fafc;border-bottom:1px solid #e5e7eb}
-.staff-cal-header span{padding:10px 6px;text-align:center;font-size:12px;font-weight:700;color:#64748b}
-.staff-cal-row{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid #e5e7eb}
-.staff-cal-row:last-child{border-bottom:none}
-.staff-cal-cell{min-height:96px;padding:6px;border-right:1px solid #eef2f7}
-.staff-cal-cell:last-child{border-right:none}
-.staff-cal-cell.other-month{background:#fafafa;color:#cbd5e1}
-.staff-cal-cell.today{background:#eff6ff}
-.staff-cal-day-num{display:block;font-size:12px;font-weight:700;margin-bottom:4px}
-.staff-cal-event{display:block;font-size:11px;line-height:1.3;padding:3px 6px;border-radius:6px;margin-bottom:3px;background:#dbeafe;color:#1e40af;text-decoration:none;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.staff-cal-event:hover{background:#bfdbfe}
-@media (max-width: 1000px){.staff-cal-layout{grid-template-columns:1fr}}
-</style>
-@endpush

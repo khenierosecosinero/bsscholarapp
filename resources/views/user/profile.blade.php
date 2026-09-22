@@ -5,18 +5,22 @@
 @endpush
 
 @section('page-content')
+@php
+    $activeProfileTab = $activeProfileTab ?? 'profile-info';
+    $profileTabUrl = fn (string $tab) => route('user.profile', ['tab' => $tab]);
+@endphp
 <div class="page-profile">
 
 <div class="tabs profile-tabs" role="tablist">
-    <button type="button" class="tab active" data-tab="profile-info">Profile Information</button>
-    <button type="button" class="tab" data-tab="academic-settings">Academic Settings</button>
-    <button type="button" class="tab" data-tab="account-settings">Account Settings</button>
-    <button type="button" class="tab" data-tab="security">Security</button>
+    <a href="{{ $profileTabUrl('profile-info') }}" class="tab {{ $activeProfileTab === 'profile-info' ? 'active' : '' }}" data-tab="profile-info" role="tab" aria-selected="{{ $activeProfileTab === 'profile-info' ? 'true' : 'false' }}">Profile Information</a>
+    <a href="{{ $profileTabUrl('academic-settings') }}#academic-settings" class="tab {{ $activeProfileTab === 'academic-settings' ? 'active' : '' }}" data-tab="academic-settings" role="tab" aria-selected="{{ $activeProfileTab === 'academic-settings' ? 'true' : 'false' }}">Academic Settings</a>
+    <a href="{{ $profileTabUrl('account-settings') }}#account-settings" class="tab {{ $activeProfileTab === 'account-settings' ? 'active' : '' }}" data-tab="account-settings" role="tab" aria-selected="{{ $activeProfileTab === 'account-settings' ? 'true' : 'false' }}">Account Settings</a>
+    <a href="{{ $profileTabUrl('security') }}#security" class="tab {{ $activeProfileTab === 'security' ? 'active' : '' }}" data-tab="security" role="tab" aria-selected="{{ $activeProfileTab === 'security' ? 'true' : 'false' }}">Security</a>
 </div>
 
 <section class="profile-layout">
     <div class="profile-main">
-        <div class="tab-panel active profile-info-panel" id="profile-info">
+        <div class="tab-panel profile-info-panel {{ $activeProfileTab === 'profile-info' ? 'active' : '' }}" id="profile-info" @if($activeProfileTab !== 'profile-info') hidden @endif>
             <div class="card profile-section-card">
                 <div class="card-header">PROFILE INFORMATION</div>
 
@@ -57,7 +61,19 @@
                         <div class="form-group"><label for="full_name">Full Name</label><input id="full_name" type="text" name="full_name" value="{{ old('full_name', $user->full_name) }}" required autocomplete="name"></div>
                         <div class="form-group"><label for="scholar_id">Scholar ID</label><input id="scholar_id" type="text" value="{{ $user->scholar_id }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group form-group-wide"><label for="email">Login Email</label><input id="email" type="email" value="{{ $user->email }}" readonly disabled aria-readonly="true"><small class="muted">Your login email cannot be changed after registration.</small></div>
-                        <div class="form-group"><label for="registered_municipality">Municipality / City</label><input id="registered_municipality" type="text" value="{{ $user->municipalityName() ?? '—' }}" readonly disabled aria-readonly="true"></div>
+                        <div class="form-group">
+                            <label for="city">Municipality / City</label>
+                            <select id="city" name="city" class="form-select">
+                                <option value="">Select municipality or city</option>
+                                @foreach($municipalityOptions as $municipality)
+                                    <option value="{{ $municipality }}" @selected(old('city', $user->municipalityName()) === $municipality)>{{ $municipality }}</option>
+                                @endforeach
+                            </select>
+                            <small class="muted">Choose the city or municipality where you live. Your scholarship program will not change.</small>
+                            @error('city')
+                                <small class="muted" style="color:#dc2626">{{ $message }}</small>
+                            @enderror
+                        </div>
                         <div class="form-group"><label for="registered_province">Province</label><input id="registered_province" type="text" value="{{ $user->provinceName() ?? '—' }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group form-group-wide"><label for="registered_program">Scholarship Program</label><input id="registered_program" type="text" value="{{ $user->scholarshipProgram?->programLabel() ?? '—' }}" readonly disabled aria-readonly="true"><small class="muted">Your scholarship program is determined by your registered location and cannot be changed.</small></div>
                         <div class="form-group"><label for="cellphone_number">Cellphone</label><input id="cellphone_number" type="text" name="cellphone_number" value="{{ old('cellphone_number', $user->cellphone_number) }}" autocomplete="tel"></div>
@@ -89,7 +105,7 @@
             </div>
         </div>
 
-        <div class="tab-panel" id="academic-settings" hidden>
+        <div class="tab-panel {{ $activeProfileTab === 'academic-settings' ? 'active' : '' }}" id="academic-settings" @if($activeProfileTab !== 'academic-settings') hidden @endif>
             <div class="card">
                 <div class="card-header">YOUR ACADEMIC PERIOD</div>
                 <p class="muted small">Select the semester and academic year used to calculate your service hours, progress, and related records throughout the app.</p>
@@ -151,7 +167,7 @@
             @endif
         </div>
 
-        <div class="tab-panel" id="account-settings" hidden>
+        <div class="tab-panel {{ $activeProfileTab === 'account-settings' ? 'active' : '' }}" id="account-settings" @if($activeProfileTab !== 'account-settings') hidden @endif>
             <div class="card">
                 <div class="card-header">LOGIN CREDENTIALS</div>
                 <p class="muted">For your security, your login email, scholar ID, and password are set when you register and cannot be edited from this page.</p>
@@ -159,11 +175,11 @@
                     <div class="form-group"><label>Login Email</label><input type="email" value="{{ $user->email }}" readonly disabled></div>
                     <div class="form-group"><label>Scholar ID</label><input type="text" value="{{ $user->scholar_id }}" readonly disabled></div>
                 </div>
-                <p class="muted small">To change your password, go to the <button type="button" class="link tab-trigger" data-tab="security">Security</button> tab. To remove your account entirely, use the Danger Zone on the right.</p>
+                <p class="muted small">To change your password, go to the <a href="{{ $profileTabUrl('security') }}#security" class="link tab-trigger" data-tab="security">Security</a> tab. To remove your account entirely, use the Danger Zone on the right.</p>
             </div>
         </div>
 
-        <div class="tab-panel" id="security" hidden>
+        <div class="tab-panel {{ $activeProfileTab === 'security' ? 'active' : '' }}" id="security" @if($activeProfileTab !== 'security') hidden @endif>
             <div class="card">
                 <div class="card-header">CHANGE PASSWORD</div>
                 <p class="muted small">You must enter your current password to set a new one.</p>
@@ -194,9 +210,21 @@
         <div class="card">
             <div class="card-header">SECURITY SHORTCUTS</div>
             <div class="shortcut-list">
-                <button type="button" class="shortcut-item tab-trigger" data-tab="academic-settings"><span>&#128218;</span> Academic Settings <span class="arrow">&#9654;</span></button>
-                <button type="button" class="shortcut-item tab-trigger" data-tab="security"><span>&#128274;</span> Change Password <span class="arrow">&#9654;</span></button>
-                <button type="button" class="shortcut-item tab-trigger" data-tab="account-settings"><span>&#128100;</span> View Login Credentials <span class="arrow">&#9654;</span></button>
+                <a href="{{ $profileTabUrl('academic-settings') }}#academic-settings" class="shortcut-item" data-tab="academic-settings" data-no-loading="true">
+                    <span class="shortcut-icon" aria-hidden="true">&#128218;</span>
+                    <span class="shortcut-label">Academic Settings</span>
+                    <span class="shortcut-arrow" aria-hidden="true">&#9654;</span>
+                </a>
+                <a href="{{ $profileTabUrl('security') }}#security" class="shortcut-item" data-tab="security" data-no-loading="true">
+                    <span class="shortcut-icon" aria-hidden="true">&#128274;</span>
+                    <span class="shortcut-label">Change Password</span>
+                    <span class="shortcut-arrow" aria-hidden="true">&#9654;</span>
+                </a>
+                <a href="{{ $profileTabUrl('account-settings') }}#account-settings" class="shortcut-item" data-tab="account-settings" data-no-loading="true">
+                    <span class="shortcut-icon" aria-hidden="true">&#128100;</span>
+                    <span class="shortcut-label">View Login Credentials</span>
+                    <span class="shortcut-arrow" aria-hidden="true">&#9654;</span>
+                </a>
             </div>
         </div>
 
@@ -221,3 +249,64 @@
 </div>
 
 @endsection
+
+@push('scripts')
+<script>
+(function () {
+    const root = document.querySelector('.page-profile');
+    if (!root || root.dataset.tabsReady === '1') return;
+    root.dataset.tabsReady = '1';
+
+    const allowed = ['profile-info', 'academic-settings', 'account-settings', 'security'];
+
+    const activateTab = (id, scroll) => {
+        if (!allowed.includes(id)) return false;
+
+        root.querySelectorAll('.profile-tabs .tab').forEach((tab) => {
+            const isActive = tab.dataset.tab === id;
+            tab.classList.toggle('active', isActive);
+            tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        root.querySelectorAll('.tab-panel').forEach((panel) => {
+            const isActive = panel.id === id;
+            panel.hidden = !isActive;
+            panel.classList.toggle('active', isActive);
+        });
+
+        const url = new URL(window.location.href);
+        if (id === 'profile-info') {
+            url.searchParams.delete('tab');
+            url.hash = '';
+        } else {
+            url.searchParams.set('tab', id);
+            url.hash = id;
+        }
+        history.replaceState(null, '', url);
+
+        if (scroll) {
+            const target = document.getElementById(id) || root.querySelector('.profile-tabs');
+            requestAnimationFrame(() => {
+                target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        }
+
+        return true;
+    };
+
+    root.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-tab]');
+        if (!trigger || !root.contains(trigger)) return;
+        const id = trigger.dataset.tab;
+        if (!id || !allowed.includes(id)) return;
+        event.preventDefault();
+        activateTab(id, trigger.classList.contains('shortcut-item') || Boolean(trigger.closest('.shortcut-list')) || trigger.classList.contains('tab-trigger'));
+    });
+
+    const fromUrl = new URLSearchParams(window.location.search).get('tab') || window.location.hash.replace('#', '');
+    if (fromUrl && allowed.includes(fromUrl)) {
+        activateTab(fromUrl, fromUrl !== 'profile-info');
+    }
+})();
+</script>
+@endpush

@@ -69,9 +69,13 @@
         min-height: 36px;
     }
 }
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
+
+.page-profile .profile-section-form .form-select {
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    appearance: auto;
+    background-color: #fff;
 }
 
 .page-profile .profile-section-card {
@@ -156,10 +160,79 @@
     margin: 0;
 }
 
-@media (max-width: 1200px) {
-    .page-profile .profile-sidebar {
-        position: static;
-        gap: 24px;
+.page-profile .profile-tabs,
+.page-profile .tab-panel {
+    scroll-margin-top: 12px;
+}
+
+.page-profile .shortcut-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.page-profile .shortcut-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 48px;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border: 1px solid #eef3f6;
+    border-radius: 10px;
+    background: #f9fafb;
+    text-decoration: none;
+    color: #0f1721;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(37, 99, 235, 0.16);
+    transition: background .15s, border-color .15s;
+}
+
+.page-profile .shortcut-item > * {
+    pointer-events: none;
+}
+
+.page-profile .shortcut-icon {
+    flex-shrink: 0;
+}
+
+.page-profile .shortcut-label {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.page-profile .shortcut-arrow,
+.page-profile .shortcut-item .arrow {
+    margin-left: auto;
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+
+.page-profile .shortcut-item:hover,
+.page-profile .shortcut-item:focus-visible {
+    background: #f0fdf4;
+    border-color: #b6ebb9;
+    outline: none;
+}
+
+.page-profile .shortcut-item:active {
+    background: #ecfdf3;
+}
+
+@media (max-width: 600px) {
+    .page-profile .shortcut-item {
+        min-height: 52px;
+        padding: 14px 16px;
+        font-size: 14px;
     }
 }
 

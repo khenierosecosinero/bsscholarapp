@@ -6,10 +6,14 @@ use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class AccountService
 {
-    public function __construct(private ScholarService $scholar) {}
+    public function __construct(
+        private ScholarService $scholar,
+        private UserSequenceService $userSequence,
+    ) {}
 
     /**
      * Initialize a newly registered account with linked records.
@@ -85,10 +89,31 @@ class AccountService
      */
     public function permanentlyDelete(User $user): void
     {
+        if ($user->isPermanentAdmin()) {
+            throw ValidationException::withMessages([
+                'account' => 'The designated administrator account is permanent and cannot be deleted.',
+            ]);
+        }
+
         DB::transaction(function () use ($user) {
+            DB::table('users')->lockForUpdate()->get(['id']);
+
             $this->deleteStoredFiles($user);
-            $user->delete();
+
+            if ($user->email) {
+                DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+            }
+
+            if ($user->isPermanentAdmin() || ! $user->delete()) {
+                throw ValidationException::withMessages([
+                    'account' => 'The designated administrator account is permanent and cannot be deleted.',
+                ]);
+            }
+
+            $this->userSequence->compact();
         });
+
+        $this->userSequence->resetAutoIncrement();
     }
 
     public function storeAvatar(User $user, UploadedFile $file): void

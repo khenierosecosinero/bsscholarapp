@@ -1,7 +1,7 @@
 @extends('layouts.user')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/notifications-page.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/notifications-page.css') }}?v={{ filemtime(public_path('css/notifications-page.css')) }}">
 @endpush
 
 @push('scripts')

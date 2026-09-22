@@ -45,7 +45,10 @@
                                 <div class="fc-cell {{ !$inMonth ? 'other-month' : '' }} {{ $start->isToday() ? 'today' : '' }}">
                                     <span class="fc-day-num">{{ $start->day }}</span>
                     @foreach($dayEvents as $ev)
-                                        <a href="{{ route('user.calendar', ['year' => $monthDate->year, 'month' => $monthDate->month, 'event' => $ev['id']]) }}" class="fc-event {{ $colorMap[$ev['calendar_status']] ?? 'blue' }}" title="{{ $ev['title'] }} — {{ $ev['status_label'] }}">{{ $ev['title'] }} | {{ $ev['starts_at']->format('g:i A') }} | {{ $ev['hours'] }} hrs</a>
+                                        <a href="{{ route('user.calendar', ['year' => $monthDate->year, 'month' => $monthDate->month, 'event' => $ev['id']]) }}" class="fc-event {{ $colorMap[$ev['calendar_status']] ?? 'blue' }}" title="{{ $ev['title'] }} — {{ $ev['status_label'] }}">
+                                            <span class="fc-event-title">{{ $ev['title'] }}</span>
+                                            <span class="fc-event-meta">{{ $ev['starts_at']->format('g:i A') }} · {{ $ev['hours'] }} hrs</span>
+                                        </a>
                                     @endforeach
                                 </div>
                                 @php $start->addDay(); @endphp
