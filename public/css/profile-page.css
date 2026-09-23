@@ -97,6 +97,118 @@
     margin-top: 20px;
 }
 
+.page-profile .form-group-date {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.page-profile .date-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.page-profile .date-input-wrap input[type="date"] {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 46px;
+    height: 46px;
+    box-sizing: border-box;
+    padding: 12px 42px;
+    margin: 0;
+    text-align: center;
+    line-height: 1.25;
+    font-size: 14px;
+    font-family: inherit;
+    color: #0f1721;
+    background: #f9fafb;
+    border: 1px solid #e6eef0;
+    border-radius: 8px;
+    color-scheme: light;
+}
+
+.page-profile .date-input-wrap input[type="date"]::-webkit-date-and-time-value {
+    text-align: center;
+    margin: 0 auto;
+    padding: 0;
+    min-height: 1.25em;
+    width: 100%;
+}
+
+.page-profile .date-input-wrap input[type="date"]::-webkit-datetime-edit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0 auto;
+    min-width: 0;
+    width: 100%;
+    text-align: center;
+}
+
+.page-profile .date-input-wrap input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.page-profile .date-input-wrap input[type="date"]::-webkit-datetime-edit-text,
+.page-profile .date-input-wrap input[type="date"]::-webkit-datetime-edit-month-field,
+.page-profile .date-input-wrap input[type="date"]::-webkit-datetime-edit-day-field,
+.page-profile .date-input-wrap input[type="date"]::-webkit-datetime-edit-year-field {
+    padding: 0;
+    margin: 0;
+}
+
+.page-profile .date-input-wrap input[type="date"]::-webkit-inner-spin-button,
+.page-profile .date-input-wrap input[type="date"]::-webkit-clear-button {
+    display: none;
+}
+
+.page-profile .date-input-wrap input[type="date"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    padding: 0;
+    transform: translateY(-50%);
+    cursor: pointer;
+    opacity: 0.75;
+    flex-shrink: 0;
+    z-index: 2;
+}
+
+@supports (-webkit-touch-callout: none) {
+    .page-profile .date-input-wrap input[type="date"] {
+        -webkit-appearance: none;
+        appearance: none;
+        display: block;
+        text-align: center;
+        padding: 12px 14px;
+    }
+}
+
+@media (max-width: 900px) {
+    .page-profile .form-group-date {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 600px) {
+    .page-profile .date-input-wrap input[type="date"] {
+        min-height: 48px;
+        height: 48px;
+        font-size: 16px;
+        padding: 12px 42px;
+    }
+}
+
 .page-profile .profile-sidebar {
     display: flex;
     flex-direction: column;

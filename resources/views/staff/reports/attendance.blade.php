@@ -2,6 +2,8 @@
 
 @section('page-content')
 
+@include('partials.staff-report-period-filter')
+
 @php $b = $report['breakdown']; @endphp
 
 <section class="staff-stat-grid">
@@ -46,7 +48,7 @@
         <a href="{{ route('staff.attendance') }}" class="staff-card-link">Open Attendance</a>
     </div>
     <div class="staff-table-wrap">
-        <table class="staff-table">
+        <table class="staff-table staff-stack-table">
             <thead>
                 <tr>
                     <th>Scholar</th>
@@ -60,14 +62,14 @@
             <tbody>
                 @forelse($report['records'] as $attendance)
                     <tr>
-                        <td>{{ $attendance->user?->full_name ?? '—' }}</td>
-                        <td>{{ $attendance->event?->title ?? '—' }}</td>
-                        <td>
+                        <td data-label="Scholar">{{ $attendance->user?->full_name ?? '—' }}</td>
+                        <td data-label="Event">{{ $attendance->event?->title ?? '—' }}</td>
+                        <td data-label="Check In / Out">
                             {{ $attendance->check_in?->format('g:i A') ?? '—' }}
                             <div class="staff-muted">{{ $attendance->check_out?->format('g:i A') ?? '—' }}</div>
                         </td>
-                        <td>{{ $attendance->hoursLabel() }}</td>
-                        <td>
+                        <td data-label="Hours">{{ $attendance->hoursLabel() }}</td>
+                        <td data-label="Status">
                             @php
                                 $statusClass = match($attendance->status) {
                                     'approved' => 'green',
@@ -77,7 +79,7 @@
                             @endphp
                             <span class="staff-badge {{ $statusClass }}">{{ $attendance->statusLabel() }}</span>
                         </td>
-                        <td>@include('partials.staff-attendance-actions', ['attendance' => $attendance])</td>
+                        <td data-label="Actions">@include('partials.staff-attendance-actions', ['attendance' => $attendance])</td>
                     </tr>
                 @empty
                     <tr><td colspan="6">No attendance records found.</td></tr>

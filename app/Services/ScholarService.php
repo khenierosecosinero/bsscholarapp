@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
-use App\Models\Announcement;
 use App\Models\AcademicSetting;
+use App\Models\Announcement;
+use App\Models\Attendance;
 use App\Models\Document;
 use App\Models\DocumentType;
-use App\Models\Attendance;
 use App\Models\Event;
 use App\Models\EventRegistration;
 use App\Models\ScholarNotification;
@@ -279,13 +279,175 @@ class ScholarService
         ];
     }
 
+    /**
+     * Year 1 of the 4-year program: scholar year level + current academic
+     * preference, pulled earlier when older stamped attendance exists.
+     * Attendance rows are never rewritten.
+     */
+    public function startingAcademicYear(User $user): int
+    {
+        $period = $this->academic->forUser($user);
+        $fromPreference = (int) $period->year_start - ($this->programYearNumber($user) - 1);
+
+        $fromRecords = (int) $user->attendances()
+            ->whereNotNull('academic_year_start')
+            ->where('academic_year_start', '>', 0)
+            ->min('academic_year_start');
+
+        if ($fromRecords > 0) {
+            return min($fromPreference, $fromRecords);
+        }
+
+        return max(2000, $fromPreference);
+    }
+
+    /**
+     * Per-semester / per-year completed hours for the scholar's 4-year span.
+     * Pending hours stay out of completed and remaining.
+     *
+     * @return array<string, mixed>
+     */
+    public function programHourTracking(User $user): array
+    {
+        $required = (float) self::REQUIRED_HOURS;
+        $period = $this->academic->forUser($user);
+        $hourStats = $this->serviceHourStats($user, $period);
+        $allocation = $this->allocatedHours($user);
+        $startYear = $this->startingAcademicYear($user);
+        $endYear = $startYear + 3;
+
+        if ($allocation !== []) {
+            $recordYears = array_map('intval', array_keys($allocation));
+            $endYear = max($endYear, ...$recordYears);
+        }
+
+        $years = [];
+        $programYear = 1;
+        for ($year = $startYear; $year <= $endYear; $year++, $programYear++) {
+            $semesters = [];
+            $yearCompleted = 0.0;
+            $yearPending = 0.0;
+
+            foreach (AcademicSettingsService::SEMESTERS as $semester) {
+                $slot = $this->statsFromSlot($allocation[$year][$semester] ?? []);
+                $semesters[] = [
+                    'semester' => $semester,
+                    'approved' => $slot['approved'],
+                    'pending' => $slot['pending'],
+                    'remaining' => $slot['remaining'],
+                    'required' => $required,
+                    'is_current' => $year === (int) $period->year_start && $semester === $period->semester,
+                ];
+                $yearCompleted += $slot['approved'];
+                $yearPending += $slot['pending'];
+            }
+
+            $years[] = [
+                'program_year' => $programYear,
+                'year_start' => $year,
+                'year_end' => $year + 1,
+                'academic_year' => 'AY '.$year.'–'.($year + 1),
+                'completed' => round($yearCompleted, 2),
+                'pending' => round($yearPending, 2),
+                'semesters' => $semesters,
+                'is_current' => $year === (int) $period->year_start,
+            ];
+        }
+
+        return [
+            'required' => $required,
+            'start_year' => $startYear,
+            'end_year' => $endYear,
+            'years' => $years,
+            'current' => $hourStats,
+            'period' => $this->academic->infoForUser($user, $hourStats),
+        ];
+    }
+
+    /**
+     * Approved / pending / remaining for one academic year (and optional
+     * semester) using the records' own stamps. Other years are ignored, so
+     * historical reports stay accurate. Each selected semester is capped at
+     * REQUIRED_HOURS. Pending hours never count as completed.
+     *
+     * @param  iterable<int, object>  $records
+     * @param  array{year_start: int, semester: string}  $filter
+     * @return array<string, float>
+     */
+    public function periodHourStatsFromRecords(iterable $records, array $filter): array
+    {
+        $requiredEach = (float) self::REQUIRED_HOURS;
+        $year = (int) $filter['year_start'];
+        $semesters = (($filter['semester'] ?? AcademicSettingsService::SEMESTER_ALL) === AcademicSettingsService::SEMESTER_ALL)
+            ? AcademicSettingsService::SEMESTERS
+            : [(string) $filter['semester']];
+
+        $approved = 0.0;
+        $pending = 0.0;
+
+        foreach ($semesters as $semester) {
+            $semesterApproved = 0.0;
+            $semesterPending = 0.0;
+
+            foreach ($records as $row) {
+                if ((int) ($row->academic_year_start ?? 0) !== $year) {
+                    continue;
+                }
+                if ((string) ($row->semester ?? '') !== $semester) {
+                    continue;
+                }
+
+                $hours = (float) ($row->hours_earned ?? 0);
+                if ($row->status === Attendance::STATUS_APPROVED) {
+                    $semesterApproved += $hours;
+                } elseif ($row->status === Attendance::STATUS_PENDING) {
+                    $semesterPending += $hours;
+                }
+            }
+
+            $approved += min($requiredEach, $semesterApproved);
+            $pending += $semesterPending;
+        }
+
+        $required = $requiredEach * count($semesters);
+        $approved = round($approved, 2);
+        $pending = round($pending, 2);
+
+        return [
+            'approved' => $approved,
+            'pending' => $pending,
+            'required' => $required,
+            'remaining' => max(0, round($required - $approved, 2)),
+        ];
+    }
+
+    private function programYearNumber(User $user): int
+    {
+        $raw = strtolower(trim((string) ($user->year_level ?? '')));
+        if ($raw === '') {
+            return 1;
+        }
+
+        if (preg_match('/\b(4th|fourth|year\s*4|iv)\b/', $raw)) {
+            return 4;
+        }
+        if (preg_match('/\b(3rd|third|year\s*3|iii)\b/', $raw)) {
+            return 3;
+        }
+        if (preg_match('/\b(2nd|second|year\s*2|ii)\b/', $raw)) {
+            return 2;
+        }
+
+        return 1;
+    }
+
     public function dashboardStats(User $user, ?array $hours = null, ?int $unreadNotifications = null): array
     {
         $hours = $hours ?? $this->serviceHourStats($user);
 
         return [
             'service_hours' => [
-                'value' => $hours['approved'] . ' / ' . $hours['required'],
+                'value' => $hours['approved'].' / '.$hours['required'],
                 'completed' => $hours['approved'],
                 'required' => $hours['required'],
             ],
@@ -401,8 +563,8 @@ class ScholarService
             'month' => strtoupper($event->starts_at->format('M')),
             'day' => $event->starts_at->format('d'),
             'dow' => strtoupper($event->starts_at->format('D')),
-            'time' => $event->starts_at->format('g:i A') . ' - ' . $event->ends_at->format('g:i A'),
-            'full_date' => $event->starts_at->format('F d, Y') . ' (' . $event->starts_at->format('l') . ')',
+            'time' => $event->starts_at->format('g:i A').' - '.$event->ends_at->format('g:i A'),
+            'full_date' => $event->starts_at->format('F d, Y').' ('.$event->starts_at->format('l').')',
             'hours' => $event->service_hours,
             'organizer' => $event->organizer,
             'image_url' => $event->image_url,

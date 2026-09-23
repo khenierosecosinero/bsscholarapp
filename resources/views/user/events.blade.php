@@ -1,7 +1,7 @@
 @extends('layouts.user')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/attendance-photo.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/attendance-photo.css') }}?v={{ filemtime(public_path('css/attendance-photo.css')) }}">
 @endpush
 
 @section('page-content')
@@ -113,12 +113,17 @@
                             <form method="POST" action="{{ route('user.events.check-in', $selected['id']) }}">@csrf<button type="submit" class="btn full checkin-btn" {{ empty($selected['can_check_in']) ? 'disabled' : '' }}>&#128247; Check In</button></form>
                             <p class="muted center small">{{ !empty($selected['attendance_open']) ? 'Attendance is OPEN. You can check in now.' : 'Attendance is CLOSED. You can no longer submit or modify your attendance.' }}</p>
                         @else
-                            @if(!empty($selected['can_check_out']))
-                                <form method="POST" action="{{ route('user.events.check-out', $selected['id']) }}">@csrf<button type="submit" class="btn full">Check Out</button></form>
-                            @elseif(!$att->check_out)
-                                <p class="muted center small">Attendance is CLOSED. You can no longer submit or modify your attendance.</p>
-                            @endif
-                            @include('partials.attendance-photo-upload', ['attendance' => $att, 'eventId' => $selected['id'], 'canModify' => !empty($selected['can_modify_attendance'])])
+                            <div class="attendance-action-stack">
+                                @include('partials.attendance-photo-upload', ['attendance' => $att, 'eventId' => $selected['id'], 'canModify' => !empty($selected['can_modify_attendance'])])
+                                @if(!empty($selected['can_check_out']))
+                                    <form method="POST" action="{{ route('user.events.check-out', $selected['id']) }}" class="attendance-checkout-form">
+                                        @csrf
+                                        <button type="submit" class="btn full">Check Out</button>
+                                    </form>
+                                @elseif(!$att->check_out)
+                                    <p class="muted center small attendance-checkout-closed">Attendance is CLOSED. You can no longer submit or modify your attendance.</p>
+                                @endif
+                            </div>
                         @endif
                     </div>
                     <div class="card inner-card">

@@ -62,7 +62,7 @@
     <div class="staff-card">
         <div class="staff-card-header"><h2>Authorized Admin Accounts</h2></div>
         <div class="staff-table-wrap">
-            <table class="staff-table">
+            <table class="staff-table staff-stack-table">
                 <thead>
                     <tr>
                         <th>Name</th>

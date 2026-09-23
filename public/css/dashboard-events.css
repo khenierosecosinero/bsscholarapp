@@ -24,9 +24,11 @@
 
 .dashboard-upcoming-events .event-title,
 .dashboard-upcoming-events .event-meta {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .dashboard-upcoming-events .event-footer {

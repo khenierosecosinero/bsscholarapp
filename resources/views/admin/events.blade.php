@@ -16,7 +16,7 @@
 
 <div class="staff-card">
     <div class="staff-table-wrap">
-        <table class="staff-table">
+        <table class="staff-table staff-stack-table">
             <thead>
                 <tr>
                     <th>Event</th>
@@ -30,12 +30,12 @@
             <tbody>
                 @forelse($events as $event)
                     <tr>
-                        <td><a href="{{ route('admin.events.show', $event) }}" class="admin-event-name-link" aria-label="View scholars who attended {{ $event->title }}">{{ $event->title }}</a></td>
-                        <td>{{ $event->scholarshipProgram?->programLabel() ?? '—' }}</td>
-                        <td>{{ $event->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>
-                        <td>{{ $event->starts_at?->format('M j, Y g:i A') ?? '—' }}</td>
-                        <td><span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span></td>
-                        <td>{{ $event->service_hours ?? 0 }}</td>
+                        <td data-label="Event"><a href="{{ route('admin.events.show', $event) }}" class="admin-event-name-link" aria-label="View scholars who attended {{ $event->title }}">{{ $event->title }}</a></td>
+                        <td data-label="Scholar Program">{{ $event->scholarshipProgram?->programLabel() ?? '—' }}</td>
+                        <td data-label="Program Type">{{ $event->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>
+                        <td data-label="Schedule">{{ $event->starts_at?->format('M j, Y g:i A') ?? '—' }}</td>
+                        <td data-label="Status"><span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span></td>
+                        <td data-label="Service Hours">{{ $event->service_hours ?? 0 }}</td>
                     </tr>
                 @empty
                     <tr><td colspan="6">No events found for this scope.</td></tr>

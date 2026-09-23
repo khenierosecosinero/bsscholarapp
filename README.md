@@ -106,7 +106,7 @@ The root URL `/` redirects to the login page. After login, users are sent to the
 
 City Scholarship Programs and Province Scholarship Programs are stored as separate `scholarship_programs` rows and are **not mixed** in staff or admin queries. Each program has its own scholars, staff, events, attendance, documents, reports, and statistics. Scope is always `scholarship_program_id` (see [§32](#32-scholarship-program-isolation)).
 
-Required service hours for scholars: **30** (`ScholarService::REQUIRED_HOURS`). Hours come from approved attendance records, not from hardcoded dashboard numbers.
+Required service hours for scholars: **30 per semester** (`ScholarService::REQUIRED_HOURS`). Approved hours are credited to the attendance row’s academic year and semester. Pending hours are not completed hours. Extra approved hours above 30 in a semester are carried into the next semester (`ScholarService::allocateHoursFromRecords`); they do not raise that semester’s completed total above 30. Staff → Scholar profile shows the current semester summary plus a 4-year progress grid from `ScholarService::programHourTracking`.
 
 There is **no Expo / React Native app in this repository yet**. The web Laravel app remains the source of truth. A future mobile client must call this backend and reuse the existing CSS tokens ([§10](#10-visual-identity-existing-css), [§28](#28-expo-go--react-native-conversion)).
 
@@ -158,7 +158,7 @@ Account status (`users.status`):
 - **Pending scholars** can open Dashboard, Announcements (list + show + mark read), and Logout. They also send a presence heartbeat (`POST /user/presence`) while the scholar portal is open. Events, Calendar, Service Hours, Documents, Notifications, and Profile are blocked until staff approval (`EnsureScholarApproved` and sidebar `is-disabled` items). Announcements are **not** a sidebar item; they are opened from the dashboard and `/user/announcements`.
 - **Approved scholars** get the full scholar portal listed in [§6.2](#62-scholar-portal-user), including the same presence heartbeat.
 - Scholars can only see events, announcements, document types, and hours for their assigned `scholarship_program_id` (`visibleLocationIds()` / `assertEventVisibleToUser`). Calendar, Events, and dashboard upcoming lists also hide events created before `User::eventsVisibleFrom()` (`events_visible_from` on approval, otherwise `created_at`). Newly approved scholars (`events_visible_from` set) do not see completed/past events on the calendar. Event rows are not deleted.
-- Scholars **cannot edit or delete** submitted attendance records. They can register, check in, check out, and upload a photo **only while staff have opened attendance** for that event (`Event::isAttendanceOpen()`).
+- Scholars **cannot edit or delete** submitted attendance records. They can register, check in, attach a participation photo, and check out **only while staff have opened attendance** for that event (`Event::isAttendanceOpen()`). On the event Attendance card, **Attach Photo** comes first and **Check Out** sits directly under it.
 - Must **register** for the event before check-in. Check-in is blocked if the event has ended **and** attendance is closed.
 - Attendance status shown to scholars: **Pending**, **Approved**, **Rejected**, and **Failed to Check In** when applied.
 - Scholars cannot approve their own hours. `POST /user/attendances/{attendance}/approve` exists but **aborts 403 unless the user is an administrator**.
@@ -374,14 +374,14 @@ flowchart LR
 | Section | What it does |
 |---------|----------------|
 | **Dashboard** | Header is **☰ Dashboard**, then the scholar profile card (avatar + full name + menu), then **Welcome back, [name]!** and **Here's what's happening in [city], [province] — [program].**, then the current date on the right. Hour stats (approved / pending / remaining vs **30** required), upcoming events, pending attendances, announcements, recent activity, attendance OPEN/CLOSED cards, sidebar hour/calendar widgets, quick links |
-| **Events** | List/select events for the scholar's program that were created after the account became active (`visibleToAccount`); confirm participation; check in; check out; upload participation photo (JPG/PNG, 5MB) while the session is open; view own photo; status badges |
+| **Events** | List/select events for the scholar's program that were created after the account became active (`visibleToAccount`); confirm participation; check in; attach participation photo (JPG/PNG, 5MB) while the session is open, then **Check Out** directly under **Attach Photo**; view own photo; status badges |
 | **Attendance live status** | JSON poll (~12s) for open/closed sessions and unread notification count (`#attendance-live-root`, `user-app.js`) |
 | **Calendar** | Month calendar (`year` / `month`) of events created after this scholar became active. Newly approved scholars also skip completed/past events. Historical `events` rows stay for other scholars, staff, and reports |
 | **Service hours** | Approved/pending/remaining hours; filter by academic year and semester (`1st Semester` / `2nd Semester`) |
 | **Documents** | Upload PDF/JPG/PNG (5MB) for types in the scholar's program only; approved / pending / rejected / not submitted; download own file |
 | **Notifications** | All / Unread / Important; mark one or all read; preference toggles; show 5 latest then **See More** / **Show Less** |
 | **Announcements** | List, show, mark one or all read. Available to pending scholars. Not a sidebar item — opened from the dashboard or `/user/announcements` |
-| **Profile & Settings** | Editable: full name, cellphone, school, course/year, year level, date of birth, guardian, academic preference. Not editable on the account tab: email, scholar ID. Password has its own form. Delete account (current password + rate limit) permanently removes the user and then compact remaining `users.id` values. The designated Admin account cannot use this action |
+| **Profile & Settings** | Editable: full name, cellphone, school, course/year, year level, date of birth, guardian, academic preference. Date of Birth uses a full-width native `type="date"` control (`.date-input-wrap`) that spans the form row; the date value is centered in the field and the calendar picker sits on the right (`padding` 12px 42px, indicator `right: 12px` / `translateY(-50%)`) so the two do not overlap on phone, tablet, or desktop. Not editable on the account tab: email, scholar ID. Password has its own form. Delete account (current password + rate limit) permanently removes the user and then compact remaining `users.id` values. The designated Admin account cannot use this action |
 | **Pending modal** | First-login overlay; dismiss via `POST /user/dismiss-pending-modal` |
 | **Presence heartbeat** | Hidden `#scholar-presence-root` on every scholar page (pending included). `user-app.js` posts `POST /user/presence` about every 20s while the tab is visible, and `POST /user/presence/leave` on `pagehide`. Updates `users.last_seen_at` only — not approval status and not `last_login_at` |
 | **Logout** | Sidebar outline button → `POST /logout`. Scholar logout also clears `last_seen_at` |
@@ -394,13 +394,13 @@ Global academic year/semester can be updated from the scholar profile **only by 
 |---------|----------------|
 | **Dashboard** | Live program stats (not fake numbers): scholars, events, pending attendance, hours, documents, pending approvals, recent activity, upcoming events — all from `StaffDashboardService` + `scholarship_program_id`. Event totals and upcoming events use `visibleToStaff` for that signed-in staff account |
 | **Scholars** | List scholars in the assigned program; search. The scholar name (`.staff-scholar-name-link`) is the only view action — it opens the existing profile (`GET /staff/scholars/{scholar}`, `canManageScholar`). There is no eye/view column. Beside each name: green-dot **Active Now** when that scholar’s current session heartbeat is fresh, otherwise **Offline**. Status polls `GET /staff/scholar-presence` about every 10s (no manual refresh). Presence is **not** “approved” and **not** a past login |
-| **Scholar detail** | Account overview for one scholar in the same program, including the same live **Active Now** / **Offline** indicator |
+| **Scholar detail** | Account overview for one scholar in the same program, including the same live **Active Now** / **Offline** indicator. **Service Hours** shows Academic Year, current semester, approved hours, **Approved of 30.00 required hours**, pending, and remaining (`30 − approved` for the current semester). **4-Year Service Hour Progress** lists Year 1–4 from `startingAcademicYear` (year level + current academic preference, pulled earlier if older stamped records exist) with 1st/2nd Semester completed / pending / remaining kept separate. **Service Hour Records** is view-only (Event, Check In / Out, Hours, Status, Notes — no Actions). Approve / reject hours stays on Attendance |
 | **Approval Requests** | Pending scholar registrations; **Approve** (status `approved` + notify) or **Reject** (permanent delete via `AccountService::permanentlyDelete`). This page still uses view / approve / reject action buttons (including the eye). Sidebar red badge = pending count |
-| **Events** | List events visible to this staff account; **Create Event** (`title`, `description`, `location`, `starts_at`, `ends_at` after start, `service_hours` 0–999, `organizer`, JPG/PNG ≤5MB). New event `status` = `confirmed`, attendance **closed**. Notifies approved scholars in that program only. Event detail + registration count. Visibility: `created_at >= events_visible_from` (set on admin approval or approved-at-register), or `created_at >=` the staff `created_at` when that column is null. Empty table: **No events found.** Event rows are not deleted |
+| **Events** | List events visible to this staff account; **Create Event** (`title`, `description`, `location`, `starts_at`, `ends_at` after start, `service_hours` 0–999, `organizer`, JPG/PNG ≤5MB) on `.staff-event-create-card` (max-width 760px). Start/end use native `datetime-local` inside `.date-input-wrap` in `.staff-datetime-grid` (one column at ≤900px): the datetime value is centered and the picker is vertically centered on the right so they do not overlap on phone, tablet, or desktop. New event `status` = `confirmed`, attendance **closed**. Notifies approved scholars in that program only. Event detail + registration count. Visibility: `created_at >= events_visible_from` (set on admin approval or approved-at-register), or `created_at >=` the staff `created_at` when that column is null. Empty table: **No events found.** Event rows are not deleted |
 | **Attendance** | Per-event lists: checked in vs failed to check in; **Open / Close Attendance** with `.staff-confirm-modal`; Approve / Reject hours; view photos (`staff.attendances.photo`). No scholar-style edit-record form |
-| **Documents** | CRUD document types (`name`, `description`, `required`) scoped to the staff program; provision placeholders for existing scholars; notify scholars. Review submissions: search, status filter, view, download, patch status + notes |
+| **Documents** | CRUD document types (`name`, `description`, `required`) scoped to the staff program; provision placeholders for existing scholars; notify scholars. Review submissions: search, status filter, view, download, patch status + notes. The type-review table (`.staff-documents-table`) keeps Status as its own centered column (`min` space for the Pending / Approved / Rejected badge) so it does not collapse into Date Submitted or Actions. Approve / reject still work from Actions |
 | **Calendar** | Staff calendar of program events (redirect target after create). Uses the same `events_visible_from` filter as Events so a new staff account does not inherit older calendar items |
-| **Reports** | Four pages: service hours, attendance, participation, completion — same program IDs only |
+| **Reports** | Four pages: service hours, attendance, participation, completion — same program IDs only. **Academic Year Setup** (`partials/staff-report-period-filter`) filters every pie, stat, and table by `year` + `semester` (`all` / `1st Semester` / `2nd Semester`). Values come from stamped `attendances` / period events (`StaffDashboardService` + `ScholarService::periodHourStatsFromRecords`). Session remembers the last period across the four report pages. Other years/semesters are not mixed |
 | **Settings** | Read-only general/notification display; **Change Password** modal (current + new + confirm; `Password::min(8)->letters()->numbers()`; hashed via `User::updatePassword`; 5 attempts / 300s) |
 
 ### 6.4 Admin portal (`/admin`)
@@ -475,18 +475,19 @@ Laravel 12 MVC. There is **no** `routes/api.php` public API. A few JSON response
 
 | Service | Responsibility |
 |---------|----------------|
-| `ScholarService` | Hours, documents, calendar, notifications, missed check-ins, activity log |
-| `StaffDashboardService` | Staff/admin stats and reports scoped by program IDs |
+| `ScholarService` | Hours (`serviceHourStats`, `programHourTracking`, 30/semester cap + carry), documents, calendar, notifications, missed check-ins, activity log |
+| `StaffDashboardService` | Staff/admin stats and reports scoped by program IDs; staff report pages accept an Academic Year / Semester filter |
 | `AdminDashboardService` | Admin scope, staff queries, dashboard stats, City/Province report pie series |
 | `AttendanceSessionService` | Open/close attendance, notify scholars, live status payload |
 | `AccountService` | Provision new scholar/staff; permanent delete (blocked for the designated Admin) |
 | `UserSequenceService` | After a user delete, compact remaining `users.id` to `1..n` and rewrite user foreign keys |
 | `AnnouncementService` | Announcements for a user |
-| `AcademicSettingsService` | Global and per-user academic year/semester; `1st Semester` / `2nd Semester` |
+| `AcademicSettingsService` | Global and per-user academic year/semester; `1st Semester` / `2nd Semester`; staff report filter (`all` / one semester) via `resolveReportFilter` + `scopeAttendancesForReport` |
 | `ProgramScopeService` | Program-type totals |
 | `ScholarshipProgramAssignmentService` | Resolve city/province assignment on register |
 | `ScholarshipProgramImportService` | Import programs from `database/data/psgc-locations.json` |
 | `PasswordResetService` | Generate one reset code, email it, verify the same hash, update that account’s password |
+| `OperationalDataResetService` | Clean-slate wipe of operational/test data (`php artisan app:reset-operational-data`). Keeps schema, `scholarship_programs`, academic-settings structure, and the permanent admin |
 
 ### Models
 
@@ -584,7 +585,7 @@ Admin **reuses** staff components and only overrides colors:
 
 - **Navigation:** rounded 10px items; active item is a solid brand color (green / blue / orange).
 - **Cards:** white surface, 12px corners, light border or shadow — not heavy drop shadows.
-- **Tables:** `.staff-table` on staff/admin; compact headers, muted secondary text. Staff scholar lists (Approval Requests, Scholars, document/event scholar rows) add `.staff-stack-table` so each row becomes a card under 800px: label above value, scholar name/ID wrap inside the card, no horizontal clip. On **Scholars**, the name (`.staff-scholar-name-link`, underlined `#1890ff`, hover `#096dd9`) is the view action.
+- **Tables:** `.staff-table` on staff/admin; compact headers, muted secondary text. Staff/admin lists use `.staff-stack-table` so each row becomes a card under 800px: label above value, names wrap, no horizontal clip. Scholar `.table.stack-table` uses the same card pattern. On **Scholars**, the name (`.staff-scholar-name-link`, underlined `#1890ff`, hover `#096dd9`) is the view action.
 - **Spacing:** 16–24px gaps between cards (`gap` / `margin-bottom` already used in the CSS).
 - **Badges:** pill (`border-radius: 999px`) for counts and OPEN/CLOSED attendance.
 - **Scholar presence:** `.staff-presence` beside the scholar name — green `#22c55e` dot + `#15803d` **Active Now**, or gray `#9ca3af` / `#6b7280` **Offline**.
@@ -600,12 +601,12 @@ When adding README screenshots or UI notes, use these hex values. Do not switch 
 | `public/css/user-nav.css` | `layouts/user.blade.php` (`?v=filemtime`) | Nav row + `.nav-notif-badge` (`#ef4444` pill); stacked scholar `.topbar` / `.topbar-dashboard` (title, profile card, welcome, date) |
 | `public/css/pending-approval-modal.css` | User layout (pending) + staff pending view | Centered 16px white panel, `rgba(15, 39, 68, 0.45)` backdrop, amber icon `#fef3c7` / `#d97706` |
 | `public/css/dashboard-events.css` | `user/dashboard.blade.php` | Upcoming-event row grid (date / thumb / details / action) |
-| `public/css/attendance-photo.css` | Events + calendar | Dashed 12px drop zone `#d1d5db`, preview 10px radius, rejected note `#b91c1c` |
+| `public/css/attendance-photo.css` | Events + calendar (`?v=filemtime`) | Dashed 12px drop zone `#d1d5db`, preview 10px radius, rejected note `#b91c1c`; `.attendance-action-stack` places **Check Out** under **Attach Photo** |
 | `public/css/service-hours-page.css` | `user/service-hours.blade.php` | Main + 340px sticky sidebar, 20px gap, charts |
 | `public/css/documents-page.css` | `user/documents.blade.php` | Main + 320px sidebar, 24px gap |
 | `public/css/notifications-page.css` | `user/notifications.blade.php` | Main + 320px settings column; hidden extra items |
-| `public/css/profile-page.css` | `user/profile.blade.php` | Section cards 20px padding, 24px stack, sidebar help |
-| `public/css/staff-admin.css` | Staff + admin layouts (`?v=filemtime`) | Staff tokens, `.staff-sidebar`, `.staff-nav-item`, `.staff-card`, `.staff-stat-card`, `.staff-table`, `.staff-stack-table` (mobile card rows), `.staff-scholar-name-link`, `.staff-presence` / `.staff-presence-dot` (Active Now / Offline), `.staff-btn`, filters, confirm modal, stacked staff header |
+| `public/css/profile-page.css` | `user/profile.blade.php` | Section cards 20px padding, 24px stack, sidebar help; Date of Birth `.date-input-wrap` centers the date value and pins the native picker on the right (`12px 42px` padding) so they stay aligned on phone/tablet/desktop |
+| `public/css/staff-admin.css` | Staff + admin layouts (`?v=filemtime`) | Staff tokens, `.staff-sidebar`, `.staff-nav-item`, `.staff-card`, `.staff-event-create-card`, `.staff-datetime-grid`, `.date-input-wrap` (centered date/datetime + right picker), `.staff-hours-card` / `.staff-hours-years` (scholar 4-year service hours), `.staff-report-period` (Academic Year Setup), `.staff-documents-table` (centered Status badge column), `.staff-stat-card`, `.staff-table`, `.staff-stack-table` (mobile card rows), `.staff-scholar-name-link`, `.staff-presence` / `.staff-presence-dot` (Active Now / Offline), `.staff-btn`, filters, confirm modal, stacked staff header |
 | `public/css/admin.css` | Admin layout **after** staff-admin | Recolors staff tokens to orange/peach; location banner/pills; name links; report pies; locations type switcher |
 
 ### Scholar component tokens (from `styles.css`)
@@ -618,7 +619,7 @@ When adding README screenshots or UI notes, use these hex values. Do not switch 
 | **Header / topbar** | Scholar shell (`user-nav.css`): stacked `.topbar` — hamburger + page title, then full-width `.profile-card` (avatar, wrapping name, dropdown). On Dashboard only (`.topbar-dashboard`): **Welcome back, [name]!**, **Here's what's happening in [city], [province] — [program].**, then `.topbar-date` right-aligned (`F j, Y`). Names and program text wrap; no ellipsis cutoff |
 | **Cards** | `.card` white, 12px radius, 16px padding, `--shadow` |
 | **Buttons** | `.btn` green 8px radius; `.btn.outline` green border; `.btn.small`; `.btn.full`; `.btn.blue` `#2563eb`; `.btn.danger` red outline |
-| **Forms** | `.form-grid` 2-col 16px gap; labels 12px uppercase muted; inputs 12×14, 8px radius, `#e6eef0` border, `#f9fafb` fill; focus border `--green`; disabled `#f3f4f6` |
+| **Forms** | `.form-grid` 2-col 16px gap; labels 12px uppercase muted; inputs 12×14, 8px radius, `#e6eef0` border, `#f9fafb` fill; focus border `--green`; disabled `#f3f4f6`. Native `date` / `datetime-local` use `.date-input-wrap`: centered value, `12px 42px` padding, calendar indicator absolutely at `right: 12px` and vertically centered |
 | **Tables** | `.table` collapse; th muted 13px; td 12px + `#f1f5f9` top border |
 | **Badges** | 8px radius (or pill 999px); pending `#fff4e6`/`#c27a00`; confirmed green; rejected `#fee2e2`/`#dc2626`; open `#dcfce7`/`#166534`; closed gray |
 | **Alerts** | Success `#d4f7db`/`#b6ebb9`/`#155724`; error `#fee2e2`/`#fecaca`/`#dc2626`; 8px radius |
@@ -631,9 +632,10 @@ When adding README screenshots or UI notes, use these hex values. Do not switch 
 | **Sidebar** | `.staff-sidebar`; staff `#e8f4fc` → `#eef8ff` text `#0b2d4d`; admin `#fff2f1` text `#5c1a14` |
 | **Nav** | `.staff-nav-item` 10px radius; hover translucent white (staff) or `rgba(194, 65, 12, 0.08)` (admin); `.active` solid primary + white |
 | **Stat cards** | `.staff-stat-grid` 5 columns 16px gap; `.staff-stat-card` white, 12px, 1px `#e5e7eb`, light shadow; icon 42px / 10px radius (blue/green/orange/purple/teal/red/gray) |
-| **Cards** | `.staff-card` 20px padding, 12px radius, 1px border |
+| **Cards** | `.staff-card` 20px padding, 12px radius, 1px border. Create Event uses `.staff-event-create-card` (max-width 760px, full width on small screens) |
 | **Buttons** | `.staff-btn` 8px; `.staff-btn-primary` fill `--staff-primary` (blue or admin orange) |
-| **Tables** | `.staff-table-wrap` horizontal scroll on desktop; `.staff-table` 14px. Under 800px, `.staff-stack-table` / `.staff-scholars-table` hide `thead` and stack each row as a card: label above value, scholar name/ID wrap. Staff Scholars uses the name link instead of an Actions column |
+| **Date / datetime** | `.date-input-wrap` + `.staff-datetime-grid` (stacks to 1 column ≤900px). Centered native date/datetime value; picker `position: absolute; right: 12px; top: 50%; transform: translateY(-50%)` so it does not overlap the value |
+| **Tables** | `.staff-table-wrap` horizontal scroll on desktop; `.staff-table` 14px. Under 800px, `.staff-stack-table` / `.staff-scholars-table` / scholar `.table.stack-table` hide `thead` and stack each row as a card: label above value, name/ID wrap. Staff Scholars uses the name link instead of an Actions column |
 | **Filters** | `.staff-filter-bar` white 12px card; `.staff-search` `#f9fafb` 8px |
 | **Confirm modal** | `.staff-confirm-modal` / `.staff-confirm-dialog` 16px, backdrop `rgba(15, 39, 68, 0.45)` |
 | **Staff name links** | `.staff-scholar-name-link` — underlined `--staff-primary` `#1890ff`, hover `#096dd9`; opens `staff.scholars.show` |
@@ -684,6 +686,8 @@ Page layouts that a mobile port must preserve (same data, stacked on small scree
 
 After `AccountService::permanentlyDelete()` succeeds, `UserSequenceService` renumbers remaining users to sequential IDs (`1, 2, 3, …`) and updates these user references only: `event_registrations.user_id`, `attendances.user_id`, `documents.user_id`, `documents.reviewed_by`, `user_activities.user_id`, `scholar_notifications.user_id`, `announcement_reads.user_id`, `attendance_session_logs.staff_id`, `events.attendance_opened_by`, `events.attendance_closed_by`, `academic_settings.updated_by`, `sessions.user_id`. Other tables’ own primary keys are not compacted. The next insert uses `AUTO_INCREMENT = max(id) + 1`.
 
+A full first-use wipe is `php artisan app:reset-operational-data` (`OperationalDataResetService`). That command empties the operational tables above (plus sessions, reset tokens, and queue/cache tables), deletes non-admin users, removes public-disk uploads, resets `academic_settings` to the current year / `2nd Semester`, and compacts the remaining admin to `users.id = 1`. It does **not** drop migrations, the schema, or `scholarship_programs`. Event-visibility filters (`events_visible_from`) are a different rule and do not delete program events.
+
 ### Attendance statuses (`Attendance`)
 
 `pending`, `approved`, `rejected`, `failed_to_check_in`.
@@ -700,6 +704,7 @@ After `AccountService::permanentlyDelete()` succeeds, `UserSequenceService` renu
 - `ScholarshipProgramSeeder` — imports nationwide locations via `ScholarshipProgramImportService` from `database/data/psgc-locations.json`.
 - `AdminSeeder` — creates/updates the administrator user and sets `is_permanent` (see [§21](#21-seeded-administrator-account)).
 - `DatabaseSeeder` — runs both seeders, then creates current `academic_settings` (this year → next year, `2nd Semester`).
+- Clean-slate reset — `php artisan app:reset-operational-data` (add `--force` to skip the confirm). Does not re-import PSGC programs and does not recreate or change the permanent admin password.
 
 ### Factories
 
@@ -834,6 +839,7 @@ There is no versioned REST API for third-party clients.
 ```
 scholar/
 ├── app/
+│   ├── Console/Commands/     # mail:inspect, app:reset-operational-data
 │   ├── Http/Controllers/     # HTTP entry points
 │   ├── Http/Middleware/      # Role and approval gates
 │   ├── Models/               # Eloquent models
@@ -1043,11 +1049,19 @@ php artisan migrate
 php artisan db:seed
 ```
 
-Refresh (destroys data):
+Refresh schema and seed (destroys **all** tables, then re-runs migrations and seeders):
 
 ```bash
 php artisan migrate:fresh --seed
 ```
+
+**Clean slate (keep schema and programs):** wipe scholars, staff (except the permanent admin), events, attendance, service-hour records, participation, documents, announcements, notifications, sessions, reset tokens, and uploaded files. Scholarship programs, migrations, `.env`, and application features stay.
+
+```bash
+php artisan app:reset-operational-data --force
+```
+
+After this command the portals work as on first use: empty lists and zero report totals until new accounts, events, and records are created. Log in again with the existing permanent admin account (sessions are cleared). Do not publish that account’s password.
 
 ---
 
@@ -1131,7 +1145,7 @@ Laravel Sail is listed as a Composer dev dependency; this README does not assume
 - **Role:** admin, approved
 - **Permanent:** `is_permanent = true`
 
-This designated Admin account cannot be deleted through the application (`User::isPermanentAdmin()`, `AccountService::permanentlyDelete`, profile delete). Changing the email in Admin Settings does not drop that protection: the model also treats `bssa_admin@gmail.com` and `ADMIN-001` as permanent.
+This designated Admin account cannot be deleted through the application (`User::isPermanentAdmin()`, `AccountService::permanentlyDelete`, profile delete) or through `php artisan app:reset-operational-data`. Changing the email in Admin Settings does not drop that protection: the model also treats `bssa_admin@gmail.com` and `ADMIN-001` as permanent. The clean-slate command keeps this row, clears its session/presence fields, and compacts it to `users.id = 1` when it is the only remaining account.
 
 The initial password is defined in `database/seeders/AdminSeeder.php`. **Do not publish that password.** Change it after first login via **Admin Settings → Change Password**.
 
@@ -1199,6 +1213,7 @@ Uncaught exceptions follow Laravel’s default handler (`bootstrap/app.php` has 
 | Forgot Password rejects an Admin email | Intended. Recovery is for Scholar and Scholar Staff accounts only |
 | Cannot delete the Admin account | Intended. The designated Admin (`is_permanent`, `bssa_admin@gmail.com`, or `ADMIN-001`) is permanent |
 | User IDs changed after a delete | Intended. Remaining accounts are renumbered `1, 2, 3, …`; user foreign keys are rewritten. Event/document IDs are not compacted |
+| Events, scholars, documents, hours, and reports are empty after a clean-slate reset | Intended. `php artisan app:reset-operational-data` wiped operational/test data. Register new Scholar / Scholar Staff accounts and create new events. The permanent admin and scholarship programs remain |
 | Phone cannot open `http://0.0.0.0:8000` | Use the LAN IPv4 URL Artisan prints (see [§19](#19-how-to-run-the-application)) |
 | New Scholar Staff Events list is empty | Intended if that account’s `created_at` / `events_visible_from` is after the existing events. Those events remain for other staff, scholars, reports, and admin. Create a new event with **+ Add Event** |
 | New Scholar calendar / Events page is empty | Intended. Events created before that scholar was created or approved stay hidden from that account only. Other scholars, staff, and reports still see them |
@@ -1206,6 +1221,8 @@ Uncaught exceptions follow Laravel’s default handler (`bootstrap/app.php` has 
 | No eye/view icon on Staff → Scholars | Intended. Click the scholar **name** to open the same profile. Approval Requests, Events, and the staff dashboard pending list still have their action buttons |
 | Staff Events still shows old events after a CSS-only refresh | Event visibility is a server filter. Confirm you are on the new staff account, then refresh. Hard-refresh `staff-admin.css` if the table layout looks stale (`?v=filemtime`) |
 | Scholar name cut off on the phone dashboard | Intended to be fixed: `user-nav.css` stacks the profile card under **Dashboard** and wraps the name. Hard-refresh `user-nav.css` |
+| Date of Birth or Add Event datetime overlaps the picker | Intended to be fixed: `profile-page.css` and `staff-admin.css` center the value and pin the picker on the right inside `.date-input-wrap`. Hard-refresh `profile-page.css` / `staff-admin.css` (`?v=filemtime`) and rebuild Vite CSS (`styles.css`) |
+| Layout overflow / clipped names on phone | Intended to be fixed: tables stack into cards under 800px; long text wraps (`overflow-wrap: anywhere`). Hard-refresh Vite CSS and `staff-admin.css` (`?v=filemtime`) |
 
 ---
 
@@ -1215,7 +1232,8 @@ Uncaught exceptions follow Laravel’s default handler (`bootstrap/app.php` has 
 - Do not open attendance from event start/end times; use `AttendanceSessionService`.
 - Do not add scholar-side edit/delete of attendance records.
 - Pending staff must stay admin-only (query + UI + routes).
-- Do not delete the designated Admin account. Do not compact primary keys except `users.id` after a user delete (`UserSequenceService`).
+- Do not delete the designated Admin account. Do not compact primary keys except `users.id` after a user delete (`UserSequenceService`) or after `app:reset-operational-data`.
+- To start the app as first use without dropping the schema or `scholarship_programs`, run `php artisan app:reset-operational-data`. That is the only supported way to delete all events/records at once. Per-account empty calendars still use `events_visible_from`, not event deletion.
 - Add domain logic in `app/Services` and keep controllers thin.
 - New scholar pages: Blade under `resources/views/user/` + route in the `scholar` / `scholar.approved` groups.
 - New staff pages: `resources/views/staff/` + `scholar.staff.approved` group.
@@ -1233,6 +1251,11 @@ Uncaught exceptions follow Laravel’s default handler (`bootstrap/app.php` has 
 ## 26. Complete function catalog
 
 This catalog matches `routes/web.php` and the controllers. The Expo app must expose **every** row that the role can use today. Do not drop reports, photo upload, document CRUD, location add, or pending-staff approval “to make mobile simpler.”
+
+### Artisan (maintenance)
+
+- `php artisan app:reset-operational-data` — first-use operational wipe (schema, `scholarship_programs`, and the permanent admin stay)
+- `php artisan mail:inspect` — show loaded SMTP settings without secrets; optional `--send=`
 
 ### Public / auth
 
@@ -1293,7 +1316,7 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 
 ### Backend services that must stay authoritative
 
-`ScholarService`, `StaffDashboardService`, `AdminDashboardService`, `AttendanceSessionService`, `AccountService`, `UserSequenceService`, `PasswordResetService`, `AnnouncementService`, `AcademicSettingsService`, `ProgramScopeService`, `ScholarshipProgramAssignmentService`.
+`ScholarService`, `StaffDashboardService`, `AdminDashboardService`, `AttendanceSessionService`, `AccountService`, `UserSequenceService`, `PasswordResetService`, `AnnouncementService`, `AcademicSettingsService`, `ProgramScopeService`, `ScholarshipProgramAssignmentService`, `OperationalDataResetService`.
 
 Mobile screens must consume their results. **Do not hardcode** scholar counts, hour totals, events, documents, or notifications.
 
@@ -1308,15 +1331,18 @@ Treat [§10](#10-visual-identity-existing-css) as the design system. Recreate th
 | Login / register / forgot password | `auth/login`, `auth/forgot-password`, `auth/verify-reset-code`, `auth/reset-password` | `styles.css` auth-page, `.verify-code-input` | Same green auth card + welcome panel |
 | Scholar shell | `layouts/user` + `partials/user-sidebar` + `user-topbar` | `styles.css`, `user-nav.css` | Drawer or bottom tabs in scholar green |
 | Scholar dashboard | `user/dashboard` + `partials/user-topbar` | `styles.css`, `user-nav.css`, `dashboard-events.css` | **☰ Dashboard** → profile card → welcome/program → date; then stacked stat cards |
-| Events / photo | `user/events` | `styles.css`, `attendance-photo.css` | Same badges + dashed upload zone |
+| Events / photo | `user/events` | `styles.css`, `attendance-photo.css` | Photo drop zone then **Attach Photo**, **Check Out** directly underneath |
 | Service hours | `user/service-hours` | `service-hours-page.css` | Sidebar cards below the chart |
 | Documents | `user/documents` | `documents-page.css` | Overview card + list |
 | Notifications | `user/notifications` | `notifications-page.css` | List + settings sheet |
-| Profile | `user/profile` | `profile-page.css` | Section cards |
+| Profile | `user/profile` | `profile-page.css` | Section cards; Date of Birth centered in `.date-input-wrap` with picker on the right |
 | Pending modal | `partials/pending-approval-modal` | `pending-approval-modal.css` | RN `Modal` / dialog |
 | Staff shell | `layouts/staff` | `staff-admin.css` | Blue drawer / tabs |
-| Staff tables | scholars, approval requests, documents, events | `.staff-table` + `.staff-stack-table` | Card list (label above value) under 800px — do not clip scholar name/ID. Scholars list: click the name (`.staff-scholar-name-link`); no eye button |
+| Staff Add Event | `staff/events/create` | `.staff-event-create-card`, `.staff-datetime-grid`, `.date-input-wrap` | Start/end datetime centered; picker right, stacked ≤900px |
+| Staff tables | scholars, approval requests, documents, events, reports, admin lists | `.staff-table` + `.staff-stack-table` | Card list (label above value) under 800px — do not clip scholar name/ID. Scholars list: click the name (`.staff-scholar-name-link`); no eye button |
 | Staff scholar presence | `partials/staff-scholar-presence` on Scholars + scholar profile | `.staff-presence`, `.staff-presence-dot` | Green dot + **Active Now** beside the name; gray **Offline** when the heartbeat expires |
+| Staff scholar hours | `staff/scholar-show` | `.staff-hours-card`, `.staff-hours-years` | Current AY / semester summary + 4-year 1st/2nd semester grid; records table has no Actions |
+| Staff reports period | `partials/staff-report-period-filter` on all four report pages | `.staff-report-period` | Academic Year + All/1st/2nd Semester; GET refresh; banner shows the selected period |
 | Staff confirm | `partials/staff-confirm-modal` | `.staff-confirm-*` | RN modal / action sheet |
 | Admin shell | `layouts/admin` | `staff-admin.css` + `admin.css` | Orange/peach chrome, same staff components |
 | Admin locations | `admin/locations` | `.admin-program-type-switch` | City vs Province tabs, one list |

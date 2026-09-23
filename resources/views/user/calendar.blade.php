@@ -1,7 +1,7 @@
 @extends('layouts.user')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/attendance-photo.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/attendance-photo.css') }}?v={{ filemtime(public_path('css/attendance-photo.css')) }}">
 @endpush
 
 @section('page-content')
@@ -114,13 +114,13 @@
                         <div class="card inner-card calendar-attendance-card">
                             <div class="card-header">Your Participation Record</div>
                             <div class="table-wrap">
-                            <table class="table compact">
+                            <table class="table compact stack-table">
                                 <thead><tr><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th></tr></thead>
                                 <tbody><tr>
-                                    <td>{{ $att?->check_in?->format('g:i A') ?? '—' }}</td>
-                                    <td>{{ $att?->check_out?->format('g:i A') ?? '—' }}</td>
-                                    <td>{{ $att?->hoursLabel() ?? '0.00 hrs' }}</td>
-                                    <td>{{ $selected['status_label'] }}</td>
+                                    <td data-label="Check In">{{ $att?->check_in?->format('g:i A') ?? '—' }}</td>
+                                    <td data-label="Check Out">{{ $att?->check_out?->format('g:i A') ?? '—' }}</td>
+                                    <td data-label="Hours">{{ $att?->hoursLabel() ?? '0.00 hrs' }}</td>
+                                    <td data-label="Status">{{ $selected['status_label'] }}</td>
                                 </tr></tbody>
                             </table>
                             </div>

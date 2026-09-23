@@ -29,7 +29,7 @@
 
 <div class="staff-card">
     <div class="staff-table-wrap">
-        <table class="staff-table">
+        <table class="staff-table staff-stack-table">
             <thead>
                 <tr>
                     <th>Event Information</th>
@@ -51,7 +51,7 @@
                         };
                     @endphp
                     <tr>
-                        <td>
+                        <td data-label="Event Information">
                             <div class="staff-event-cell">
                                 @if($event->image_url)
                                     <img src="{{ $event->image_url }}" alt="" class="staff-event-thumb">
@@ -64,14 +64,14 @@
                                 </div>
                             </div>
                         </td>
-                        <td>
+                        <td data-label="Date &amp; Time">
                             {{ $event->starts_at?->format('M j, Y') }}
                             <div class="staff-muted">{{ $event->starts_at?->format('g:i A') }}@if($event->ends_at) – {{ $event->ends_at->format('g:i A') }}@endif</div>
                         </td>
-                        <td>{{ number_format((float) $event->service_hours, 1) }} hrs</td>
-                        <td><span class="staff-badge {{ $statusClass }}">{{ ucfirst(str_replace('_', ' ', $event->status ?? 'upcoming')) }}</span></td>
-                        <td><span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}">{{ $event->attendanceStatusLabel() }}</span></td>
-                        <td>
+                        <td data-label="Service Hours">{{ number_format((float) $event->service_hours, 1) }} hrs</td>
+                        <td data-label="Status"><span class="staff-badge {{ $statusClass }}">{{ ucfirst(str_replace('_', ' ', $event->status ?? 'upcoming')) }}</span></td>
+                        <td data-label="Attendance"><span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}">{{ $event->attendanceStatusLabel() }}</span></td>
+                        <td data-label="Actions">
                             <a href="{{ route('staff.events.show', $event) }}" class="staff-action-btn" title="View">👁</a>
                         </td>
                     </tr>

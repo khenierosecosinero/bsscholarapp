@@ -2,7 +2,7 @@
 
 @section('page-content')
 
-<div class="staff-card" style="max-width:760px">
+<div class="staff-card staff-event-create-card">
     <div class="staff-card-header">
         <h2>Create New Event</h2>
         <a href="{{ route('staff.events') }}" class="staff-card-link">&larr; Back to Events</a>
@@ -40,15 +40,19 @@
             </div>
         </div>
 
-        <div class="staff-form-grid">
-            <div class="staff-form-group">
+        <div class="staff-form-grid staff-datetime-grid">
+            <div class="staff-form-group staff-form-group-datetime">
                 <label for="starts_at">Start Date &amp; Time *</label>
-                <input type="datetime-local" id="starts_at" name="starts_at" value="{{ old('starts_at') }}" required>
+                <div class="date-input-wrap">
+                    <input type="datetime-local" id="starts_at" name="starts_at" value="{{ old('starts_at') }}" required>
+                </div>
                 @error('starts_at')<div class="staff-field-error">{{ $message }}</div>@enderror
             </div>
-            <div class="staff-form-group">
+            <div class="staff-form-group staff-form-group-datetime">
                 <label for="ends_at">End Date &amp; Time *</label>
-                <input type="datetime-local" id="ends_at" name="ends_at" value="{{ old('ends_at') }}" required>
+                <div class="date-input-wrap">
+                    <input type="datetime-local" id="ends_at" name="ends_at" value="{{ old('ends_at') }}" required>
+                </div>
                 @error('ends_at')<div class="staff-field-error">{{ $message }}</div>@enderror
             </div>
         </div>
@@ -70,7 +74,7 @@
             @error('image')<div class="staff-field-error">{{ $message }}</div>@enderror
         </div>
 
-        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px">
+        <div class="staff-form-actions">
             <a href="{{ route('staff.events') }}" class="staff-btn">Cancel</a>
             <button type="submit" class="staff-btn staff-btn-primary">Publish Event</button>
         </div>

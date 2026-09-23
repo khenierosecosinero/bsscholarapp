@@ -92,18 +92,18 @@
                 <p class="muted">No pending attendances.</p>
             @else
                 <div class="table-wrap">
-                <table class="table">
+                <table class="table stack-table">
                     <thead><tr><th>Event</th><th>Date</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th><th>Action</th></tr></thead>
                     <tbody>
                         @foreach($pendingAttendances as $att)
                             <tr>
-                                <td><div class="table-event">@if($att->event?->image_url)<img src="{{ $att->event->image_url }}" alt="">@endif {{ $att->event?->title }}</div></td>
-                                <td>{{ $att->event?->starts_at?->format('M d, Y') }}</td>
-                                <td>{{ $att->check_in?->format('g:i A') ?? '—' }}</td>
-                                <td>{{ $att->check_out?->format('g:i A') ?? '—' }}</td>
-                                <td>{{ $att->hoursLabel() }}</td>
-                                <td><span class="badge pending">Pending</span></td>
-                                <td>@if(!$accountPending)<a href="{{ route('user.events', ['event' => $att->event_id]) }}" class="btn outline small">View Details</a>@endif</td>
+                                <td data-label="Event"><div class="table-event">@if($att->event?->image_url)<img src="{{ $att->event->image_url }}" alt="">@endif {{ $att->event?->title }}</div></td>
+                                <td data-label="Date">{{ $att->event?->starts_at?->format('M d, Y') }}</td>
+                                <td data-label="Check In">{{ $att->check_in?->format('g:i A') ?? '—' }}</td>
+                                <td data-label="Check Out">{{ $att->check_out?->format('g:i A') ?? '—' }}</td>
+                                <td data-label="Hours">{{ $att->hoursLabel() }}</td>
+                                <td data-label="Status"><span class="badge pending">Pending</span></td>
+                                <td data-label="Action">@if(!$accountPending)<a href="{{ route('user.events', ['event' => $att->event_id]) }}" class="btn outline small">View Details</a>@endif</td>
                             </tr>
                         @endforeach
                     </tbody>

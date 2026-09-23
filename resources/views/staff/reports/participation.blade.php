@@ -2,6 +2,8 @@
 
 @section('page-content')
 
+@include('partials.staff-report-period-filter')
+
 <section class="staff-stat-grid">
     <div class="staff-stat-card"><div class="staff-stat-icon blue">👥</div><div class="staff-stat-body"><h3>Registered</h3><div class="value">{{ $report['registered'] }}</div><div class="sub">Event sign-ups</div></div></div>
     <div class="staff-stat-card"><div class="staff-stat-icon green">✓</div><div class="staff-stat-body"><h3>Participated</h3><div class="value">{{ $report['participated'] }}</div><div class="sub">Approved attendance</div></div></div>
@@ -39,7 +41,7 @@
 <div class="staff-card" style="margin-top:20px">
     <div class="staff-card-header"><h2>Participation by Event</h2></div>
     <div class="staff-table-wrap">
-        <table class="staff-table">
+        <table class="staff-table staff-stack-table">
             <thead>
                 <tr>
                     <th>Event</th>
@@ -53,12 +55,12 @@
             <tbody>
                 @forelse($report['events'] as $event)
                     <tr>
-                        <td><a href="{{ route('staff.events.show', $event) }}">{{ $event->title }}</a></td>
-                        <td>{{ $event->starts_at?->format('M j, Y') ?? '—' }}</td>
-                        <td>{{ $event->registrations_count }}</td>
-                        <td>{{ $event->checked_in_count }}</td>
-                        <td>{{ $event->approved_count }}</td>
-                        <td>{{ number_format((float) $event->service_hours, 2) }}</td>
+                        <td data-label="Event"><a href="{{ route('staff.events.show', $event) }}">{{ $event->title }}</a></td>
+                        <td data-label="Date">{{ $event->starts_at?->format('M j, Y') ?? '—' }}</td>
+                        <td data-label="Registered">{{ $event->registrations_count }}</td>
+                        <td data-label="Checked In">{{ $event->checked_in_count }}</td>
+                        <td data-label="Approved">{{ $event->approved_count }}</td>
+                        <td data-label="Hours">{{ number_format((float) $event->service_hours, 2) }}</td>
                     </tr>
                 @empty
                     <tr><td colspan="6">No events found.</td></tr>

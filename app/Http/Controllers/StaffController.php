@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Attendance;
 use App\Models\Event;
 use App\Models\EventRegistration;
-use App\Models\ScholarshipProgram;
 use App\Models\User;
 use App\Services\AccountService;
 use App\Services\AttendanceSessionService;
@@ -118,11 +117,15 @@ class StaffController extends Controller
         $this->scholar->syncMissedCheckInsForUser($scholar);
         $this->scholar->syncCompletedEventHoursForUser($scholar);
 
+        $hourTracking = $this->scholar->programHourTracking($scholar);
+
         return view('staff.scholar-show', array_merge(
             $this->layoutData('scholars', $scholar->full_name, 'Scholar account overview'),
             [
                 'scholar' => $scholar,
-                'hourStats' => $this->scholar->serviceHourStats($scholar),
+                'hourStats' => $hourTracking['current'],
+                'semesterInfo' => $hourTracking['period'],
+                'hourTracking' => $hourTracking,
                 'documents' => $scholar->documents()->with('documentType')->get(),
                 'recentActivities' => $scholar->activities()->latest()->limit(10)->get(),
                 'attendances' => $scholar->attendances()->with('event')->latest()->get(),
@@ -413,49 +416,57 @@ class StaffController extends Controller
         }
     }
 
-    public function serviceHoursReports()
+    public function serviceHoursReports(Request $request)
     {
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
         $this->scholar->syncCompletedEventHoursForPrograms($programIds);
+        $context = $this->staffData->reportContext($request, $programIds);
 
         return view('staff.reports.service-hours', array_merge(
             $this->layoutData('service-hours-reports', 'Service Hours Reports', 'Track and analyze scholar service hours and completion status.', 'Service Hours Reports'),
-            ['report' => $this->staffData->serviceHoursReport($programIds)]
+            $context,
+            ['report' => $this->staffData->serviceHoursReport($programIds, $context['reportFilter'])]
         ));
     }
 
-    public function attendanceReports()
+    public function attendanceReports(Request $request)
     {
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
+        $context = $this->staffData->reportContext($request, $programIds);
 
         return view('staff.reports.attendance', array_merge(
             $this->layoutData('attendance-reports', 'Attendance Reports', 'Track and analyze attendance records and participation status.', 'Attendance Reports'),
-            ['report' => $this->staffData->attendanceReport($programIds)]
+            $context,
+            ['report' => $this->staffData->attendanceReport($programIds, $context['reportFilter'])]
         ));
     }
 
-    public function participationReports()
+    public function participationReports(Request $request)
     {
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
+        $context = $this->staffData->reportContext($request, $programIds);
 
         return view('staff.reports.participation', array_merge(
             $this->layoutData('participation-reports', 'Participation Reports', 'Track and analyze scholar event participation and engagement.', 'Participation Reports'),
-            ['report' => $this->staffData->participationReport($programIds)]
+            $context,
+            ['report' => $this->staffData->participationReport($programIds, $context['reportFilter'])]
         ));
     }
 
-    public function completionReports()
+    public function completionReports(Request $request)
     {
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
         $this->scholar->syncCompletedEventHoursForPrograms($programIds);
+        $context = $this->staffData->reportContext($request, $programIds);
 
         return view('staff.reports.completion', array_merge(
             $this->layoutData('completion-reports', 'Completion Reports', 'Track and analyze scholar completion and achievement status.', 'Completion Reports'),
-            ['report' => $this->staffData->completionReport($programIds)]
+            $context,
+            ['report' => $this->staffData->completionReport($programIds, $context['reportFilter'])]
         ));
     }
 

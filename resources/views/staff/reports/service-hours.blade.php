@@ -2,7 +2,8 @@
 
 @section('page-content')
 
-<p class="staff-muted" style="margin:0 0 16px">{{ $report['period']->semester }} · AY {{ $report['period']->year_start }}–{{ $report['period']->year_end }} · {{ $staff->locationLabel() }}</p>
+@include('partials.staff-report-period-filter')
+<p class="staff-muted staff-report-scope">{{ $staff->locationLabel() }}</p>
 
 <section class="staff-stat-grid">
     <div class="staff-stat-card"><div class="staff-stat-icon green">✓</div><div class="staff-stat-body"><h3>Approved Hours</h3><div class="value">{{ number_format($report['overview']['approved_hours'], 2) }}</div><div class="sub">Credited this location</div></div></div>
@@ -32,7 +33,7 @@
     </div>
     <div class="staff-card">
         <div class="staff-card-header"><h2>Hours Summary</h2></div>
-        <div class="staff-list-item"><div><strong>Required per scholar</strong><div class="staff-muted">{{ $report['required'] }} hours / semester</div></div></div>
+        <div class="staff-list-item"><div><strong>Required per scholar</strong><div class="staff-muted">{{ number_format($report['required'], 2) }} hours {{ $reportFilter['semester'] === 'all' ? 'this academic year (30 per semester)' : 'this semester' }}</div></div></div>
         <div class="staff-list-item"><div><strong>Approved</strong><div class="staff-muted">{{ number_format($report['overview']['approved_hours'], 2) }} hrs credited after verification</div></div></div>
         <div class="staff-list-item"><div><strong>Pending</strong><div class="staff-muted">{{ number_format($report['overview']['pending_hours'], 2) }} hrs waiting for Scholar Staff approval</div></div></div>
         <p class="staff-muted" style="margin:12px 0 0">Scholars who check in and complete an event receive that event’s posted service hours after you approve the attendance photo. Failed check-ins receive 0 hours.</p>
@@ -42,7 +43,7 @@
 <div class="staff-card" style="margin-top:20px">
     <div class="staff-card-header"><h2>Service Hours by Scholar</h2></div>
     <div class="staff-table-wrap">
-        <table class="staff-table">
+        <table class="staff-table staff-stack-table">
             <thead>
                 <tr>
                     <th>Scholar</th>
@@ -56,15 +57,15 @@
             <tbody>
                 @forelse($report['rows'] as $row)
                     <tr>
-                        <td>
+                        <td data-label="Scholar">
                             <a href="{{ route('staff.scholars.show', $row['scholar']) }}">{{ $row['scholar']->full_name }}</a>
                             <div class="staff-muted">{{ $row['scholar']->scholar_id }}</div>
                         </td>
-                        <td>{{ $row['scholar']->locationLabel() }}</td>
-                        <td>{{ number_format($row['approved'], 2) }}</td>
-                        <td>{{ number_format($row['pending'], 2) }}</td>
-                        <td>{{ number_format($row['remaining'], 2) }}</td>
-                        <td>
+                        <td data-label="Location">{{ $row['scholar']->locationLabel() }}</td>
+                        <td data-label="Approved">{{ number_format($row['approved'], 2) }}</td>
+                        <td data-label="Pending">{{ number_format($row['pending'], 2) }}</td>
+                        <td data-label="Remaining">{{ number_format($row['remaining'], 2) }}</td>
+                        <td data-label="Status">
                             <span class="staff-badge {{ $row['status'] === 'Completed' ? 'green' : ($row['status'] === 'In Progress' ? 'blue' : 'gray') }}">{{ $row['status'] }}</span>
                         </td>
                     </tr>
@@ -79,7 +80,7 @@
 <div class="staff-card" style="margin-top:20px">
     <div class="staff-card-header"><h2>Recent Attendance Records</h2></div>
     <div class="staff-table-wrap">
-        <table class="staff-table">
+        <table class="staff-table staff-stack-table">
             <thead>
                 <tr>
                     <th>Scholar</th>

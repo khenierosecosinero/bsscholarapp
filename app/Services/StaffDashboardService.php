@@ -7,6 +7,8 @@ use App\Models\Document;
 use App\Models\Event;
 use App\Models\EventRegistration;
 use App\Models\User;
+use App\Models\UserActivity;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
@@ -150,7 +152,7 @@ class StaffDashboardService
 
     public function recentActivities(array $programIds, int $limit = 5): Collection
     {
-        return \App\Models\UserActivity::query()
+        return UserActivity::query()
             ->whereHas('user', fn ($q) => $q->where('role', User::ROLE_SCHOLAR)
                 ->whereIn('scholarship_program_id', $programIds ?: [0]))
             ->latest()
@@ -170,11 +172,9 @@ class StaffDashboardService
             ->get();
     }
 
-    public function attendanceBreakdown(array $programIds): array
+    public function attendanceBreakdown(array $programIds, ?array $filter = null): array
     {
-        $base = Attendance::query()
-            ->whereHas('user', fn ($q) => $q->where('role', User::ROLE_SCHOLAR)
-                ->whereIn('scholarship_program_id', $programIds ?: [0]));
+        $base = $this->attendanceQuery($programIds, $filter);
 
         $approved = (clone $base)->where('status', Attendance::STATUS_APPROVED)->whereNotNull('check_in')->count();
         $pending = (clone $base)->where('status', Attendance::STATUS_PENDING)->whereNotNull('check_in')->count();
@@ -183,6 +183,30 @@ class StaffDashboardService
         $total = max(1, $approved + $pending + $rejected + $failedCheckIn);
 
         return compact('approved', 'pending', 'rejected', 'failedCheckIn', 'total');
+    }
+
+    /**
+     * @param  array<int, int>  $programIds
+     * @return array{reportFilter: array<string, mixed>, reportYearOptions: array<int, string>, reportSemesterOptions: array<string, string>}
+     */
+    public function reportContext(Request $request, array $programIds): array
+    {
+        $yearRaw = $request->query('year', session('staff_report_year'));
+        $semesterRaw = $request->query('semester', session('staff_report_semester', AcademicSettingsService::SEMESTER_ALL));
+        $year = is_numeric($yearRaw) ? (int) $yearRaw : null;
+        $semester = is_string($semesterRaw) ? $semesterRaw : AcademicSettingsService::SEMESTER_ALL;
+
+        $filter = $this->academic->resolveReportFilter($year, $semester);
+        session([
+            'staff_report_year' => $filter['year_start'],
+            'staff_report_semester' => $filter['semester'],
+        ]);
+
+        return [
+            'reportFilter' => $filter,
+            'reportYearOptions' => $this->academic->reportYearOptions($programIds),
+            'reportSemesterOptions' => $this->academic->reportSemesterOptions(),
+        ];
     }
 
     public function hoursOverview(array $programIds): array
@@ -202,34 +226,31 @@ class StaffDashboardService
         ];
     }
 
-    public function serviceHoursReport(array $programIds): array
+    public function serviceHoursReport(array $programIds, ?array $filter = null): array
     {
-        $period = $this->academic->current();
-        $required = ScholarService::REQUIRED_HOURS;
+        $filter ??= $this->defaultReportFilter();
+        $required = (float) $this->scholar->periodHourStatsFromRecords([], $filter)['required'];
         $scholars = $this->scholarsQuery($programIds)->with('scholarshipProgram')->orderBy('full_name')->get();
 
-        $periodQuery = $this->attendanceQuery($programIds)
-            ->where('academic_year_start', $period->year_start)
-            ->where('academic_year_end', $period->year_end)
-            ->where('semester', $period->semester);
+        $periodQuery = $this->attendanceQuery($programIds, $filter);
 
-        $allHourRows = $this->attendanceQuery($programIds)
+        $hourRows = $this->attendanceQuery($programIds, $filter)
             ->whereNotNull('check_in')
             ->whereIn('status', [Attendance::STATUS_APPROVED, Attendance::STATUS_PENDING])
             ->get(['user_id', 'academic_year_start', 'semester', 'status', 'hours_earned'])
             ->groupBy('user_id');
 
-        $rows = $scholars->map(function (User $scholar) use ($allHourRows, $period, $required) {
-            $stats = $this->scholar->serviceHourStatsFromRecords(
-                $allHourRows->get($scholar->id, collect()),
-                $period
+        $rows = $scholars->map(function (User $scholar) use ($hourRows, $filter, $required) {
+            $stats = $this->scholar->periodHourStatsFromRecords(
+                $hourRows->get($scholar->id, collect()),
+                $filter
             );
             $approved = (float) $stats['approved'];
             $pending = (float) $stats['pending'];
             $remaining = (float) $stats['remaining'];
             $status = $approved >= $required
                 ? 'Completed'
-                : ($approved > 0 || $pending > 0 || ($stats['carried_in'] ?? 0) > 0 ? 'In Progress' : 'Not Started');
+                : ($approved > 0 || $pending > 0 ? 'In Progress' : 'Not Started');
 
             return [
                 'scholar' => $scholar,
@@ -251,7 +272,7 @@ class StaffDashboardService
         $inProgress = $rows->where('status', 'In Progress')->count();
         $notStarted = $rows->where('status', 'Not Started')->count();
 
-        $recent = $this->attendanceQuery($programIds)
+        $recent = $this->attendanceQuery($programIds, $filter)
             ->with(['user', 'event'])
             ->whereNotNull('check_in')
             ->latest()
@@ -259,7 +280,7 @@ class StaffDashboardService
             ->get();
 
         return [
-            'period' => $period,
+            'period' => $filter,
             'required' => $required,
             'overview' => $overview,
             'rows' => $rows,
@@ -270,17 +291,19 @@ class StaffDashboardService
         ];
     }
 
-    public function attendanceReport(array $programIds): array
+    public function attendanceReport(array $programIds, ?array $filter = null): array
     {
-        $breakdown = $this->attendanceBreakdown($programIds);
+        $filter ??= $this->defaultReportFilter();
+        $breakdown = $this->attendanceBreakdown($programIds, $filter);
         $checkedIn = $breakdown['approved'] + $breakdown['pending'] + $breakdown['rejected'];
-        $records = $this->attendanceQuery($programIds)
+        $records = $this->attendanceQuery($programIds, $filter)
             ->with(['user', 'event'])
             ->latest()
             ->limit(30)
             ->get();
 
         return [
+            'period' => $filter,
             'breakdown' => $breakdown,
             'checked_in' => $checkedIn,
             'rate' => $breakdown['total'] > 0
@@ -290,30 +313,39 @@ class StaffDashboardService
         ];
     }
 
-    public function participationCounts(array $programIds): array
+    public function participationCounts(array $programIds, ?array $filter = null): array
     {
         $registrations = EventRegistration::query()
             ->whereHas('user', fn ($q) => $q->where('role', User::ROLE_SCHOLAR)
                 ->whereIn('scholarship_program_id', $programIds ?: [0]));
 
+        if ($filter) {
+            [$start, $end] = $this->academic->eventBoundsForReport($filter);
+            $registrations->whereHas('event', fn ($event) => $event
+                ->whereIn('scholarship_program_id', $programIds ?: [0])
+                ->whereBetween('starts_at', [$start, $end]));
+        }
+
         return [
             'registered' => (clone $registrations)->count(),
             'failed' => (clone $registrations)->where('status', EventRegistration::STATUS_FAILED_CHECK_IN)->count(),
             'confirmed' => (clone $registrations)->where('status', EventRegistration::STATUS_CONFIRMED)->count(),
-            'participated' => $this->attendanceQuery($programIds)
+            'participated' => $this->attendanceQuery($programIds, $filter)
                 ->where('status', Attendance::STATUS_APPROVED)
                 ->whereNotNull('check_in')
                 ->count(),
-            'pending' => $this->attendanceQuery($programIds)
+            'pending' => $this->attendanceQuery($programIds, $filter)
                 ->where('status', Attendance::STATUS_PENDING)
                 ->whereNotNull('check_in')
                 ->count(),
         ];
     }
 
-    public function participationReport(array $programIds): array
+    public function participationReport(array $programIds, ?array $filter = null): array
     {
-        $counts = $this->participationCounts($programIds);
+        $filter ??= $this->defaultReportFilter();
+        $counts = $this->participationCounts($programIds, $filter);
+        [$start, $end] = $this->academic->eventBoundsForReport($filter);
 
         $events = Event::query()
             ->with('scholarshipProgram')
@@ -323,11 +355,15 @@ class StaffDashboardService
                 'attendances as approved_count' => fn ($q) => $q->where('status', Attendance::STATUS_APPROVED),
             ])
             ->whereIn('scholarship_program_id', $programIds ?: [0])
+            ->where(function ($query) use ($start, $end, $filter) {
+                $query->whereBetween('starts_at', [$start, $end])
+                    ->orWhereHas('attendances', fn ($attendance) => $this->academic->scopeAttendancesForReport($attendance, $filter));
+            })
             ->orderByDesc('starts_at')
             ->limit(20)
             ->get();
 
-        return array_merge($counts, compact('events'));
+        return array_merge($counts, ['events' => $events, 'period' => $filter]);
     }
 
     public function completionCounts(array $programIds): array
@@ -372,9 +408,9 @@ class StaffDashboardService
         ];
     }
 
-    public function completionReport(array $programIds): array
+    public function completionReport(array $programIds, ?array $filter = null): array
     {
-        $report = $this->serviceHoursReport($programIds);
+        $report = $this->serviceHoursReport($programIds, $filter);
         $total = max(1, $report['rows']->count());
 
         return [
@@ -406,10 +442,23 @@ class StaffDashboardService
         return md5(implode(',', $programIds));
     }
 
-    private function attendanceQuery(array $programIds)
+    private function defaultReportFilter(): array
     {
-        return Attendance::query()
+        $current = $this->academic->current();
+
+        return $this->academic->resolveReportFilter((int) $current->year_start, $current->semester);
+    }
+
+    private function attendanceQuery(array $programIds, ?array $filter = null)
+    {
+        $query = Attendance::query()
             ->whereHas('user', fn ($q) => $q->where('role', User::ROLE_SCHOLAR)
                 ->whereIn('scholarship_program_id', $programIds ?: [0]));
+
+        if ($filter) {
+            $this->academic->scopeAttendancesForReport($query, $filter);
+        }
+
+        return $query;
     }
 }

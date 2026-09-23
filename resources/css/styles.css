@@ -1840,10 +1840,16 @@ body.avatar-preview-open{overflow:hidden}
 /* ===== AUTH PAGES (scoped) ===== */
 .auth-page{
     min-height:100vh;
+    min-height:100dvh;
     display:flex;
     align-items:center;
     justify-content:center;
+    padding:max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
     padding:32px 24px;
+    padding-top:max(32px, env(safe-area-inset-top, 0px));
+    padding-right:max(24px, env(safe-area-inset-right, 0px));
+    padding-bottom:max(32px, env(safe-area-inset-bottom, 0px));
+    padding-left:max(24px, env(safe-area-inset-left, 0px));
     background:linear-gradient(145deg,#9fd4a0 0%,#7fb883 50%,#6aad72 100%);
     box-sizing:border-box;
 }
@@ -2157,10 +2163,10 @@ body.avatar-preview-open{overflow:hidden}
     }
     .auth-page .auth-card{
         padding:32px 28px 24px;
-        min-height:420px;
+        min-height:0;
     }
     .auth-page .auth-form-body{
-        max-height:360px;
+        max-height:none;
     }
     .auth-page .right-panel{
         padding:36px 28px;
@@ -2330,6 +2336,177 @@ body.nav-locked .staff-sidebar{
 .attendance-status-top strong{min-width:0;overflow-wrap:anywhere;word-wrap:break-word}
 .attendance-status-item p,
 .attendance-status-item .muted{overflow-wrap:anywhere;word-wrap:break-word;white-space:normal}
+
+/* App-wide layout guardrails */
+html,body{
+    max-width:100%;
+    overflow-x:clip;
+}
+img,video{max-width:100%}
+.staff-shell,.staff-main-wrap,.staff-main,.admin-shell{
+    min-width:0;
+    max-width:100%;
+}
+.card,.inner,.form-group,h1,h2,h3,p,td,th,label{
+    overflow-wrap:anywhere;
+    word-wrap:break-word;
+}
+.form-group input[type="date"],
+.form-group input[type="datetime-local"],
+.form-group input[type="time"],
+.auth-page input[type="date"],
+.auth-page input[type="datetime-local"]{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    min-height:46px;
+    box-sizing:border-box;
+    padding:12px 42px;
+    text-align:center;
+    line-height:1.25;
+    color-scheme:light;
+}
+.date-input-wrap{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    min-width:0;
+    max-width:100%;
+}
+.form-group .date-input-wrap input[type="date"],
+.form-group .date-input-wrap input[type="datetime-local"]{
+    position:relative;
+    height:46px;
+    margin:0;
+    font-family:inherit;
+}
+.form-group input[type="date"]::-webkit-date-and-time-value,
+.form-group input[type="datetime-local"]::-webkit-date-and-time-value{
+    text-align:center;
+    margin:0 auto;
+    padding:0;
+    min-height:1.25em;
+    width:100%;
+}
+.form-group input[type="date"]::-webkit-datetime-edit,
+.form-group input[type="datetime-local"]::-webkit-datetime-edit{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+    margin:0 auto;
+    min-width:0;
+    width:100%;
+    text-align:center;
+}
+.form-group input[type="date"]::-webkit-inner-spin-button,
+.form-group input[type="datetime-local"]::-webkit-inner-spin-button,
+.form-group input[type="date"]::-webkit-clear-button,
+.form-group input[type="datetime-local"]::-webkit-clear-button{
+    display:none;
+}
+.form-group input[type="date"]::-webkit-calendar-picker-indicator,
+.form-group input[type="datetime-local"]::-webkit-calendar-picker-indicator{
+    position:absolute;
+    top:50%;
+    right:12px;
+    width:18px;
+    height:18px;
+    margin:0;
+    padding:0;
+    transform:translateY(-50%);
+    cursor:pointer;
+    opacity:0.75;
+    flex-shrink:0;
+    z-index:2;
+}
+@supports (-webkit-touch-callout: none){
+    .form-group input[type="date"],
+    .form-group input[type="datetime-local"]{
+        -webkit-appearance:none;
+        appearance:none;
+        display:block;
+        text-align:center;
+        padding:12px 14px;
+    }
+}
+
+@media (max-width:800px){
+    .table-wrap .table,
+    .table-wrap .table.compact{min-width:0}
+    .table.stack-table thead{display:none}
+    .table.stack-table,
+    .table.stack-table tbody,
+    .table.stack-table tr,
+    .table.stack-table td{
+        display:block;
+        width:100%;
+        max-width:100%;
+        box-sizing:border-box;
+    }
+    .table.stack-table tr{
+        border:1px solid #eef3f6;
+        border-radius:12px;
+        padding:12px 14px;
+        margin-bottom:12px;
+        background:#fff;
+    }
+    .table.stack-table td{
+        display:flex;
+        flex-direction:column;
+        align-items:flex-start;
+        gap:4px;
+        padding:8px 0;
+        border-top:none;
+        border-bottom:1px solid #f1f5f9;
+        white-space:normal;
+        overflow-wrap:anywhere;
+        word-wrap:break-word;
+    }
+    .table.stack-table td:last-child{border-bottom:none;padding-bottom:0}
+    .table.stack-table td:first-child{padding-top:0}
+    .table.stack-table td::before{
+        content:attr(data-label);
+        font-size:11px;
+        font-weight:700;
+        letter-spacing:.04em;
+        text-transform:uppercase;
+        color:var(--muted);
+    }
+    .table.stack-table td:not([data-label])::before,
+    .table.stack-table td[colspan]::before{content:none;display:none}
+    .table.stack-table .table-event{
+        flex-wrap:wrap;
+        max-width:100%;
+    }
+}
+
+@media (max-width:600px){
+    .form-group input,
+    .form-group select,
+    .form-group textarea,
+    .form-group .form-select,
+    .auth-page .form-input,
+    .auth-page .form-select{
+        font-size:16px;
+    }
+    .form-group input[type="date"],
+    .form-group input[type="datetime-local"],
+    .form-group .date-input-wrap input[type="date"],
+    .form-group .date-input-wrap input[type="datetime-local"]{
+        min-height:48px;
+        height:48px;
+        font-size:16px;
+        padding:12px 42px;
+    }
+}
+
 @media (max-width:800px){
     .filter-bar{flex-direction:column;align-items:stretch}
     .filter-bar .search-box,

@@ -2,7 +2,7 @@
 
 @section('page-content')
 
-<p class="staff-muted" style="margin:0 0 16px">{{ $report['period']->semester }} · AY {{ $report['period']->year_start }}–{{ $report['period']->year_end }} · {{ $report['required'] }} hours required</p>
+@include('partials.staff-report-period-filter')
 
 <section class="staff-stat-grid">
     <div class="staff-stat-card"><div class="staff-stat-icon green">✓</div><div class="staff-stat-body"><h3>Completed</h3><div class="value">{{ $report['completed'] }}</div><div class="sub">{{ $report['completed_pct'] }}% of scholars</div></div></div>
@@ -31,14 +31,14 @@
     </div>
     <div class="staff-card">
         <div class="staff-card-header"><h2>Requirement</h2></div>
-        <p class="staff-muted" style="margin:0">A scholar is marked Completed after Scholar Staff approves enough event attendance to reach {{ $report['required'] }} credited service hours this semester. Pending hours do not count until you verify the record.</p>
+        <p class="staff-muted" style="margin:0">A scholar is marked Completed after Scholar Staff approves enough event attendance to reach {{ number_format($report['required'], 2) }} credited service hours {{ $reportFilter['semester'] === 'all' ? 'this academic year (30 per semester)' : 'this semester' }}. Pending hours do not count until you verify the record.</p>
     </div>
 </section>
 
 <div class="staff-card" style="margin-top:20px">
     <div class="staff-card-header"><h2>Scholar Completion</h2></div>
     <div class="staff-table-wrap">
-        <table class="staff-table">
+        <table class="staff-table staff-stack-table">
             <thead>
                 <tr>
                     <th>Scholar</th>
@@ -51,14 +51,14 @@
             <tbody>
                 @forelse($report['rows'] as $row)
                     <tr>
-                        <td>
+                        <td data-label="Scholar">
                             <a href="{{ route('staff.scholars.show', $row['scholar']) }}">{{ $row['scholar']->full_name }}</a>
                             <div class="staff-muted">{{ $row['scholar']->scholar_id }}</div>
                         </td>
-                        <td>{{ number_format($row['approved'], 2) }}</td>
-                        <td>{{ number_format($row['pending'], 2) }}</td>
-                        <td>{{ number_format($row['remaining'], 2) }}</td>
-                        <td><span class="staff-badge {{ $row['status'] === 'Completed' ? 'green' : ($row['status'] === 'In Progress' ? 'blue' : 'gray') }}">{{ $row['status'] }}</span></td>
+                        <td data-label="Approved Hours">{{ number_format($row['approved'], 2) }}</td>
+                        <td data-label="Pending Hours">{{ number_format($row['pending'], 2) }}</td>
+                        <td data-label="Remaining">{{ number_format($row['remaining'], 2) }}</td>
+                        <td data-label="Status"><span class="staff-badge {{ $row['status'] === 'Completed' ? 'green' : ($row['status'] === 'In Progress' ? 'blue' : 'gray') }}">{{ $row['status'] }}</span></td>
                     </tr>
                 @empty
                     <tr><td colspan="5">No scholars found for this location.</td></tr>

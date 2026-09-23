@@ -59,7 +59,7 @@
             <p class="staff-muted">No pending scholar account approvals.</p>
         @else
             <div class="staff-table-wrap">
-                <table class="staff-table">
+                <table class="staff-table staff-stack-table">
                     <thead>
                         <tr>
                             <th>Type</th>
@@ -72,11 +72,11 @@
                     <tbody>
                         @foreach($pendingApprovals as $request)
                             <tr>
-                                <td>Registration</td>
-                                <td>{{ $request->full_name }}</td>
-                                <td>{{ $request->scholar_id }} · {{ $request->email }}</td>
-                                <td>{{ $request->created_at->format('M j, Y') }}</td>
-                                <td>
+                                <td data-label="Type">Registration</td>
+                                <td data-label="Name / Title">{{ $request->full_name }}</td>
+                                <td data-label="Details">{{ $request->scholar_id }} · {{ $request->email }}</td>
+                                <td data-label="Date Submitted">{{ $request->created_at->format('M j, Y') }}</td>
+                                <td data-label="Action">
                                     <a href="{{ route('staff.scholars.show', $request) }}" class="staff-action-btn" title="View">👁</a>
                                     <form method="POST" action="{{ route('staff.scholars.approve', $request) }}" style="display:inline" data-ajax-approval="approve" data-no-loading="true">
                                         @csrf

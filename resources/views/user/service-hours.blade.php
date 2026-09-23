@@ -33,19 +33,19 @@
                 <p class="muted">No service hour records found.</p>
             @else
                 <div class="table-wrap">
-                <table class="table service-table">
+                <table class="table service-table stack-table">
                     <thead><tr><th>Event / Activity</th><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours Earned</th><th>Status</th><th>Remarks</th><th>Action</th></tr></thead>
                     <tbody>
                         @foreach($records as $rec)
                             <tr>
-                                <td><div class="table-event">@if($rec->event?->image_url)<img src="{{ $rec->event->image_url }}" alt="">@endif {{ $rec->event?->title ?? 'N/A' }}</div></td>
-                                <td>{{ $rec->event?->starts_at?->format('M d, Y') ?? '—' }}</td>
-                                <td>{{ $rec->check_in?->format('g:i A') ?? '—' }}</td>
-                                <td>{{ $rec->check_out?->format('g:i A') ?? '—' }}</td>
-                                <td>{{ $rec->hoursLabel() }}</td>
-                                <td><span class="badge {{ $rec->status === 'approved' ? 'confirmed' : ($rec->status === 'rejected' || $rec->status === 'failed_to_check_in' ? 'rejected' : 'pending') }}">{{ $rec->statusLabel() }}</span></td>
-                                <td>{{ $rec->reviewNote() }}</td>
-                                <td>@if($rec->event_id)<a href="{{ route('user.events', ['event' => $rec->event_id]) }}" class="btn outline small">View</a>@endif</td>
+                                <td data-label="Event / Activity"><div class="table-event">@if($rec->event?->image_url)<img src="{{ $rec->event->image_url }}" alt="">@endif {{ $rec->event?->title ?? 'N/A' }}</div></td>
+                                <td data-label="Date">{{ $rec->event?->starts_at?->format('M d, Y') ?? '—' }}</td>
+                                <td data-label="Time In">{{ $rec->check_in?->format('g:i A') ?? '—' }}</td>
+                                <td data-label="Time Out">{{ $rec->check_out?->format('g:i A') ?? '—' }}</td>
+                                <td data-label="Hours Earned">{{ $rec->hoursLabel() }}</td>
+                                <td data-label="Status"><span class="badge {{ $rec->status === 'approved' ? 'confirmed' : ($rec->status === 'rejected' || $rec->status === 'failed_to_check_in' ? 'rejected' : 'pending') }}">{{ $rec->statusLabel() }}</span></td>
+                                <td data-label="Remarks">{{ $rec->reviewNote() }}</td>
+                                <td data-label="Action">@if($rec->event_id)<a href="{{ route('user.events', ['event' => $rec->event_id]) }}" class="btn outline small">View</a>@endif</td>
                             </tr>
                         @endforeach
                     </tbody>

@@ -80,7 +80,12 @@
                         <div class="form-group"><label for="school_university">School</label><input id="school_university" type="text" name="school_university" value="{{ old('school_university', $user->school_university) }}"></div>
                         <div class="form-group"><label for="course_year_level">Course</label><input id="course_year_level" type="text" name="course_year_level" value="{{ old('course_year_level', $user->course_year_level) }}"></div>
                         <div class="form-group"><label for="year_level">Year Level</label><input id="year_level" type="text" name="year_level" value="{{ old('year_level', $user->year_level) }}"></div>
-                        <div class="form-group"><label for="date_of_birth">Date of Birth</label><input id="date_of_birth" type="date" name="date_of_birth" value="{{ old('date_of_birth', $user->date_of_birth?->format('Y-m-d')) }}"></div>
+                        <div class="form-group form-group-date form-group-wide">
+                            <label for="date_of_birth">Date of Birth</label>
+                            <div class="date-input-wrap">
+                                <input id="date_of_birth" type="date" name="date_of_birth" value="{{ old('date_of_birth', $user->date_of_birth?->format('Y-m-d')) }}" autocomplete="bday">
+                            </div>
+                        </div>
                     </div>
                     <div class="form-actions-right"><button type="submit" class="btn blue">Save Changes</button></div>
                 </form>

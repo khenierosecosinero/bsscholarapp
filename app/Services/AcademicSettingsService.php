@@ -14,6 +14,8 @@ class AcademicSettingsService
 {
     public const SEMESTERS = ['1st Semester', '2nd Semester'];
 
+    public const SEMESTER_ALL = 'all';
+
     public const CACHE_KEY = 'academic_settings.current';
 
     public function current(): AcademicSetting
@@ -97,6 +99,115 @@ class AcademicSettingsService
         }
 
         return $years;
+    }
+
+    /**
+     * Academic years staff can filter reports by, including years that already
+     * have stamped attendance in the given programs.
+     *
+     * @param  array<int, int>  $programIds
+     * @return array<int, string>
+     */
+    public function reportYearOptions(array $programIds = []): array
+    {
+        $years = $this->yearOptions();
+
+        Attendance::query()
+            ->whereNotNull('academic_year_start')
+            ->where('academic_year_start', '>', 0)
+            ->when($programIds !== [], function ($query) use ($programIds) {
+                $query->whereHas('user', fn ($user) => $user->where('role', User::ROLE_SCHOLAR)
+                    ->whereIn('scholarship_program_id', $programIds ?: [0]));
+            })
+            ->distinct()
+            ->pluck('academic_year_start')
+            ->each(function ($year) use (&$years) {
+                $year = (int) $year;
+                if ($year >= 2000) {
+                    $years[$year] = $year.'–'.($year + 1);
+                }
+            });
+
+        ksort($years);
+
+        return $years;
+    }
+
+    /**
+     * @return array{year_start: int, year_end: int, semester: string, semester_label: string, academic_year: string, label: string}
+     */
+    public function resolveReportFilter(?int $yearStart, ?string $semester): array
+    {
+        $current = $this->current();
+        $year = ($yearStart !== null && $yearStart >= 2000 && $yearStart <= 2100)
+            ? $yearStart
+            : (int) $current->year_start;
+
+        $semester = $semester ?: self::SEMESTER_ALL;
+        if ($semester !== self::SEMESTER_ALL && ! in_array($semester, self::SEMESTERS, true)) {
+            $semester = self::SEMESTER_ALL;
+        }
+
+        $semesterLabel = $semester === self::SEMESTER_ALL ? 'All Semesters' : $semester;
+
+        return [
+            'year_start' => $year,
+            'year_end' => $year + 1,
+            'semester' => $semester,
+            'semester_label' => $semesterLabel,
+            'academic_year' => 'AY '.$year.'–'.($year + 1),
+            'label' => $semesterLabel.' · AY '.$year.'–'.($year + 1),
+        ];
+    }
+
+    public function scopeAttendancesForReport(Builder|Relation $query, array $filter): Builder|Relation
+    {
+        $query->where('academic_year_start', $filter['year_start']);
+
+        if (($filter['semester'] ?? self::SEMESTER_ALL) !== self::SEMESTER_ALL) {
+            $query->where('semester', $filter['semester']);
+        }
+
+        return $query;
+    }
+
+    /**
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public function eventBoundsForReport(array $filter): array
+    {
+        $year = (int) $filter['year_start'];
+
+        if (($filter['semester'] ?? self::SEMESTER_ALL) === '1st Semester') {
+            return [
+                Carbon::create($year, 8, 1)->startOfDay(),
+                Carbon::create($year, 12, 31)->endOfDay(),
+            ];
+        }
+
+        if (($filter['semester'] ?? self::SEMESTER_ALL) === '2nd Semester') {
+            return [
+                Carbon::create($year + 1, 1, 1)->startOfDay(),
+                Carbon::create($year + 1, 5, 31)->endOfDay(),
+            ];
+        }
+
+        return [
+            Carbon::create($year, 8, 1)->startOfDay(),
+            Carbon::create($year + 1, 7, 31)->endOfDay(),
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function reportSemesterOptions(): array
+    {
+        return [
+            self::SEMESTER_ALL => 'All Semesters',
+            '1st Semester' => '1st Semester',
+            '2nd Semester' => '2nd Semester',
+        ];
     }
 
     public function label(AcademicSetting $setting, string $style = 'short'): string

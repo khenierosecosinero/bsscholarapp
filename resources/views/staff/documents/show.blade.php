@@ -43,13 +43,20 @@
 
 <div class="staff-card">
     <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table">
+        <table class="staff-table staff-stack-table staff-documents-table">
+            <colgroup>
+                <col class="staff-documents-col-scholar">
+                <col class="staff-documents-col-file">
+                <col class="staff-documents-col-date">
+                <col class="staff-documents-col-status">
+                <col class="staff-documents-col-actions">
+            </colgroup>
             <thead>
                 <tr>
                     <th>Scholar Information</th>
                     <th>File</th>
                     <th>Date Submitted</th>
-                    <th>Status</th>
+                    <th class="staff-col-status">Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -67,7 +74,7 @@
                                 </div>
                             </div>
                         </td>
-                        <td data-label="File">
+                        <td data-label="File" class="staff-col-file">
                             <div class="staff-stack-value">
                                 @if($document->hasFile())
                                     {{ $document->original_name ?? 'Attached file' }}
@@ -76,14 +83,14 @@
                                 @endif
                             </div>
                         </td>
-                        <td data-label="Date Submitted">
+                        <td data-label="Date Submitted" class="staff-col-date">
                             <div class="staff-stack-value">{{ $document->uploaded_at?->timezone(config('app.timezone'))->format('M j, Y g:i A') ?? '—' }}</div>
                         </td>
-                        <td data-label="Status">
-                            <div class="staff-stack-value">
+                        <td data-label="Status" class="staff-col-status">
+                            <div class="staff-stack-value staff-doc-status">
                                 <span class="staff-badge {{ $document->reviewBadgeClass() }}">{{ ucfirst(str_replace('_', ' ', $document->reviewStatus())) }}</span>
                                 @if($document->status === 'rejected' && $document->review_notes)
-                                    <div class="staff-muted" style="margin-top:4px">{{ $document->review_notes }}</div>
+                                    <div class="staff-muted staff-doc-status-note">{{ $document->review_notes }}</div>
                                 @endif
                             </div>
                         </td>

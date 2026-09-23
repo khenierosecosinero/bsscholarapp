@@ -72,7 +72,7 @@
                 </div>
             </div>
             <div class="table-wrap">
-            <table class="table doc-table">
+            <table class="table doc-table stack-table">
                 <thead><tr><th>Document Type</th><th>Description</th><th>Status</th><th>Date Uploaded</th><th>Action</th></tr></thead>
                 <tbody>
                     @php
@@ -97,11 +97,11 @@
                             };
                         @endphp
                         <tr>
-                            <td><div class="table-event">@include('partials.document-icon', ['slug' => $doc->documentType->slug, 'size' => 'sm'])<span>{{ $doc->documentType->name }}</span></div></td>
-                            <td>{{ $doc->documentType->description }}</td>
-                            <td><span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $doc->status)) }}</span></td>
-                            <td>{{ $doc->uploaded_at?->format('M d, Y') ?? '—' }}</td>
-                            <td>
+                            <td data-label="Document Type"><div class="table-event">@include('partials.document-icon', ['slug' => $doc->documentType->slug, 'size' => 'sm'])<span>{{ $doc->documentType->name }}</span></div></td>
+                            <td data-label="Description">{{ $doc->documentType->description }}</td>
+                            <td data-label="Status"><span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $doc->status)) }}</span></td>
+                            <td data-label="Date Uploaded">{{ $doc->uploaded_at?->format('M d, Y') ?? '—' }}</td>
+                            <td data-label="Action">
                                 @if($doc->file_path)
                                     <a href="{{ route('user.documents.download', $doc) }}" class="icon-btn" title="Download">&#11015;</a>
                                 @endif
