@@ -7,6 +7,18 @@
 @section('page-content')
 <div class="page-documents">
 
+<section class="card documents-scholar-card">
+    <div class="card-header">STUDENT INFORMATION</div>
+    <div class="documents-scholar-meta">
+        <div><span>Name</span><strong>{{ $scholarName ?? auth()->user()->full_name }}</strong></div>
+        <div><span>Scholar Code</span><strong>{{ $scholarCode ?? auth()->user()->scholar_id }}</strong></div>
+        <div><span>Academic Year</span><strong>{{ $academicYearLabel ?? '—' }}</strong></div>
+    </div>
+    @if(empty($driveReady))
+        <p class="muted">Google Drive is not connected yet. Ask Scholar Staff or an administrator to connect Drive before uploading.</p>
+    @endif
+</section>
+
 @if(!empty($documentOverview))
     @php $o = $documentOverview; @endphp
     <section class="documents-overview-banner card">
@@ -77,7 +89,7 @@
                 <tbody>
                     @php
                         $filtered = match ($activeTab) {
-                            'submitted' => $documents->filter(fn ($doc) => filled($doc->file_path)),
+                            'submitted' => $documents->filter(fn ($doc) => $doc->hasFile()),
                             'pending' => $documents->whereIn('status', ['pending', 'submitted']),
                             'approved' => $documents->where('status', 'approved'),
                             'rejected' => $documents->where('status', 'rejected'),
@@ -102,12 +114,22 @@
                             <td data-label="Status"><span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $doc->status)) }}</span></td>
                             <td data-label="Date Uploaded">{{ $doc->uploaded_at?->format('M d, Y') ?? '—' }}</td>
                             <td data-label="Action">
-                                @if($doc->file_path)
-                                    <a href="{{ route('user.documents.download', $doc) }}" class="icon-btn" title="Download">&#11015;</a>
-                                @endif
-                                @if($doc->status !== 'approved')
-                                    <button type="button" class="btn small" onclick="document.getElementById('doc-type-select').value='{{ $doc->document_type_id }}';document.getElementById('file-input').click()">{{ $doc->file_path ? 'Replace' : 'Upload' }}</button>
-                                @endif
+                                <div class="doc-actions">
+                                    @if($doc->hasFile())
+                                        <a href="{{ route('user.documents.view', $doc) }}" class="btn small" target="_blank" rel="noopener">View</a>
+                                        <a href="{{ route('user.documents.download', $doc) }}" class="btn small">Download</a>
+                                    @endif
+                                    @if($doc->status !== 'approved')
+                                        <button type="button" class="btn small" onclick="document.getElementById('doc-type-select').value='{{ $doc->document_type_id }}';document.getElementById('file-input').click()">{{ $doc->hasFile() ? 'Replace' : 'Upload' }}</button>
+                                        @if($doc->hasFile())
+                                            <form method="POST" action="{{ route('user.documents.destroy', $doc) }}" onsubmit="return confirm('Delete this {{ addslashes($doc->documentType->name) }}?')">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn small danger">Delete</button>
+                                            </form>
+                                        @endif
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @empty

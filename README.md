@@ -258,9 +258,9 @@ flowchart TD
 
 1. Staff define **document types** per scholarship program.
 2. When a scholar is provisioned, placeholder `documents` rows are created (`ScholarService::ensureUserDocuments`).
-3. Scholar uploads a file (stored on the `public` disk).
-4. Staff review: approve, reject, or other status updates, with optional notes.
-5. Admin can open a scholar’s document list and Preview/Download files. Admin does **not** change document status.
+3. Scholar uploads a PDF/JPG/PNG (max 5MB). Laravel stores a local copy and uploads to Google Drive under `BSSA Scholar Documents/{academic-year}/{scholar_id} - {full_name}/`. Academic year comes from `AcademicSettingsService::forUser()` (`users.academic_year_start` or global `academic_settings`), formatted `{year_start}-{year_end}`. Scholar Code (`users.scholar_id`) is the folder identity; full name is only the label. A second upload of the same type **replaces** the previous Drive file and local file.
+4. Staff review: approve, reject, or other status updates, with optional notes. View/download go through Laravel (Drive first, local fallback). Admin Preview/Download uses the same stream. Admin does **not** change document status.
+5. An administrator or approved staff member must connect Google Drive once (`/google-drive`). The OAuth token is stored encrypted in `google_drive_connections` so scholars do not each connect their own Drive.
 
 ### 4.5 Forgot password (Scholar and Scholar Staff)
 
@@ -460,7 +460,7 @@ Laravel 12 MVC. There is **no** `routes/api.php` public API. A few JSON response
 | Controller | Responsibility |
 |------------|----------------|
 | `AuthController` | Login, register scholar/staff, logout (scholar logout also clears `last_seen_at`), rate limits |
-| `GoogleDriveController` | Google Drive OAuth start (`google.redirect`) and callback (`google.callback`) via `Google\Client` |
+| `GoogleDriveController` | Google Drive OAuth start/callback, temporary test page, and Drive upload via `GoogleDriveService` |
 | `PasswordResetController` | Forgot-password email, verify code, set new password |
 | `UserController` | Scholar pages + attendance status JSON + presence heartbeat/leave + notification pages |
 | `StaffController` | Staff pages, scholar list/profile, program-scoped presence JSON, scholar approve/reject, attendance open/close/approve/reject, password change |
@@ -489,10 +489,13 @@ Laravel 12 MVC. There is **no** `routes/api.php` public API. A few JSON response
 | `ScholarshipProgramImportService` | Import programs from `database/data/psgc-locations.json` |
 | `PasswordResetService` | Generate one reset code, email it, verify the same hash, update that account’s password |
 | `OperationalDataResetService` | Clean-slate wipe of operational/test data (`php artisan app:reset-operational-data`). Keeps schema, `scholarship_programs`, academic-settings structure, and the permanent admin |
+| `GoogleDriveService` | Org Drive folders (`BSSA Scholar Documents` / year / `{scholar_id} - {full_name}`), upload/download/delete, token persist + refresh |
+| `DocumentStorageService` | Scholar document store/replace/stream/delete: Drive plus local `file_path` fallback |
+| `GoogleApiClientFactory` | Builds `Google\Client` with credentials from `services.google` and Guzzle TLS verify via `certs/cacert.pem` (fixes Windows cURL error 60) |
 
 ### Models
 
-`User`, `ScholarshipProgram`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`.
+`User`, `ScholarshipProgram`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`, `GoogleDriveFolder`, `GoogleDriveConnection`.
 
 Passwords use the Eloquent `hashed` cast. `User::updatePassword()` and `User::register()` set the password through that cast (not mass assignment of `password`).
 
@@ -668,7 +671,9 @@ Page layouts that a mobile port must preserve (same data, stacked on small scree
 | `attendances` | Check-in/out, hours, status, photo, academic period |
 | `attendance_session_logs` | Open/close audit |
 | `document_types` | Required docs per program |
-| `documents` | Uploads and review |
+| `documents` | Uploads and review; `google_drive_file_id` / `google_drive_web_link` |
+| `google_drive_folders` | Cached Drive folder IDs for root and academic-year folders |
+| `google_drive_connections` | Encrypted org OAuth token (`connected_by`) |
 | `announcements` | Notices (optional program + announcement reads) |
 | `announcement_reads` | Read receipts |
 | `scholar_notifications` | In-app notifications (`announcement_id`, `event_id`) |
@@ -677,7 +682,9 @@ Page layouts that a mobile port must preserve (same data, stacked on small scree
 
 ### Important `users` fields
 
-`full_name`, `scholar_id`, `email`, `password`, `role`, `is_admin`, `is_permanent`, `status`, `scholarship_program_id`, `city`, `province`, school/contact/guardian fields, `notification_preferences`, `academic_year_start`, `semester`, `last_login_at`, `last_seen_at`, `events_visible_from`, `avatar_path`.
+`full_name`, `scholar_id`, `email`, `password`, `role`, `is_admin`, `is_permanent`, `status`, `scholarship_program_id`, `city`, `province`, school/contact/guardian fields, `notification_preferences`, `academic_year_start`, `semester`, `last_login_at`, `last_seen_at`, `events_visible_from`, `avatar_path`, `google_drive_folder_id`.
+
+`scholar_id` is the Scholar Code (authoritative identity). Drive student folders are named `{scholar_id} - {full_name}`. Name changes rename the same folder ID; they do not create a second student.
 
 `last_seen_at` is **not** mass-assignable. Migration `2026_09_23_000003_add_last_seen_at_to_users` adds the nullable timestamp. Scholar heartbeats (`User::markPresence`) write it; logout / leave (`User::clearPresence`) null it. Staff **Active Now** requires `last_seen_at` within `User::PRESENCE_SECONDS` (90). Approved status and `last_login_at` never imply online.
 
@@ -736,6 +743,10 @@ Named routes use prefixes `admin.*`, `staff.*`, `user.*`.
 | GET | `/user/calendar` | `user.calendar` | Approved |
 | GET | `/user/service-hours` | `user.service-hours` | Approved |
 | GET | `/user/documents` | `user.documents` | Approved |
+| POST | `/user/documents/upload` | `user.documents.upload` | Approved; type must match program |
+| GET | `/user/documents/{document}/view` | `user.documents.view` | Owner only |
+| GET | `/user/documents/{document}/download` | `user.documents.download` | Owner only |
+| DELETE | `/user/documents/{document}` | `user.documents.destroy` | Owner only; not if approved |
 | GET | `/user/notifications` | `user.notifications` | Approved |
 | GET | `/user/notifications/more` | `user.notifications.more` | Approved |
 | GET | `/user/profile` | `user.profile` | Approved |
@@ -745,8 +756,6 @@ Named routes use prefixes `admin.*`, `staff.*`, `user.*`.
 | POST | `/user/events/{event}/photo` | `user.events.photo` | Approved + session open |
 | GET | `/user/attendances/{attendance}/photo` | `user.attendances.photo` | Owner only |
 | POST | `/user/attendances/{attendance}/approve` | `user.attendances.approve` | **Admin only** (403 otherwise) |
-| POST | `/user/documents/upload` | `user.documents.upload` | Approved; type must match program |
-| GET | `/user/documents/{document}/download` | `user.documents.download` | Owner only |
 | POST | `/user/notifications/{notification}/read` | `user.notifications.read` | Owner only |
 | POST | `/user/notifications/read-all` | `user.notifications.read-all` | Approved |
 | POST | `/user/notifications/settings` | `user.notifications.settings` | Approved |
@@ -815,7 +824,18 @@ Also: `GET /` → login; `GET /dashboard` role redirect; `GET /up` health.
 | GET | `/auth/google` | `google.redirect` |
 | GET | `/auth/google/callback` | `google.callback` |
 
-These routes match `GOOGLE_REDIRECT_URI` (`http://127.0.0.1:8000/auth/google/callback`). Credentials come from `config('services.google')`. The controller uses `google/apiclient` (`Google\Client`, Drive file scope) and stores the OAuth token in session (`google_drive_token`). They are not a second login system and do not replace Scholar / Staff / Admin session auth.
+These routes match `GOOGLE_REDIRECT_URI` (`http://127.0.0.1:8000/auth/google/callback`). Credentials come from `config('services.google')`. The controller uses `google/apiclient` (`Google\Client`, Drive file scope). Admin or approved staff connect once; the token is stored encrypted in `google_drive_connections` (and the session). Scholars do not connect their own Drive. Files stay private (no “anyone with the link”).
+
+Google Cloud must list Authorized JavaScript origin `http://127.0.0.1:8000` and Authorized redirect URI `http://127.0.0.1:8000/auth/google/callback`. Use `127.0.0.1` in the browser, not `localhost`.
+
+Org Drive connection test (`auth`, admin or approved staff):
+
+| Method | Path | Name |
+|--------|------|------|
+| GET | `/google-drive` | `google.drive.test` |
+| POST | `/google-drive/upload` | `google.drive.upload` |
+
+Scholar documents use `user.documents.*`. Drive layout: `BSSA Scholar Documents/{year_start}-{year_end}/{scholar_id} - {full_name}/`.
 
 ### Public password recovery (`guest`)
 
@@ -1226,6 +1246,10 @@ Uncaught exceptions follow Laravel’s default handler (`bootstrap/app.php` has 
 | Cannot delete the Admin account | Intended. The designated Admin (`is_permanent`, `bssa_admin@gmail.com`, or `ADMIN-001`) is permanent |
 | User IDs changed after a delete | Intended. Remaining accounts are renumbered `1, 2, 3, …`; user foreign keys are rewritten. Event/document IDs are not compacted |
 | Events, scholars, documents, hours, and reports are empty after a clean-slate reset | Intended. `php artisan app:reset-operational-data` wiped operational/test data. Register new Scholar / Scholar Staff accounts and create new events. The permanent admin and scholarship programs remain |
+| Google **Access blocked** / Error 403 `access_denied` / app not verified | Google Cloud OAuth is in **Testing**. Only emails listed as test users can authorize. In [Google Auth Platform → Audience](https://console.cloud.google.com/auth/audience) add the Google account you sign in with (for example the project owner). Publishing the app without verification does not replace test users for Drive. This is not a Laravel bug |
+| cURL error 60 / unable to get local issuer certificate when calling `oauth2.googleapis.com/token` | Windows PHP (WAMP) had empty `curl.cainfo`. The app verifies TLS with `certs/cacert.pem` (`GoogleApiClientFactory`). `php.ini` also sets `curl.cainfo` and `openssl.cafile` to that file. Restart `php artisan serve` after a php.ini change |
+| POST data is too large / `PostTooLargeException` | PHP `upload_max_filesize` was 2M and `post_max_size` was 8M. They are now 12M / 16M so Laravel’s 10 MB Drive test and 5 MB scholar/event uploads can pass PHP before app validation. Restart `php artisan serve` after a php.ini change. Oversized posts redirect back with an error instead of a stack trace |
+| Scholar document upload says Google Drive is not connected | Log in as admin or approved staff, open `/google-drive`, connect Google, then scholars can upload. The org token is stored in `google_drive_connections` |
 | Phone cannot open `http://0.0.0.0:8000` | Use the LAN IPv4 URL Artisan prints (see [§19](#19-how-to-run-the-application)) |
 | New Scholar Staff Events list is empty | Intended if that account’s `created_at` / `events_visible_from` is after the existing events. Those events remain for other staff, scholars, reports, and admin. Create a new event with **+ Add Event** |
 | New Scholar calendar / Events page is empty | Intended. Events created before that scholar was created or approved stay hidden from that account only. Other scholars, staff, and reports still see them |
@@ -1271,6 +1295,7 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 
 ### Public / auth
 
+- Google Drive OAuth (`/auth/google`) and temporary upload test (`/google-drive`, auth)
 - Login (email + password, remember me, rate limit 5/60s)
 - Forgot Password (Scholar/Staff email → emailed 6-digit code → verify same code → new password)
 - Scholar register (program picker, unique email/scholar ID, min 8 password)
@@ -1294,7 +1319,7 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 - Live attendance JSON poll
 - Calendar (same visibility; newly approved scholars skip completed/past items)
 - Service hours + academic filters
-- Documents upload/download
+- Documents upload/view/download/replace/delete (Google Drive + local fallback; Scholar Code folders)
 - Notifications list/filters/settings/see more
 - Profile, guardian, academic preference, password, delete account
 - Program-scoped data only
@@ -1328,7 +1353,7 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 
 ### Backend services that must stay authoritative
 
-`ScholarService`, `StaffDashboardService`, `AdminDashboardService`, `AttendanceSessionService`, `AccountService`, `UserSequenceService`, `PasswordResetService`, `AnnouncementService`, `AcademicSettingsService`, `ProgramScopeService`, `ScholarshipProgramAssignmentService`, `OperationalDataResetService`.
+`ScholarService`, `StaffDashboardService`, `AdminDashboardService`, `AttendanceSessionService`, `AccountService`, `UserSequenceService`, `PasswordResetService`, `AnnouncementService`, `AcademicSettingsService`, `ProgramScopeService`, `ScholarshipProgramAssignmentService`, `OperationalDataResetService`, `GoogleDriveService`, `DocumentStorageService`, `GoogleApiClientFactory`.
 
 Mobile screens must consume their results. **Do not hardcode** scholar counts, hour totals, events, documents, or notifications.
 
@@ -1345,7 +1370,7 @@ Treat [§10](#10-visual-identity-existing-css) as the design system. Recreate th
 | Scholar dashboard | `user/dashboard` + `partials/user-topbar` | `styles.css`, `user-nav.css`, `dashboard-events.css` | **☰ Dashboard** → profile card → welcome/program → date; then stacked stat cards |
 | Events / photo | `user/events` | `styles.css`, `attendance-photo.css` | Photo drop zone then **Attach Photo**, **Check Out** directly underneath |
 | Service hours | `user/service-hours` | `service-hours-page.css` | Sidebar cards below the chart |
-| Documents | `user/documents` | `documents-page.css` | Overview card + list |
+| Documents | `user/documents` | `documents-page.css` | Scholar Code header + View/Download/Replace/Delete |
 | Notifications | `user/notifications` | `notifications-page.css` | List + settings sheet |
 | Profile | `user/profile` | `profile-page.css` | Section cards; Date of Birth centered in `.date-input-wrap` with picker on the right |
 | Pending modal | `partials/pending-approval-modal` | `pending-approval-modal.css` | RN `Modal` / dialog |

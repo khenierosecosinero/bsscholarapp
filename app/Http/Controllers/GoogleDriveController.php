@@ -2,20 +2,22 @@
 
 namespace App\Http\Controllers;
 
-use Google\Client;
+use App\Models\User;
+use App\Services\GoogleApiClientFactory;
+use App\Services\GoogleDriveService;
 use Google\Service\Drive;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
+use Throwable;
 
 class GoogleDriveController extends Controller
 {
-    public function redirectToGoogle(): RedirectResponse
+    public function redirectToGoogle(GoogleApiClientFactory $googleClients): RedirectResponse
     {
-        $client = new Client();
+        $this->assertDriveManager();
 
-        $client->setClientId(config('services.google.client_id'));
-        $client->setClientSecret(config('services.google.client_secret'));
-        $client->setRedirectUri(config('services.google.redirect'));
+        $client = $googleClients->make();
 
         $client->addScope(Drive::DRIVE_FILE);
 
@@ -25,38 +27,95 @@ class GoogleDriveController extends Controller
         return redirect()->away($client->createAuthUrl());
     }
 
-    public function handleGoogleCallback(Request $request): RedirectResponse
+    public function handleGoogleCallback(Request $request, GoogleApiClientFactory $googleClients): RedirectResponse
     {
         if ($request->has('error')) {
-            return redirect('/')
+            return redirect($this->afterGoogleRedirect())
                 ->with('error', 'Google authorization was cancelled.');
         }
 
-        if (!$request->has('code')) {
-            return redirect('/')
+        if (! $request->has('code')) {
+            return redirect($this->afterGoogleRedirect())
                 ->with('error', 'Google did not return an authorization code.');
         }
 
-        $client = new Client();
+        $client = $googleClients->make();
 
-        $client->setClientId(config('services.google.client_id'));
-        $client->setClientSecret(config('services.google.client_secret'));
-        $client->setRedirectUri(config('services.google.redirect'));
-
-        $token = $client->fetchAccessTokenWithAuthCode(
-            $request->string('code')->toString()
-        );
+        try {
+            $token = $client->fetchAccessTokenWithAuthCode(
+                $request->string('code')->toString()
+            );
+        } catch (Throwable $e) {
+            return redirect($this->afterGoogleRedirect())
+                ->with('error', 'Google authorization failed: '.$e->getMessage());
+        }
 
         if (isset($token['error'])) {
-            return redirect('/')
+            return redirect($this->afterGoogleRedirect())
                 ->with('error', 'Google authorization failed.');
         }
 
-        session([
-            'google_drive_token' => $token,
+        app(GoogleDriveService::class)->storeToken($token, auth()->id());
+
+        return redirect($this->afterGoogleRedirect())
+            ->with('success', 'Google Drive connected successfully.');
+    }
+
+    private function afterGoogleRedirect(): string
+    {
+        return auth()->check()
+            ? route('google.drive.test')
+            : route('login');
+    }
+
+    public function showTest(GoogleDriveService $googleDrive): View
+    {
+        $this->assertDriveManager();
+
+        return view('google-drive.test', [
+            'connected' => $googleDrive->isConnected(),
+        ]);
+    }
+
+    public function upload(Request $request, GoogleDriveService $googleDrive)
+    {
+        $this->assertDriveManager();
+
+        $request->validate([
+            'file' => [
+                'required',
+                'file',
+                'max:10240',
+            ],
         ]);
 
-        return redirect('/')
-            ->with('success', 'Google Drive connected successfully.');
+        try {
+            $googleDrive->upload(
+                $request->file('file')
+            );
+
+            return back()->with(
+                'success',
+                'File uploaded to Google Drive successfully.'
+            );
+        } catch (Throwable $e) {
+            return back()->with(
+                'error',
+                'Google Drive upload failed: '.$e->getMessage()
+            );
+        }
+    }
+
+    private function assertDriveManager(): void
+    {
+        $user = auth()->user();
+
+        abort_unless(
+            $user && (
+                $user->isAdmin()
+                || ($user->isScholarStaff() && $user->status === User::STATUS_APPROVED)
+            ),
+            403
+        );
     }
 }

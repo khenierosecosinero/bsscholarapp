@@ -42,6 +42,13 @@ Route::get('/auth/google', [GoogleDriveController::class, 'redirectToGoogle'])
 Route::get('/auth/google/callback', [GoogleDriveController::class, 'handleGoogleCallback'])
     ->name('google.callback');
 
+Route::middleware('auth')->group(function () {
+    Route::get('/google-drive', [GoogleDriveController::class, 'showTest'])
+        ->name('google.drive.test');
+    Route::post('/google-drive/upload', [GoogleDriveController::class, 'upload'])
+        ->name('google.drive.upload');
+});
+
 Route::middleware('auth')->get('/events/{event}/image', [EventActionController::class, 'viewEventImage'])->name('events.image');
 
 Route::get('/dashboard', function () {
@@ -179,7 +186,9 @@ Route::middleware(['auth', 'scholar'])->prefix('user')->name('user.')->group(fun
         Route::post('/attendances/{attendance}/approve', [EventActionController::class, 'approveAttendance'])->name('attendances.approve');
 
         Route::post('/documents/upload', [DocumentActionController::class, 'upload'])->name('documents.upload');
+        Route::get('/documents/{document}/view', [DocumentActionController::class, 'view'])->name('documents.view');
         Route::get('/documents/{document}/download', [DocumentActionController::class, 'download'])->name('documents.download');
+        Route::delete('/documents/{document}', [DocumentActionController::class, 'destroy'])->name('documents.destroy');
 
         Route::post('/notifications/{notification}/read', [NotificationActionController::class, 'markRead'])->name('notifications.read');
         Route::post('/notifications/read-all', [NotificationActionController::class, 'markAllRead'])->name('notifications.read-all');

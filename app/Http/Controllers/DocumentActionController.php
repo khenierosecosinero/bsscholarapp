@@ -4,14 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\Document;
 use App\Models\DocumentType;
+use App\Services\DocumentStorageService;
 use App\Services\ScholarService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class DocumentActionController extends Controller
 {
-    public function __construct(private ScholarService $scholar) {}
+    public function __construct(
+        private ScholarService $scholar,
+        private DocumentStorageService $files,
+    ) {}
 
     public function upload(Request $request)
     {
@@ -29,50 +33,66 @@ class DocumentActionController extends Controller
             'This document requirement belongs to a different scholarship program.'
         );
 
-        $path = $request->file('file')->store("documents/{$user->id}", 'public');
-
-        $existing = Document::where('user_id', $user->id)
+        $existing = Document::query()
+            ->where('user_id', $user->id)
             ->where('document_type_id', $type->id)
             ->first();
 
-        $oldPath = $existing?->file_path;
+        abort_if($existing?->status === 'approved', 403, 'Approved documents cannot be replaced.');
 
-        $document = Document::updateOrCreate(
-            ['user_id' => $user->id, 'document_type_id' => $type->id],
-            [
-                'file_path' => $path,
-                'original_name' => $request->file('file')->getClientOriginalName(),
-                'status' => 'pending',
-                'uploaded_at' => now(),
-                'review_notes' => null,
-                'reviewed_at' => null,
-                'reviewed_by' => null,
-            ]
-        );
-
-        if ($oldPath && $oldPath !== $path) {
-            Storage::disk('public')->delete($oldPath);
+        try {
+            $this->files->store($user, $type, $request->file('file'));
+        } catch (Throwable $e) {
+            return back()->with('error', $e->getMessage());
         }
 
         $this->scholar->logActivity($user, 'document', "Document \"{$type->name}\" uploaded");
         $this->scholar->notify($user, 'Document Uploaded', "Your {$type->name} has been submitted for review.", 'documents');
 
-        return back()->with('success', 'Document uploaded successfully.');
+        return back()->with('success', $existing?->hasFile()
+            ? 'Document replaced successfully.'
+            : 'Document uploaded successfully.');
+    }
+
+    public function view(Document $document)
+    {
+        $this->assertOwnDocument($document);
+
+        return $this->files->stream($document, false);
     }
 
     public function download(Document $document)
     {
-        if ($document->user_id !== Auth::id()) {
-            abort(403);
+        $this->assertOwnDocument($document);
+
+        return $this->files->stream($document, true);
+    }
+
+    public function destroy(Document $document)
+    {
+        $this->assertOwnDocument($document);
+
+        abort_if($document->status === 'approved', 403, 'Approved documents cannot be deleted.');
+
+        if (! $document->hasFile()) {
+            return back()->with('error', 'There is no file to delete.');
         }
 
-        if (!$document->file_path || !Storage::disk('public')->exists($document->file_path)) {
-            return back()->with('error', 'File not found.');
+        $typeName = $document->documentType?->name ?? 'Document';
+
+        try {
+            $this->files->deleteStoredFile($document);
+        } catch (Throwable $e) {
+            return back()->with('error', $e->getMessage());
         }
 
-        return Storage::disk('public')->download(
-            $document->file_path,
-            $document->original_name ?? 'document'
-        );
+        $this->scholar->logActivity(Auth::user(), 'document', "Document \"{$typeName}\" deleted");
+
+        return back()->with('success', 'Document deleted successfully.');
+    }
+
+    private function assertOwnDocument(Document $document): void
+    {
+        abort_unless($document->user_id === Auth::id(), 403);
     }
 }

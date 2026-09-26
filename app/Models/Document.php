@@ -9,6 +9,7 @@ class Document extends Model
 {
     protected $fillable = [
         'user_id', 'document_type_id', 'file_path',
+        'google_drive_file_id', 'google_drive_web_link',
         'original_name', 'status', 'uploaded_at',
         'review_notes', 'reviewed_at', 'reviewed_by',
     ];
@@ -23,7 +24,7 @@ class Document extends Model
 
     public function hasFile(): bool
     {
-        return filled($this->file_path);
+        return filled($this->file_path) || filled($this->google_drive_file_id);
     }
 
     public function isSubmitted(): bool

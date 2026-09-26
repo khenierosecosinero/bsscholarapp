@@ -9,12 +9,12 @@ use App\Models\ScholarshipProgram;
 use App\Models\User;
 use App\Services\AccountService;
 use App\Services\AdminDashboardService;
+use App\Services\DocumentStorageService;
 use App\Services\ScholarService;
 use App\Services\StaffDashboardService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
@@ -28,6 +28,7 @@ class AdminController extends Controller
         private StaffDashboardService $staff,
         private ScholarService $scholar,
         private AccountService $accounts,
+        private DocumentStorageService $files,
     ) {}
 
     private function syncLocation(Request $request): string
@@ -458,7 +459,7 @@ class AdminController extends Controller
         $documents = Document::query()
             ->with('documentType')
             ->where('user_id', $scholar->id)
-            ->orderByRaw("CASE WHEN file_path IS NULL OR file_path = '' THEN 1 ELSE 0 END")
+            ->orderByRaw("CASE WHEN (file_path IS NULL OR file_path = '') AND (google_drive_file_id IS NULL OR google_drive_file_id = '') THEN 1 ELSE 0 END")
             ->orderByDesc('uploaded_at')
             ->orderBy('id')
             ->get();
@@ -473,28 +474,14 @@ class AdminController extends Controller
     {
         $this->assertAdminDocument($request, $document);
 
-        if (! $document->file_path || ! Storage::disk('public')->exists($document->file_path)) {
-            abort(404, 'File not found.');
-        }
-
-        return Storage::disk('public')->response(
-            $document->file_path,
-            $document->original_name ?? 'document'
-        );
+        return $this->files->stream($document, false);
     }
 
     public function downloadDocument(Request $request, Document $document)
     {
         $this->assertAdminDocument($request, $document);
 
-        if (! $document->file_path || ! Storage::disk('public')->exists($document->file_path)) {
-            abort(404, 'File not found.');
-        }
-
-        return Storage::disk('public')->download(
-            $document->file_path,
-            $document->original_name ?? 'document'
-        );
+        return $this->files->stream($document, true);
     }
 
     public function reports(Request $request)

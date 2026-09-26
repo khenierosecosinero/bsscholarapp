@@ -25,6 +25,7 @@ class OperationalDataResetService
         'user_activities',
         'documents',
         'document_types',
+        'google_drive_folders',
         'attendances',
         'attendance_session_logs',
         'event_registrations',

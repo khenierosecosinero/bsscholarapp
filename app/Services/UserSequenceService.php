@@ -24,6 +24,7 @@ class UserSequenceService
         ['events', 'attendance_opened_by'],
         ['events', 'attendance_closed_by'],
         ['academic_settings', 'updated_by'],
+        ['google_drive_connections', 'connected_by'],
         ['sessions', 'user_id'],
     ];
 

@@ -5,12 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\User;
+use App\Services\DocumentStorageService;
 use App\Services\ProgramScopeService;
 use App\Services\ScholarService;
 use App\Services\StaffDashboardService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class StaffDocumentController extends Controller
@@ -18,6 +18,7 @@ class StaffDocumentController extends Controller
     public function __construct(
         private ScholarService $scholar,
         private StaffDashboardService $staffData,
+        private DocumentStorageService $files,
         private ProgramScopeService $programScope,
     ) {}
 
@@ -203,13 +204,9 @@ class StaffDocumentController extends Controller
 
         $name = $documentType->name;
 
-        $documentType->documents()
-            ->whereNotNull('file_path')
-            ->each(function (Document $document) {
-                if ($document->file_path) {
-                    Storage::disk('public')->delete($document->file_path);
-                }
-            });
+        $documentType->documents->each(function (Document $document) {
+            $this->files->deleteStoredFile($document);
+        });
 
         $documentType->delete();
 
@@ -222,28 +219,14 @@ class StaffDocumentController extends Controller
     {
         $this->assertManagesDocument($document);
 
-        if (! $document->file_path || ! Storage::disk('public')->exists($document->file_path)) {
-            return back()->with('error', 'File not found.');
-        }
-
-        return Storage::disk('public')->download(
-            $document->file_path,
-            $document->original_name ?? 'document'
-        );
+        return $this->files->stream($document, true);
     }
 
     public function view(Document $document)
     {
         $this->assertManagesDocument($document);
 
-        if (! $document->file_path || ! Storage::disk('public')->exists($document->file_path)) {
-            return back()->with('error', 'File not found.');
-        }
-
-        return Storage::disk('public')->response(
-            $document->file_path,
-            $document->original_name ?? 'document'
-        );
+        return $this->files->stream($document, false);
     }
 
     public function updateStatus(Request $request, Document $document)

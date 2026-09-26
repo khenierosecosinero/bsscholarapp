@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\ScholarshipProgram;
 use App\Services\AccountService;
 use App\Services\AcademicSettingsService;
+use App\Services\GoogleDriveService;
 use App\Services\ScholarService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\Rule;
@@ -20,6 +22,7 @@ class ProfileActionController extends Controller
         private ScholarService $scholar,
         private AcademicSettingsService $academic,
         private AccountService $accounts,
+        private GoogleDriveService $drive,
     ) {}
 
     /**
@@ -45,6 +48,18 @@ class ProfileActionController extends Controller
         ]);
 
         $user->update($data);
+
+        if ($user->isScholar()) {
+            try {
+                $this->drive->syncStudentFolderName($user->fresh());
+            } catch (\Throwable $e) {
+                Log::warning('Could not rename the scholar Drive folder after a name change.', [
+                    'scholar_id' => $user->scholar_id,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
         $this->scholar->logActivity($user, 'profile', 'Profile information updated');
 
         return back()->with('success', 'Profile updated successfully.');
