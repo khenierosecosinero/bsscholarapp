@@ -460,6 +460,7 @@ Laravel 12 MVC. There is **no** `routes/api.php` public API. A few JSON response
 | Controller | Responsibility |
 |------------|----------------|
 | `AuthController` | Login, register scholar/staff, logout (scholar logout also clears `last_seen_at`), rate limits |
+| `GoogleDriveController` | Google Drive OAuth start (`google.redirect`) and callback (`google.callback`) via `Google\Client` |
 | `PasswordResetController` | Forgot-password email, verify code, set new password |
 | `UserController` | Scholar pages + attendance status JSON + presence heartbeat/leave + notification pages |
 | `StaffController` | Staff pages, scholar list/profile, program-scoped presence JSON, scholar approve/reject, attendance open/close/approve/reject, password change |
@@ -807,6 +808,15 @@ Named routes use prefixes `admin.*`, `staff.*`, `user.*`.
 
 Also: `GET /` → login; `GET /dashboard` role redirect; `GET /up` health.
 
+### Google OAuth (`GoogleDriveController`)
+
+| Method | Path | Name |
+|--------|------|------|
+| GET | `/auth/google` | `google.redirect` |
+| GET | `/auth/google/callback` | `google.callback` |
+
+These routes match `GOOGLE_REDIRECT_URI` (`http://127.0.0.1:8000/auth/google/callback`). Credentials come from `config('services.google')`. The controller uses `google/apiclient` (`Google\Client`, Drive file scope) and stores the OAuth token in session (`google_drive_token`). They are not a second login system and do not replace Scholar / Staff / Admin session auth.
+
 ### Public password recovery (`guest`)
 
 | Method | Path | Name |
@@ -897,6 +907,7 @@ Uploads used by the app:
 | Package | Constraint / locked |
 |---------|---------------------|
 | `laravel/framework` | `^12.0` / **v12.62.0** |
+| `google/apiclient` | `^2.15` (Drive OAuth; `Google\Client`) |
 | `laravel/tinker` | `^2.10.1` |
 | `laravel/pint` | `^1.24` (dev) |
 | `laravel/sail` | `^1.41` (dev) |
@@ -982,6 +993,7 @@ Relevant keys from `.env.example`:
 | `CACHE_STORE` | `database` |
 | `FILESYSTEM_DISK` | `local` (uploads still use the `public` disk in code) |
 | `MAIL_*` | Gmail SMTP for Forgot Password codes. See [§17.1](#171-gmail-smtp-for-forgot-password) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Read by `config/services.php` as `services.google`. Do not put the client secret in git or Blade |
 | `VITE_APP_NAME` | Exposed to Vite |
 
 If you use SQLite, ensure `database/database.sqlite` exists (Laravel’s create-project script can create it; otherwise `touch database/database.sqlite` or create the file manually).

@@ -8,6 +8,7 @@ use App\Http\Controllers\EventActionController;
 use App\Http\Controllers\NotificationActionController;
 use App\Http\Controllers\ProfileActionController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\GoogleDriveController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\StaffDocumentController;
 use App\Http\Controllers\UserController;
@@ -34,6 +35,12 @@ Route::post('/register', [AuthController::class, 'register'])->name('register.po
 Route::get('/register/staff', [AuthController::class, 'showStaffRegister'])->name('register.staff');
 Route::post('/register/staff', [AuthController::class, 'registerStaff'])->name('register.staff.post');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+Route::get('/auth/google', [GoogleDriveController::class, 'redirectToGoogle'])
+    ->name('google.redirect');
+
+Route::get('/auth/google/callback', [GoogleDriveController::class, 'handleGoogleCallback'])
+    ->name('google.callback');
 
 Route::middleware('auth')->get('/events/{event}/image', [EventActionController::class, 'viewEventImage'])->name('events.image');
 
