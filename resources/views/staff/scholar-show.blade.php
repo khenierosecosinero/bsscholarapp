@@ -17,10 +17,12 @@
             </div>
         </div>
         <div class="staff-list-item"><div><strong>Email</strong><div class="staff-muted">{{ $scholar->email }}</div></div></div>
-        <div class="staff-list-item"><div><strong>Municipality / City</strong><div class="staff-muted">{{ $scholar->municipalityName() ?? '—' }}</div></div></div>
-        <div class="staff-list-item"><div><strong>Province</strong><div class="staff-muted">{{ $scholar->provinceName() ?? '—' }}</div></div></div>
+        <div class="staff-list-item"><div><strong>Scholarship Club</strong><div class="staff-muted">{{ $scholar->scholarshipClubName() }}</div></div></div>
+        <div class="staff-list-item"><div><strong>Municipality / City</strong><div class="staff-muted">{{ $scholar->scholarshipClubCity() ?? '—' }}</div></div></div>
+        <div class="staff-list-item"><div><strong>Province</strong><div class="staff-muted">{{ $scholar->scholarshipClubProvince() ?? '—' }}</div></div></div>
         <div class="staff-list-item"><div><strong>School</strong><div class="staff-muted">{{ $scholar->school_university ?? '—' }}</div></div></div>
-        <div class="staff-list-item"><div><strong>Course / Year</strong><div class="staff-muted">{{ $scholar->course_year_level ?? '—' }}</div></div></div>
+        <div class="staff-list-item"><div><strong>Course</strong><div class="staff-muted">{{ $scholar->course_year_level ?? '—' }}</div></div></div>
+        <div class="staff-list-item"><div><strong>Year Level</strong><div class="staff-muted">{{ $scholar->year_level ?? '—' }}</div></div></div>
 
         @if($scholar->status === 'pending')
             <div class="staff-scholar-profile-actions" data-approval-actions>

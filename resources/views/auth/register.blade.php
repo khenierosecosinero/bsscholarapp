@@ -5,7 +5,7 @@
     <div class="auth-container">
         <div class="auth-card">
             <h1>Registration</h1>
-            <p class="lead">Create your scholar account to get started. Select your province and designated area to be connected to the correct City or Province Scholarship Program.</p>
+            <p class="lead">Create your scholar account to get started. Select the Scholarship Club you want to register under. Its Province, Municipality/City, and School/University options come from that club.</p>
 
             @if($errors->any())
                 <div class="errors">{{ implode(' ', $errors->all()) }}</div>
@@ -16,16 +16,37 @@
                 <div class="auth-form-body">
                     <input class="form-input" type="text" name="full_name" placeholder="Full Name" value="{{ old('full_name') }}" required autocomplete="name" />
                     <input class="form-input" type="text" name="scholar_id" placeholder="Scholar ID" value="{{ old('scholar_id') }}" required />
-                    @include('partials.staff-location-select', [
-                        'locationTree' => $locationTree,
-                        'requireCity' => false,
+                    @include('partials.scholar-club-select', [
+                        'clubs' => $clubs,
                     ])
                     <p class="muted small" style="margin:-4px 0 12px;padding-left:4px">
-                        Choose your province, then select your municipality/city for a City Scholarship Program, or the province-wide option for a Province Scholarship Program.
+                        Choose a Scholarship Club. The Province, Municipality/City, and School/University list come from that club.
                     </p>
                     <input class="form-input" type="email" name="email" placeholder="Email" value="{{ old('email') }}" required autocomplete="email" />
-                    <input class="form-input" type="text" name="school_university" placeholder="School/University" value="{{ old('school_university') }}" />
-                    <input class="form-input" type="text" name="course_year_level" placeholder="Course and Year Level" value="{{ old('course_year_level') }}" />
+                    <label class="location-cascade-label" for="course_year_level" style="display:block;font-size:12px;font-weight:600;color:#6b7280;margin:0 0 6px;padding-left:4px">Course</label>
+                    <input
+                        class="form-input"
+                        id="course_year_level"
+                        type="text"
+                        name="course_year_level"
+                        placeholder="Bachelor of Science in Information Technology"
+                        value="{{ old('course_year_level') }}"
+                        maxlength="255"
+                        autocomplete="off"
+                    />
+                    <p class="muted small" style="margin:-4px 0 12px;padding-left:4px">
+                        Type the complete official course name. Do not use initials such as BSICT, BSCE, or BSIS.
+                    </p>
+                    <label class="location-cascade-label" for="year_level" style="display:block;font-size:12px;font-weight:600;color:#6b7280;margin:0 0 6px;padding-left:4px">Year Level</label>
+                    <select class="form-input form-select" id="year_level" name="year_level">
+                        <option value="">Select year level</option>
+                        @foreach(($yearLevels ?? []) as $yearLevel)
+                            <option value="{{ $yearLevel }}" @selected(old('year_level') === $yearLevel)>{{ $yearLevel }}</option>
+                        @endforeach
+                    </select>
+                    <p class="muted small" style="margin:-4px 0 12px;padding-left:4px">
+                        Course and Year Level are saved to your account and shown in User Settings.
+                    </p>
                     <input class="form-input" type="text" name="cellphone_number" placeholder="Cellphone Number" value="{{ old('cellphone_number') }}" autocomplete="tel" />
                     <input class="form-input" type="password" name="password" placeholder="Password" required autocomplete="new-password" minlength="8" />
                     <input class="form-input" type="password" name="password_confirmation" placeholder="Confirm Password" required autocomplete="new-password" minlength="8" />
@@ -37,7 +58,11 @@
             </form>
         </div>
 
-        @include('partials.auth-welcome', ['ctaRoute' => route('login'), 'ctaLabel' => 'Login'])
+        @include('partials.auth-welcome', [
+            'ctaRoute' => route('login'),
+            'ctaLabel' => 'Login',
+            'ctaVariant' => 'outline',
+        ])
     </div>
 </div>
 @endsection

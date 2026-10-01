@@ -1,6 +1,7 @@
 @php
     $staffName = $staff->full_name ?? 'Scholar Staff';
-    $staffRole = $staff->locationLabel() ?? 'Scholar Staff';
+    $staffRole = $staff->scholarshipClubName() ?? 'Scholar Staff';
+    $staffAddress = $staff->scholarshipClubAddress();
 @endphp
 
 <header class="staff-topbar">
@@ -13,7 +14,7 @@
             <div class="staff-profile-avatar">{{ strtoupper(substr($staffName, 0, 1)) }}</div>
             <div class="staff-profile-info">
                 <div class="name">{{ $staffName }}</div>
-                <div class="role">{{ $staffRole }}</div>
+                <div class="role">{{ $staffRole }}{{ $staffAddress ? ' — '.$staffAddress : '' }}</div>
             </div>
             <button type="button" class="staff-profile-toggle" id="profile-toggle" aria-label="Profile menu">&#9662;</button>
             <div class="profile-menu" id="profile-menu" hidden>

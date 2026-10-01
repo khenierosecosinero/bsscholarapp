@@ -29,7 +29,7 @@ class UserController extends Controller
 
     private function layoutData(string $active, string $title, string $subtitle = ''): array
     {
-        $user = Auth::user()->loadMissing('scholarshipProgram');
+        $user = Auth::user()->loadMissing(['scholarshipProgram', 'scholarshipClub']);
         $hasPortalAccess = $user->hasScholarPortalAccess();
         $needsHours = $active !== 'notifications';
         $needsDocuments = $hasPortalAccess && in_array($active, ['dashboard', 'documents'], true);

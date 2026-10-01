@@ -3,7 +3,7 @@
 @section('page-content')
 
 @include('partials.staff-report-period-filter')
-<p class="staff-muted staff-report-scope">{{ $staff->locationLabel() }}</p>
+<p class="staff-muted staff-report-scope">{{ $staff->scholarshipClubLabel() }}</p>
 
 <section class="staff-stat-grid">
     <div class="staff-stat-card"><div class="staff-stat-icon green">✓</div><div class="staff-stat-body"><h3>Approved Hours</h3><div class="value">{{ number_format($report['overview']['approved_hours'], 2) }}</div><div class="sub">Credited this location</div></div></div>
@@ -47,7 +47,7 @@
             <thead>
                 <tr>
                     <th>Scholar</th>
-                    <th>Location</th>
+                    <th>Scholarship Club</th>
                     <th>Approved</th>
                     <th>Pending</th>
                     <th>Remaining</th>
@@ -61,7 +61,7 @@
                             <a href="{{ route('staff.scholars.show', $row['scholar']) }}">{{ $row['scholar']->full_name }}</a>
                             <div class="staff-muted">{{ $row['scholar']->scholar_id }}</div>
                         </td>
-                        <td data-label="Location">{{ $row['scholar']->locationLabel() }}</td>
+                        <td data-label="Scholarship Club">{{ $row['scholar']->scholarshipClubLabel() }}</td>
                         <td data-label="Approved">{{ number_format($row['approved'], 2) }}</td>
                         <td data-label="Pending">{{ number_format($row['pending'], 2) }}</td>
                         <td data-label="Remaining">{{ number_format($row['remaining'], 2) }}</td>

@@ -69,7 +69,7 @@
                                     <x-user-avatar :user="$document->user" class="staff-scholar-avatar" />
                                     <div class="staff-scholar-meta">
                                         <strong>{{ $document->user?->full_name ?? '—' }}</strong>
-                                        <small>{{ $document->user?->scholar_id }} · {{ $document->user?->locationLabel() }}</small>
+                                        <small>{{ $document->user?->scholar_id }} · {{ $document->user?->scholarshipClubLabel() }}</small>
                                     </div>
                                 </div>
                             </div>

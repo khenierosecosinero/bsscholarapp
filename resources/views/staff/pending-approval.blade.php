@@ -79,8 +79,8 @@
                 {{ $staff->full_name }}
             </div>
             <div>
-                <strong>Assigned Program</strong>
-                {{ $staff->scholarshipProgram?->programLabel() ?? 'Unassigned' }}
+                <strong>Scholarship Club</strong>
+                {{ $staff->scholarshipClubLabel() }}
             </div>
             <div>
                 <strong>Status</strong>

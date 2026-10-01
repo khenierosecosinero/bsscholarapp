@@ -41,8 +41,6 @@ class ProfileActionController extends Controller
             'full_name' => 'required|string|max:255',
             'cellphone_number' => 'nullable|string|max:50',
             'school_university' => 'nullable|string|max:255',
-            'course_year_level' => 'nullable|string|max:255',
-            'year_level' => 'nullable|string|max:50',
             'date_of_birth' => 'nullable|date|before:today',
             'city' => ['nullable', 'string', 'max:255', Rule::in($allowedCities)],
         ]);

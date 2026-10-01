@@ -2017,7 +2017,7 @@ body.avatar-preview-open{overflow:hidden}
     display:flex;
     align-items:center;
     justify-content:center;
-    background:#8BC58A;
+    background:#1E6E1E;
     color:#fff;
     width:100%;
     max-width:240px;
@@ -2031,7 +2031,7 @@ body.avatar-preview-open{overflow:hidden}
     transition:background .2s, transform .15s;
 }
 .auth-page .login-btn:hover,
-.auth-page .register-btn:hover{background:#7ab87a}
+.auth-page .register-btn:hover{background:#185a18}
 .auth-page .login-btn:active,
 .auth-page .register-btn:active{transform:scale(.98)}
 .auth-page .staff-register-btn{

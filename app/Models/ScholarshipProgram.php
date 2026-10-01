@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as BaseCollection;
 use Illuminate\Support\Str;
 
 class ScholarshipProgram extends Model
@@ -40,6 +41,11 @@ class ScholarshipProgram extends Model
         return $this->hasMany(User::class)
             ->where('role', User::ROLE_SCHOLAR_STAFF)
             ->where('status', User::STATUS_APPROVED);
+    }
+
+    public function clubs(): HasMany
+    {
+        return $this->hasMany(ScholarshipClub::class);
     }
 
     public function pendingStaff(): HasMany
@@ -110,6 +116,16 @@ class ScholarshipProgram extends Model
         return "{$name} — {$this->programTypeLabel()}";
     }
 
+    public function clubName(): string
+    {
+        return $this->display_name ?: $this->name ?: $this->location_name;
+    }
+
+    public function clubTypeLabel(): string
+    {
+        return 'Scholarship Club';
+    }
+
     /**
      * Derive saved city/province values from this program for user records.
      *
@@ -128,7 +144,7 @@ class ScholarshipProgram extends Model
     /**
      * Sort programs alphabetically by their full program label.
      */
-    public static function sortAlphabetically(Collection $programs): Collection
+    public static function sortAlphabetically(BaseCollection $programs): BaseCollection
     {
         return $programs
             ->sortBy(fn (self $program) => Str::lower($program->programLabel()), SORT_NATURAL)
@@ -242,7 +258,28 @@ class ScholarshipProgram extends Model
     {
         $programs = static::active()
             ->orderBy('location_name')
-            ->get(['id', 'location_name', 'location_type', 'province_name', 'region_name']);
+            ->get(['id', 'location_name', 'location_type', 'province_name', 'region_name', 'name', 'display_name']);
+
+        $clubsByProgram = ScholarshipClub::query()
+            ->active()
+            ->orderBy('name')
+            ->get(['id', 'name', 'scholarship_program_id'])
+            ->groupBy('scholarship_program_id');
+
+        $clubPayload = function (?int $programId) use ($clubsByProgram): array {
+            if (! $programId) {
+                return [];
+            }
+
+            return ($clubsByProgram->get($programId) ?? collect())
+                ->map(fn (ScholarshipClub $club) => [
+                    'id' => $club->id,
+                    'name' => $club->name,
+                    'program_id' => $club->scholarship_program_id,
+                ])
+                ->values()
+                ->all();
+        };
 
         $provinces = $programs->where('location_type', 'province')->values();
         $citiesByProvince = $programs
@@ -260,11 +297,15 @@ class ScholarshipProgram extends Model
                 'id' => $province->id,
                 'name' => $province->location_name,
                 'label' => $province->programLabel(),
+                'club_name' => $province->clubName(),
+                'clubs' => $clubPayload($province->id),
                 'region' => $province->region_name,
                 'cities' => static::sortAlphabetically($cities)->map(fn (self $city) => [
                     'id' => $city->id,
                     'name' => $city->location_name,
                     'label' => $city->programLabel(),
+                    'club_name' => $city->clubName(),
+                    'clubs' => $clubPayload($city->id),
                 ])->values()->all(),
             ];
         }
@@ -278,11 +319,15 @@ class ScholarshipProgram extends Model
                 'id' => null,
                 'name' => $provinceName,
                 'label' => $provinceName,
+                'club_name' => $provinceName,
+                'clubs' => [],
                 'region' => $cities->first()?->region_name,
                 'cities' => static::sortAlphabetically($cities)->map(fn (self $city) => [
                     'id' => $city->id,
                     'name' => $city->location_name,
                     'label' => $city->programLabel(),
+                    'club_name' => $city->clubName(),
+                    'clubs' => $clubPayload($city->id),
                 ])->values()->all(),
             ];
         }

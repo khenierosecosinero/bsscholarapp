@@ -1,18 +1,18 @@
 @php
     $userName = $user->full_name ?? 'Scholar';
-    $userRole = $user->scholarshipProgram?->location_name ?? 'Scholar';
+    $userRole = $user->scholarshipClubName() ?: 'Scholar';
     $isDashboard = ($active ?? '') === 'dashboard';
-    $city = $user->municipalityName();
-    $province = $user->provinceName();
-    $programType = $user->scholarshipProgram?->programTypeLabel() ?? 'Scholar Program';
+    $city = $user->scholarshipClubCity();
+    $province = $user->scholarshipClubProvince();
+    $clubName = $user->scholarshipClubName();
     if ($city && $province) {
-        $welcomeContext = "Here's what's happening in {$city}, {$province} — {$programType}.";
+        $welcomeContext = "Here's what's happening in {$city}, {$province} — {$clubName}.";
     } elseif ($city) {
-        $welcomeContext = "Here's what's happening in {$city} — {$programType}.";
+        $welcomeContext = "Here's what's happening in {$city} — {$clubName}.";
     } elseif ($province) {
-        $welcomeContext = "Here's what's happening in {$province} — {$programType}.";
+        $welcomeContext = "Here's what's happening in {$province} — {$clubName}.";
     } else {
-        $welcomeContext = "Here's what's happening in your scholarship program.";
+        $welcomeContext = "Here's what's happening in your Scholarship Club.";
     }
     $dashboardDate = now()->timezone(config('app.timezone'))->format('F j, Y');
 @endphp

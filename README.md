@@ -116,7 +116,7 @@ There is **no Expo / React Native app in this repository yet**. The web Laravel 
 
 The application supports day-to-day scholarship operations:
 
-- Register scholars and scholar staff against a **specific city or province program**.
+- Register scholars and scholar staff against a **specific city or province program** and a staff-created **Scholarship Club**.
 - Approve or reject new accounts before they get full access.
 - Publish **events**, collect **participation**, and control **attendance sessions** (open/close).
 - Collect **check-in / check-out** and a **participation photo**.
@@ -207,9 +207,9 @@ flowchart LR
   F --> H[Account permanently deleted]
 ```
 
-1. Scholar submits `/register` with name, scholar ID, email, password, program (city/province tree), and optional school/contact fields.
+1. Scholar submits `/register` with name, scholar ID, email, password, a **Scholarship Club** (`scholarship_club_id`) created by Scholar Staff, a **School/University** from that club’s list (`scholarship_club_school_id`), an optional **Course** typed as the complete official name (stored on `users.course_year_level`), and an optional **Year Level** (`CourseCatalog::yearLevels()`, stored on `users.year_level`). Course is a fillable text field. Initials such as BSICT, BSCE, or BSIS are rejected; the scholar enters the full name (for example Bachelor of Science in Information Technology). Year Level options are 1st Year, 2nd Year, 3rd Year, and 4th Year. Both values are saved on the scholar account and shown as retrieved, read-only fields in User Settings / Profile Information. Selecting a club automatically shows that club’s saved Province and Municipality/City and the School/University names added in Staff Settings; the scholar cannot edit the address. The club, school, and address are stored on the scholar (`users.scholarship_club_id`, `users.scholarship_club_school_id`, `users.school_university`, `users.city`, `users.province`, and the club’s location program on `users.scholarship_program_id`). After approval, only staff of that club can manage the scholar.
 2. `User::register()` creates the account; `AccountService::provisionNewAccount()` creates document placeholders and a pending-approval notification.
-3. Staff on the same program see the scholar under **Approval Requests** and **Scholars**. On **Scholars**, the name opens the scholar profile; Approval Requests still uses its view / approve / reject action buttons.
+3. Staff on the same Scholarship Club see the scholar under **Approval Requests** and **Scholars**. On **Scholars**, the name opens the scholar profile; Approval Requests still uses its view / approve / reject action buttons.
 4. **Approve** sets status to `approved`, calls `User::activateFreshEventList()` (sets `events_visible_from` if null), and notifies the scholar. That scholar’s calendar starts empty of earlier program events.
 5. **Reject** permanently deletes the scholar account (`AccountService::permanentlyDelete`). After a successful delete, remaining `users.id` values are compacted to `1, 2, 3, …` (`UserSequenceService`) and user foreign keys are rewritten. The designated Admin account is never deleted.
 
@@ -226,7 +226,7 @@ flowchart LR
   F --> H[Cannot log in]
 ```
 
-1. Staff submits `/register/staff`.
+1. Staff submits `/register/staff` with a typed **Scholarship Club Name**, the official **Province** and **Municipality/City** of the club, and an optional **Contact Number**. Club values are stored on `scholarship_clubs` (`name`, `province`, `city`, and the matching city program) and linked to the staff account (`users.scholarship_club_id`). Contact Number is stored on `users.cellphone_number`. Staff can edit the club name, address, and contact number in `/staff/settings`.
 2. Account is `scholar_staff` + `pending`. Admin is notified only via the admin **Scholar Staff** pending list and sidebar badge.
 3. Other staff never see pending staff details.
 4. Admin **Approve** sets `approved` and calls `User::activateFreshStaffEventList()` (sets `events_visible_from` to now if it is still null). Admin **Reject** sets `rejected` (account remains; login is blocked).
@@ -373,7 +373,7 @@ flowchart LR
 
 | Section | What it does |
 |---------|----------------|
-| **Dashboard** | Header is **☰ Dashboard**, then the scholar profile card (avatar + full name + menu), then **Welcome back, [name]!** and **Here's what's happening in [city], [province] — [program].**, then the current date on the right. Hour stats (approved / pending / remaining vs **30** required), upcoming events, pending attendances, announcements, recent activity, attendance OPEN/CLOSED cards, sidebar hour/calendar widgets, quick links |
+| **Dashboard** | Header is **☰ Dashboard**, then the scholar profile card (avatar + full name + menu), then **Welcome back, [name]!** and **Here's what's happening in [city], [province] — [Scholarship Club].**, then the current date on the right. Hour stats (approved / pending / remaining vs **30** required), upcoming events, pending attendances, announcements, recent activity, attendance OPEN/CLOSED cards, sidebar hour/calendar widgets, quick links |
 | **Events** | List/select events for the scholar's program that were created after the account became active (`visibleToAccount`); confirm participation; check in; attach participation photo (JPG/PNG, 5MB) while the session is open, then **Check Out** directly under **Attach Photo**; view own photo; status badges |
 | **Attendance live status** | JSON poll (~12s) for open/closed sessions and unread notification count (`#attendance-live-root`, `user-app.js`) |
 | **Calendar** | Month calendar (`year` / `month`) of events created after this scholar became active. Newly approved scholars also skip completed/past events. Historical `events` rows stay for other scholars, staff, and reports |
@@ -381,7 +381,7 @@ flowchart LR
 | **Documents** | Upload PDF/JPG/PNG (5MB) for types in the scholar's program only; approved / pending / rejected / not submitted; download own file |
 | **Notifications** | All / Unread / Important; mark one or all read; preference toggles; show 5 latest then **See More** / **Show Less** |
 | **Announcements** | List, show, mark one or all read. Available to pending scholars. Not a sidebar item — opened from the dashboard or `/user/announcements` |
-| **Profile & Settings** | Editable: full name, cellphone, school, course/year, year level, date of birth, guardian, academic preference. Date of Birth uses a full-width native `type="date"` control (`.date-input-wrap`) that spans the form row; the date value is centered in the field and the calendar picker sits on the right (`padding` 12px 42px, indicator `right: 12px` / `translateY(-50%)`) so the two do not overlap on phone, tablet, or desktop. Not editable on the account tab: email, scholar ID. Password has its own form. Delete account (current password + rate limit) permanently removes the user and then compact remaining `users.id` values. The designated Admin account cannot use this action |
+| **Profile & Settings** | Editable: full name, cellphone, school, date of birth, guardian, academic preference. Course and Year Level are retrieved from the scholar account (`users.course_year_level`, `users.year_level`) and shown as read-only in Profile Information — the full official course name and the selected year level (1st Year–4th Year) from `/register`. Date of Birth uses a full-width native `type="date"` control (`.date-input-wrap`) that spans the form row; the date value is centered in the field and the calendar picker sits on the right (`padding` 12px 42px, indicator `right: 12px` / `translateY(-50%)`) so the two do not overlap on phone, tablet, or desktop. Not editable on the account tab: email, scholar ID, Scholarship Club name, and the club’s Province and Municipality/City. Password has its own form. Delete account (current password + rate limit) permanently removes the user and then compact remaining `users.id` values. The designated Admin account cannot use this action |
 | **Pending modal** | First-login overlay; dismiss via `POST /user/dismiss-pending-modal` |
 | **Presence heartbeat** | Hidden `#scholar-presence-root` on every scholar page (pending included). `user-app.js` posts `POST /user/presence` about every 20s while the tab is visible, and `POST /user/presence/leave` on `pagehide`. Updates `users.last_seen_at` only — not approval status and not `last_login_at` |
 | **Logout** | Sidebar outline button → `POST /logout`. Scholar logout also clears `last_seen_at` |
@@ -392,16 +392,16 @@ Global academic year/semester can be updated from the scholar profile **only by 
 
 | Section | What it does |
 |---------|----------------|
-| **Dashboard** | Live program stats (not fake numbers): scholars, events, pending attendance, hours, documents, pending approvals, recent activity, upcoming events — all from `StaffDashboardService` + `scholarship_program_id`. Event totals and upcoming events use `visibleToStaff` for that signed-in staff account |
-| **Scholars** | List scholars in the assigned program; search. The scholar name (`.staff-scholar-name-link`) is the only view action — it opens the existing profile (`GET /staff/scholars/{scholar}`, `canManageScholar`). There is no eye/view column. Beside each name: green-dot **Active Now** when that scholar’s current session heartbeat is fresh, otherwise **Offline**. Status polls `GET /staff/scholar-presence` about every 10s (no manual refresh). Presence is **not** “approved” and **not** a past login |
-| **Scholar detail** | Account overview for one scholar in the same program, including the same live **Active Now** / **Offline** indicator. **Service Hours** shows Academic Year, current semester, approved hours, **Approved of 30.00 required hours**, pending, and remaining (`30 − approved` for the current semester). **4-Year Service Hour Progress** lists Year 1–4 from `startingAcademicYear` (year level + current academic preference, pulled earlier if older stamped records exist) with 1st/2nd Semester completed / pending / remaining kept separate. **Service Hour Records** is view-only (Event, Check In / Out, Hours, Status, Notes — no Actions). Approve / reject hours stays on Attendance |
+| **Dashboard** | Live Scholarship Club stats (not fake numbers): scholars, events, pending attendance, hours, documents, pending approvals, recent activity, upcoming events — all from `StaffDashboardService` + `scholarship_program_id`. Event totals and upcoming events use `visibleToStaff` for that signed-in staff account |
+| **Scholars** | List scholars in the assigned Scholarship Club; search. The scholar name (`.staff-scholar-name-link`) is the only view action — it opens the existing profile (`GET /staff/scholars/{scholar}`, `canManageScholar`). There is no eye/view column. Beside each name: green-dot **Active Now** when that scholar’s current session heartbeat is fresh, otherwise **Offline**. Status polls `GET /staff/scholar-presence` about every 10s (no manual refresh). Presence is **not** “approved” and **not** a past login |
+| **Scholar detail** | Account overview for one scholar in the same Scholarship Club, including the club name and the same live **Active Now** / **Offline** indicator. **Service Hours** shows Academic Year, current semester, approved hours, **Approved of 30.00 required hours**, pending, and remaining (`30 − approved` for the current semester). **4-Year Service Hour Progress** lists Year 1–4 from `startingAcademicYear` (year level + current academic preference, pulled earlier if older stamped records exist) with 1st/2nd Semester completed / pending / remaining kept separate. **Service Hour Records** is view-only (Event, Check In / Out, Hours, Status, Notes — no Actions). Approve / reject hours stays on Attendance |
 | **Approval Requests** | Pending scholar registrations; **Approve** (status `approved` + notify) or **Reject** (permanent delete via `AccountService::permanentlyDelete`). This page still uses view / approve / reject action buttons (including the eye). Sidebar red badge = pending count |
 | **Events** | List events visible to this staff account; **Create Event** (`title`, `description`, `location`, `starts_at`, `ends_at` after start, `service_hours` 0–999, `organizer`, JPG/PNG ≤5MB) on `.staff-event-create-card` (max-width 760px). Start/end use native `datetime-local` inside `.date-input-wrap` in `.staff-datetime-grid` (one column at ≤900px): the datetime value is centered and the picker is vertically centered on the right so they do not overlap on phone, tablet, or desktop. New event `status` = `confirmed`, attendance **closed**. Notifies approved scholars in that program only. Event detail + registration count. Visibility: `created_at >= events_visible_from` (set on admin approval or approved-at-register), or `created_at >=` the staff `created_at` when that column is null. Empty table: **No events found.** Event rows are not deleted |
 | **Attendance** | Per-event lists: checked in vs failed to check in; **Open / Close Attendance** with `.staff-confirm-modal`; Approve / Reject hours; view photos (`staff.attendances.photo`). No scholar-style edit-record form |
 | **Documents** | CRUD document types (`name`, `description`, `required`) scoped to the staff program; provision placeholders for existing scholars; notify scholars. Review submissions: search, status filter, view, download, patch status + notes. The type-review table (`.staff-documents-table`) keeps Status as its own centered column (`min` space for the Pending / Approved / Rejected badge) so it does not collapse into Date Submitted or Actions. Approve / reject still work from Actions |
 | **Calendar** | Staff calendar of program events (redirect target after create). Uses the same `events_visible_from` filter as Events so a new staff account does not inherit older calendar items |
-| **Reports** | Four pages: service hours, attendance, participation, completion — same program IDs only. **Academic Year Setup** (`partials/staff-report-period-filter`) filters every pie, stat, and table by `year` + `semester` (`all` / `1st Semester` / `2nd Semester`). Values come from stamped `attendances` / period events (`StaffDashboardService` + `ScholarService::periodHourStatsFromRecords`). Session remembers the last period across the four report pages. Other years/semesters are not mixed |
-| **Settings** | Read-only general/notification display; **Change Password** modal (current + new + confirm; `Password::min(8)->letters()->numbers()`; hashed via `User::updatePassword`; 5 attempts / 300s) |
+| **Reports** | Four pages: service hours, attendance, participation, completion — same Scholarship Club IDs only. **Academic Year Setup** (`partials/staff-report-period-filter`) shows the club name and filters every pie, stat, and table by `year` + `semester` (`all` / `1st Semester` / `2nd Semester`). Values come from stamped `attendances` / period events (`StaffDashboardService` + `ScholarService::periodHourStatsFromRecords`). Session remembers the last period across the four report pages. Other years/semesters are not mixed |
+| **Settings** | **Scholarship Club Name**, **Province**, **Municipality/City**, and **Contact Number** are editable. Contact Number automatically shows the registered Scholar Staff Number (`users.scholar_id`) until a contact is saved; edits are stored on `users.cellphone_number`. Saving also updates `scholarship_clubs` (name and official address). Email and language stay read-only. **School/University Management** lets staff add, edit, or remove names for this club (`scholarship_club_schools`); those names are the only School/University choices on scholar registration. Notification display is read-only. **Change Password** modal (current + new + confirm; `Password::min(8)->letters()->numbers()`; hashed via `User::updatePassword`; 5 attempts / 300s) |
 
 ### 6.4 Admin portal (`/admin`)
 
@@ -485,7 +485,7 @@ Laravel 12 MVC. There is **no** `routes/api.php` public API. A few JSON response
 | `AnnouncementService` | Announcements for a user |
 | `AcademicSettingsService` | Global and per-user academic year/semester; `1st Semester` / `2nd Semester`; staff report filter (`all` / one semester) via `resolveReportFilter` + `scopeAttendancesForReport` |
 | `ProgramScopeService` | Program-type totals |
-| `ScholarshipProgramAssignmentService` | Resolve city/province assignment on register |
+| `ScholarshipProgramAssignmentService` | Resolve location program or staff-created Scholarship Club assignment on register |
 | `ScholarshipProgramImportService` | Import programs from `database/data/psgc-locations.json` |
 | `PasswordResetService` | Generate one reset code, email it, verify the same hash, update that account’s password |
 | `OperationalDataResetService` | Clean-slate wipe of operational/test data (`php artisan app:reset-operational-data`). Keeps schema, `scholarship_programs`, academic-settings structure, and the permanent admin |
@@ -495,7 +495,7 @@ Laravel 12 MVC. There is **no** `routes/api.php` public API. A few JSON response
 
 ### Models
 
-`User`, `ScholarshipProgram`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`, `GoogleDriveFolder`, `GoogleDriveConnection`.
+`User`, `ScholarshipProgram`, `ScholarshipClub`, `ScholarshipClubSchool`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`, `GoogleDriveFolder`, `GoogleDriveConnection`. Scholar register Course is a typed full official name (`App\Support\CourseCatalog` rejects initials such as BSICT, BSCE, and BSIS). Year-level labels live in `CourseCatalog::yearLevels()`. Course and Year Level are saved on `users.course_year_level` and `users.year_level` and displayed from that account in User Settings.
 
 Passwords use the Eloquent `hashed` cast. `User::updatePassword()` and `User::register()` set the password through that cast (not mass assignment of `password`).
 
@@ -550,6 +550,8 @@ This documentation follows the **same tokens the app already uses**. Do not intr
 | Logo mark | Gradient `#0ea96d` → `#2fa76a`, 12px radius |
 | Cards | White, 12px radius, `--shadow` |
 | Primary button `.btn` | `#2fa76a` fill, white text, 8px radius |
+| Auth submit `.login-btn` / `.register-btn` | `#1E6E1E` fill, white text (Login, Register, Register Scholar Staff) |
+| Auth welcome `.welcome-action-btn-outline` | White fill, `#1E6E1E` text; `:focus` / `:active` shadow `#1f2937` (Create an Account and City's Scholar Registration on login; Login on `/register` and `/register/staff`) |
 | Outline button `.btn.outline` | Transparent fill, `#2fa76a` border |
 | Program badge | White card, `#b6ebb9` border, `#166534` text |
 | Notification badge `.nav-notif-badge` | `#ef4444` pill, white count (`user-nav.css` + `styles.css`) |
@@ -666,6 +668,8 @@ Page layouts that a mobile port must preserve (same data, stacked on small scree
 | `cache`, `cache_locks` | Cache |
 | `jobs`, `job_batches`, `failed_jobs` | Queue |
 | `scholarship_programs` | City/province programs (PSGC fields, type, names) |
+| `scholarship_clubs` | Staff-created Scholarship Club names and official address (`name`, `province`, `city`, `scholarship_program_id`, `created_by`, `is_active`) |
+| `scholarship_club_schools` | School/University names added by staff for a club (`name`, `scholarship_club_id`, `created_by`) |
 | `events` | Events + attendance session columns + `image_path` |
 | `event_registrations` | Scholar ↔ event |
 | `attendances` | Check-in/out, hours, status, photo, academic period |
@@ -682,7 +686,7 @@ Page layouts that a mobile port must preserve (same data, stacked on small scree
 
 ### Important `users` fields
 
-`full_name`, `scholar_id`, `email`, `password`, `role`, `is_admin`, `is_permanent`, `status`, `scholarship_program_id`, `city`, `province`, school/contact/guardian fields, `notification_preferences`, `academic_year_start`, `semester`, `last_login_at`, `last_seen_at`, `events_visible_from`, `avatar_path`, `google_drive_folder_id`.
+`full_name`, `scholar_id`, `email`, `password`, `role`, `is_admin`, `is_permanent`, `status`, `scholarship_program_id`, `scholarship_club_id`, `scholarship_club_school_id`, `city`, `province`, school/contact/guardian fields, `notification_preferences`, `academic_year_start`, `semester`, `last_login_at`, `last_seen_at`, `events_visible_from`, `avatar_path`, `google_drive_folder_id`.
 
 `scholar_id` is the Scholar Code (authoritative identity). Drive student folders are named `{scholar_id} - {full_name}`. Name changes rename the same folder ID; they do not create a second student.
 
@@ -692,7 +696,7 @@ Page layouts that a mobile port must preserve (same data, stacked on small scree
 
 `events_visible_from` is **not** mass-assignable. Migration `2026_09_23_000002_add_events_visible_from_to_users` adds the nullable timestamp. It is set when a Scholar or Scholar Staff account is created already approved, when staff approve a pending scholar (`User::activateFreshEventList()`), or when an administrator approves pending staff. Calendars and event lists use that timestamp, or `users.created_at` when it is null. Older program events stay in the `events` table.
 
-After `AccountService::permanentlyDelete()` succeeds, `UserSequenceService` renumbers remaining users to sequential IDs (`1, 2, 3, …`) and updates these user references only: `event_registrations.user_id`, `attendances.user_id`, `documents.user_id`, `documents.reviewed_by`, `user_activities.user_id`, `scholar_notifications.user_id`, `announcement_reads.user_id`, `attendance_session_logs.staff_id`, `events.attendance_opened_by`, `events.attendance_closed_by`, `academic_settings.updated_by`, `sessions.user_id`. Other tables’ own primary keys are not compacted. The next insert uses `AUTO_INCREMENT = max(id) + 1`.
+After `AccountService::permanentlyDelete()` succeeds, `UserSequenceService` renumbers remaining users to sequential IDs (`1, 2, 3, …`) and updates these user references only: `event_registrations.user_id`, `attendances.user_id`, `documents.user_id`, `documents.reviewed_by`, `user_activities.user_id`, `scholar_notifications.user_id`, `announcement_reads.user_id`, `attendance_session_logs.staff_id`, `events.attendance_opened_by`, `events.attendance_closed_by`, `academic_settings.updated_by`, `google_drive_connections.connected_by`, `scholarship_clubs.created_by`, `scholarship_club_schools.created_by`, `sessions.user_id`. Other tables’ own primary keys are not compacted. The next insert uses `AUTO_INCREMENT = max(id) + 1`.
 
 A full first-use wipe is `php artisan app:reset-operational-data` (`OperationalDataResetService`). That command empties the operational tables above (plus sessions, reset tokens, and queue/cache tables), deletes non-admin users, removes public-disk uploads, resets `academic_settings` to the current year / `2nd Semester`, and compacts the remaining admin to `users.id = 1`. It does **not** drop migrations, the schema, or `scholarship_programs`. Event-visibility filters (`events_visible_from`) are a different rule and do not delete program events.
 
@@ -702,7 +706,9 @@ A full first-use wipe is `php artisan app:reset-operational-data` (`OperationalD
 
 ### Relationships (high level)
 
-- Program `hasMany` users (scholars / approved staff), events, announcements.
+- Program `hasMany` users (scholars / approved staff), events, announcements, clubs.
+- Club `belongsTo` program; User `belongsTo` club (`scholarship_club_id`).
+- Club `hasMany` schools; User `belongsTo` school (`scholarship_club_school_id`). The school name is also stored on `users.school_university`.
 - User `hasMany` attendances, documents, notifications, activities, registrations.
 - Event `hasMany` attendances, registrations, session logs.
 - Document `belongsTo` user and document type.
@@ -1298,8 +1304,8 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 - Google Drive OAuth (`/auth/google`) and temporary upload test (`/google-drive`, auth)
 - Login (email + password, remember me, rate limit 5/60s)
 - Forgot Password (Scholar/Staff email → emailed 6-digit code → verify same code → new password)
-- Scholar register (program picker, unique email/scholar ID, min 8 password)
-- Staff register (same uniqueness rules, status pending, cannot log in until admin approves)
+- Scholar register (province/city + Scholarship Club picker from staff-created clubs, unique email/scholar ID, min 8 password)
+- Staff register (location + typed Scholarship Club Name, uniqueness rules, status pending, cannot log in until admin approves)
 - Logout (invalidate session; scholar logout also clears `last_seen_at`)
 - Authenticated event image stream
 
@@ -1327,7 +1333,7 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 
 ### Scholar staff (approved)
 
-- Dashboard stats for **one** program
+- Dashboard stats for **one** Scholarship Club
 - Scholars list + detail (click the scholar name to open the profile; no eye/view button), including live **Active Now** / **Offline** (program-scoped poll). Profile is view-only except existing pending Approve / Reject
 - Approve / reject scholars (Approval Requests and pending profile still use those action buttons)
 - Events list / create / show (list scoped by `visibleToStaff`; empty copy **No events found.**)
@@ -1335,7 +1341,7 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 - Document types CRUD + review
 - Calendar (same `visibleToStaff` start time as Events)
 - Four report pages
-- Settings password change
+- Settings: Scholarship Club name, province, municipality/city, contact number, and School/University management; password change
 
 ### Administrator
 
@@ -1548,8 +1554,8 @@ Existing rule (do not change for mobile):
 - Each `scholarship_programs` row is either a **city/municipality** or a **province** program (`location_type`).
 - `coveredLocationIds()` and `visibleLocationIds()` return **only** `[ $this->id ]`. Programs are never merged.
 - Scholars, staff, events, attendance, document types, announcements, reports, and admin stats filter on `scholarship_program_id` / `resolveAdminProgramIds()` / `StaffDashboardService::programIds()`.
-- Registration uses `ScholarshipProgramAssignmentService::resolveRegistrationAssignment()` so city vs province pickers stay correct.
-- Staff `canManageScholar()` requires the target to be a **scholar** in the staff member’s program.
+- Registration uses `ScholarshipProgramAssignmentService::resolveClubAssignment()` for scholars (selected `scholarship_club_id` copies that club’s saved Province and Municipality/City and sets the club’s location program) and `resolveRegistrationAssignment()` for staff so the Municipality/City address maps to a city program only.
+- Staff `canManageScholar()` requires the target to be a **scholar** in the staff member’s Scholarship Club when both accounts have `scholarship_club_id`; otherwise it falls back to the staff member’s program.
 - Staff **Active Now** (`GET /staff/scholar-presence`) uses the same `StaffDashboardService::programIds()` scope. Heartbeats live on the scholar’s own `users.last_seen_at` row — no extra accounts.
 - Pending staff are hidden from `ScholarshipProgram::staff()` and from non-admin lists.
 

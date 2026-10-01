@@ -21,6 +21,6 @@
         </div>
     </form>
     <p class="staff-report-period-banner">
-        Showing <strong>{{ $reportFilter['academic_year'] }}</strong> · <strong>{{ $reportFilter['semester_label'] }}</strong>
+        Showing <strong>{{ $staff->scholarshipClubLabel() }}</strong> · <strong>{{ $reportFilter['academic_year'] }}</strong> · <strong>{{ $reportFilter['semester_label'] }}</strong>
     </p>
 </div>

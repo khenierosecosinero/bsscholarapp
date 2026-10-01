@@ -246,7 +246,7 @@ class AdminController extends Controller
     {
         abort_unless($scholar->isScholar(), 404);
 
-        $scholar->load('scholarshipProgram');
+        $scholar->load(['scholarshipProgram', 'scholarshipClub']);
 
         return view('admin.scholar-show', array_merge(
             $this->layoutData(request(), 'scholars', $scholar->full_name, 'Personal information provided during registration and profile setup.'),

@@ -58,6 +58,8 @@ class User extends Authenticatable
         'is_admin',
         'role',
         'scholarship_program_id',
+        'scholarship_club_id',
+        'scholarship_club_school_id',
         'academic_year_start',
         'semester',
         'last_login_at',
@@ -309,6 +311,67 @@ class User extends Authenticatable
             : $program->province_name;
     }
 
+    public function scholarshipClubName(): string
+    {
+        return $this->scholarshipClub?->name
+            ?? $this->scholarshipProgram?->clubName()
+            ?? 'Unassigned';
+    }
+
+    /**
+     * Staff Settings Contact Number: saved contact, or the registered Scholar Staff Number.
+     */
+    public function contactNumber(): string
+    {
+        if (filled($this->cellphone_number)) {
+            return (string) $this->cellphone_number;
+        }
+
+        return (string) ($this->scholar_id ?? '');
+    }
+
+    public function scholarshipClubCity(): ?string
+    {
+        if (filled($this->scholarshipClub?->city)) {
+            return $this->scholarshipClub->city;
+        }
+
+        $location = $this->scholarshipClub?->program?->registrationLocation();
+
+        return $location['city'] ?? null;
+    }
+
+    public function scholarshipClubProvince(): ?string
+    {
+        if (filled($this->scholarshipClub?->province)) {
+            return $this->scholarshipClub->province;
+        }
+
+        $location = $this->scholarshipClub?->program?->registrationLocation();
+
+        return $location['province'] ?? null;
+    }
+
+    public function scholarshipClubAddress(): string
+    {
+        $city = $this->scholarshipClubCity();
+        $province = $this->scholarshipClubProvince();
+
+        if ($city && $province) {
+            return $city.', '.$province;
+        }
+
+        return $city ?: $province ?: '';
+    }
+
+    public function scholarshipClubLabel(): string
+    {
+        $name = $this->scholarshipClubName();
+        $address = $this->scholarshipClubAddress();
+
+        return $address !== '' ? $name.' — '.$address : $name;
+    }
+
     public function locationLabel(): string
     {
         if ($this->scholarshipProgram) {
@@ -355,6 +418,10 @@ class User extends Authenticatable
             return false;
         }
 
+        if ($this->scholarship_club_id && $scholar->scholarship_club_id) {
+            return (int) $this->scholarship_club_id === (int) $scholar->scholarship_club_id;
+        }
+
         $managed = $this->managedLocationIds();
 
         return $scholar->scholarship_program_id
@@ -394,6 +461,16 @@ class User extends Authenticatable
         return $this->belongsTo(ScholarshipProgram::class);
     }
 
+    public function scholarshipClub(): BelongsTo
+    {
+        return $this->belongsTo(ScholarshipClub::class);
+    }
+
+    public function scholarshipClubSchool(): BelongsTo
+    {
+        return $this->belongsTo(ScholarshipClubSchool::class, 'scholarship_club_school_id');
+    }
+
     /**
      * Create a new scholar account with immutable login credentials.
      * Associated records are provisioned separately; nothing is auto-deleted afterward.
@@ -411,6 +488,7 @@ class User extends Authenticatable
             'full_name',
             'school_university',
             'course_year_level',
+            'year_level',
             'cellphone_number',
             'city',
             'province',
@@ -422,6 +500,8 @@ class User extends Authenticatable
         $user->status = $attributes['status'] ?? 'approved';
         $user->role = $attributes['role'] ?? self::ROLE_SCHOLAR;
         $user->scholarship_program_id = $attributes['scholarship_program_id'] ?? null;
+        $user->scholarship_club_id = $attributes['scholarship_club_id'] ?? null;
+        $user->scholarship_club_school_id = $attributes['scholarship_club_school_id'] ?? null;
 
         if (($user->isScholar() || $user->isScholarStaff()) && $user->status === self::STATUS_APPROVED) {
             $user->events_visible_from = now();
@@ -433,7 +513,7 @@ class User extends Authenticatable
 
         $user->save();
 
-        return $user->fresh(['scholarshipProgram']);
+        return $user->fresh(['scholarshipProgram', 'scholarshipClub']);
     }
 
     /**

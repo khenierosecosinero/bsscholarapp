@@ -69,17 +69,26 @@
                                     <option value="{{ $municipality }}" @selected(old('city', $user->municipalityName()) === $municipality)>{{ $municipality }}</option>
                                 @endforeach
                             </select>
-                            <small class="muted">Choose the city or municipality where you live. Your scholarship program will not change.</small>
+                            <small class="muted">Choose the city or municipality where you live. Your Scholarship Club will not change.</small>
                             @error('city')
                                 <small class="muted" style="color:#dc2626">{{ $message }}</small>
                             @enderror
                         </div>
-                        <div class="form-group"><label for="registered_province">Province</label><input id="registered_province" type="text" value="{{ $user->provinceName() ?? '—' }}" readonly disabled aria-readonly="true"></div>
-                        <div class="form-group form-group-wide"><label for="registered_program">Scholarship Program</label><input id="registered_program" type="text" value="{{ $user->scholarshipProgram?->programLabel() ?? '—' }}" readonly disabled aria-readonly="true"><small class="muted">Your scholarship program is determined by your registered location and cannot be changed.</small></div>
+                        <div class="form-group form-group-wide"><label for="registered_program">Scholarship Club</label><input id="registered_program" type="text" value="{{ $user->scholarshipClubName() }}" readonly disabled aria-readonly="true"><small class="muted">Your account is linked to this Scholarship Club and cannot be moved to another club.</small></div>
+                        <div class="form-group"><label for="registered_club_city">Scholarship Club Municipality / City</label><input id="registered_club_city" type="text" value="{{ $user->scholarshipClubCity() ?? '—' }}" readonly disabled aria-readonly="true"></div>
+                        <div class="form-group"><label for="registered_province">Scholarship Club Province</label><input id="registered_province" type="text" value="{{ $user->scholarshipClubProvince() ?? '—' }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group"><label for="cellphone_number">Cellphone</label><input id="cellphone_number" type="text" name="cellphone_number" value="{{ old('cellphone_number', $user->cellphone_number) }}" autocomplete="tel"></div>
                         <div class="form-group"><label for="school_university">School</label><input id="school_university" type="text" name="school_university" value="{{ old('school_university', $user->school_university) }}"></div>
-                        <div class="form-group"><label for="course_year_level">Course</label><input id="course_year_level" type="text" name="course_year_level" value="{{ old('course_year_level', $user->course_year_level) }}"></div>
-                        <div class="form-group"><label for="year_level">Year Level</label><input id="year_level" type="text" name="year_level" value="{{ old('year_level', $user->year_level) }}"></div>
+                        <div class="form-group">
+                            <label for="course_year_level">Course</label>
+                            <input id="course_year_level" type="text" value="{{ $user->course_year_level ?: '—' }}" readonly disabled aria-readonly="true">
+                            <small class="muted">Retrieved from your registration. The full official course name is shown.</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="year_level">Year Level</label>
+                            <input id="year_level" type="text" value="{{ $user->year_level ?: '—' }}" readonly disabled aria-readonly="true">
+                            <small class="muted">Retrieved from your registration. You do not need to enter this again.</small>
+                        </div>
                         <div class="form-group form-group-date form-group-wide">
                             <label for="date_of_birth">Date of Birth</label>
                             <div class="date-input-wrap">

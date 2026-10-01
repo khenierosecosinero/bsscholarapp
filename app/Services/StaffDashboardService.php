@@ -26,7 +26,7 @@ class StaffDashboardService
 
     public function layoutPayload(User $staff, string $active, string $title, string $subtitle = '', ?string $breadcrumb = null): array
     {
-        $staff->loadMissing('scholarshipProgram');
+        $staff->loadMissing('scholarshipProgram', 'scholarshipClub');
         $program = $staff->scholarshipProgram;
         $programIds = $this->programIds($staff);
 
@@ -36,20 +36,20 @@ class StaffDashboardService
             'programIds' => $programIds,
             'active' => $active,
             'pageTitle' => $title,
-            'pageSubtitle' => $subtitle ?: ($program ? 'Managing '.$staff->locationLabel().'.' : 'Manage your assigned scholarship program.'),
+            'pageSubtitle' => $subtitle ?: ($staff->scholarshipClubName() !== 'Unassigned' ? 'Managing '.$staff->scholarshipClubLabel().'.' : 'Manage your assigned Scholarship Club.'),
             'breadcrumb' => $breadcrumb ?? $title,
-            'pendingApprovalsCount' => $this->pendingApprovalsCount($programIds),
+            'pendingApprovalsCount' => $this->pendingApprovalsCount($programIds, $staff),
         ];
     }
 
-    public function forgetPendingApprovalsCache(array $programIds): void
+    public function forgetPendingApprovalsCache(array $programIds, ?User $staff = null): void
     {
-        Cache::forget('staff.pending_approvals.'.$this->programCacheKey($programIds));
+        Cache::forget('staff.pending_approvals.'.$this->programCacheKey($programIds, $staff));
     }
 
-    public function approvalRequestStats(array $programIds): array
+    public function approvalRequestStats(array $programIds, ?User $staff = null): array
     {
-        $counts = $this->scholarStatusCounts($programIds);
+        $counts = $this->scholarStatusCounts($programIds, $staff);
 
         return [
             'total' => array_sum($counts),
@@ -58,18 +58,18 @@ class StaffDashboardService
         ];
     }
 
-    public function pendingApprovalsCount(array $programIds): int
+    public function pendingApprovalsCount(array $programIds, ?User $staff = null): int
     {
         return Cache::remember(
-            'staff.pending_approvals.'.$this->programCacheKey($programIds),
+            'staff.pending_approvals.'.$this->programCacheKey($programIds, $staff),
             20,
-            fn () => $this->scholarsQuery($programIds)->where('status', 'pending')->count()
+            fn () => $this->scholarsQuery($programIds, $staff)->where('status', 'pending')->count()
         );
     }
 
-    public function scholarPageStats(array $programIds): array
+    public function scholarPageStats(array $programIds, ?User $staff = null): array
     {
-        $statusCounts = $this->scholarStatusCounts($programIds);
+        $statusCounts = $this->scholarStatusCounts($programIds, $staff);
 
         return [
             'total_scholars' => array_sum($statusCounts),
@@ -77,22 +77,33 @@ class StaffDashboardService
             'pending_scholars' => $statusCounts['pending'] ?? 0,
             'pending_documents' => Document::query()
                 ->where('status', 'pending')
-                ->whereHas('user', fn ($q) => $q->where('role', User::ROLE_SCHOLAR)
-                    ->whereIn('scholarship_program_id', $programIds ?: [0]))
+                ->whereHas('user', function ($q) use ($programIds, $staff) {
+                    $q->where('role', User::ROLE_SCHOLAR)
+                        ->whereIn('scholarship_program_id', $programIds ?: [0]);
+                    if ($staff?->scholarship_club_id) {
+                        $q->where('scholarship_club_id', $staff->scholarship_club_id);
+                    }
+                })
                 ->count(),
         ];
     }
 
-    public function scholarsQuery(array $programIds)
+    public function scholarsQuery(array $programIds, ?User $staff = null)
     {
-        return User::query()
+        $query = User::query()
             ->where('role', User::ROLE_SCHOLAR)
             ->whereIn('scholarship_program_id', $programIds ?: [0]);
+
+        if ($staff?->scholarship_club_id) {
+            $query->where('scholarship_club_id', $staff->scholarship_club_id);
+        }
+
+        return $query;
     }
 
     public function dashboardStats(array $programIds, ?User $staff = null): array
     {
-        $statusCounts = $this->scholarStatusCounts($programIds);
+        $statusCounts = $this->scholarStatusCounts($programIds, $staff);
         $totalScholars = array_sum($statusCounts);
 
         $events = Event::query()
@@ -226,11 +237,11 @@ class StaffDashboardService
         ];
     }
 
-    public function serviceHoursReport(array $programIds, ?array $filter = null): array
+    public function serviceHoursReport(array $programIds, ?array $filter = null, ?User $staff = null): array
     {
         $filter ??= $this->defaultReportFilter();
         $required = (float) $this->scholar->periodHourStatsFromRecords([], $filter)['required'];
-        $scholars = $this->scholarsQuery($programIds)->with('scholarshipProgram')->orderBy('full_name')->get();
+        $scholars = $this->scholarsQuery($programIds, $staff)->with(['scholarshipProgram', 'scholarshipClub'])->orderBy('full_name')->get();
 
         $periodQuery = $this->attendanceQuery($programIds, $filter);
 
@@ -408,9 +419,9 @@ class StaffDashboardService
         ];
     }
 
-    public function completionReport(array $programIds, ?array $filter = null): array
+    public function completionReport(array $programIds, ?array $filter = null, ?User $staff = null): array
     {
-        $report = $this->serviceHoursReport($programIds, $filter);
+        $report = $this->serviceHoursReport($programIds, $filter, $staff);
         $total = max(1, $report['rows']->count());
 
         return [
@@ -424,9 +435,9 @@ class StaffDashboardService
         ];
     }
 
-    private function scholarStatusCounts(array $programIds): array
+    private function scholarStatusCounts(array $programIds, ?User $staff = null): array
     {
-        return $this->scholarsQuery($programIds)
+        return $this->scholarsQuery($programIds, $staff)
             ->selectRaw('status, count(*) as aggregate')
             ->groupBy('status')
             ->pluck('aggregate', 'status')
@@ -434,12 +445,12 @@ class StaffDashboardService
             ->all();
     }
 
-    private function programCacheKey(array $programIds): string
+    private function programCacheKey(array $programIds, ?User $staff = null): string
     {
         $programIds = array_values(array_unique(array_map('intval', $programIds)));
         sort($programIds);
 
-        return md5(implode(',', $programIds));
+        return md5(implode(',', $programIds).'|club:'.($staff?->scholarship_club_id ?? '0'));
     }
 
     private function defaultReportFilter(): array

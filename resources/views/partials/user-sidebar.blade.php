@@ -48,7 +48,7 @@
 
         @if(!empty($scholarshipProgram))
 
-            <div class="scholar-program-badge">{{ auth()->user()->locationLabel() }}</div>
+            <div class="scholar-program-badge">{{ auth()->user()->scholarshipClubLabel() }}</div>
 
         @endif
 

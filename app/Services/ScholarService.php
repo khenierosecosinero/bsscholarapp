@@ -1274,6 +1274,11 @@ class ScholarService
             ->where('status', User::STATUS_APPROVED)
             ->where('scholarship_program_id', $event->scholarship_program_id);
 
+        $staff = auth()->user();
+        if ($staff?->isScholarStaff() && $staff->scholarship_club_id) {
+            $scholarsQuery->where('scholarship_club_id', $staff->scholarship_club_id);
+        }
+
         $title = 'New Event: '.$event->title;
         $body = sprintf(
             '%s has been scheduled on %s at %s (%s). Service hours: %s. Visit the Events page to view details and register.',

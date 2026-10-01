@@ -43,6 +43,7 @@
         @include('partials.auth-welcome', [
             'ctaRoute' => route('register'),
             'ctaLabel' => 'Create an Account',
+            'ctaVariant' => 'outline',
             'staffRegisterRoute' => route('register.staff'),
         ])
     </div>

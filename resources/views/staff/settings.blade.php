@@ -7,10 +7,28 @@
         <div class="staff-card-header">
             <h2>⚙ General Settings</h2>
         </div>
-        <form class="staff-form-grid">
+        <form method="POST" action="{{ route('staff.settings.club') }}" class="staff-form-grid">
+            @csrf
+            @method('PUT')
             <div class="staff-form-group">
-                <label for="app_name">Application Name</label>
-                <input type="text" id="app_name" value="Batang Surigaonon Scholar's App" readonly>
+                <label for="app_name">Scholarship Club Name</label>
+                <input type="text" id="app_name" name="scholarship_club_name" value="{{ old('scholarship_club_name', $staff->scholarshipClubName()) }}" required maxlength="255">
+                <p class="staff-muted" style="margin:6px 0 0">Scholarship Club linked to this staff account. Scholars you manage belong to this club only.</p>
+                @error('scholarship_club_name')
+                    <p class="staff-field-error">{{ $message }}</p>
+                @enderror
+            </div>
+            <div class="staff-form-group staff-form-group-wide">
+                @include('partials.staff-location-select', [
+                    'locationTree' => $locationTree ?? [],
+                    'requireCity' => true,
+                    'addressMode' => true,
+                    'selectedId' => old('scholarship_program_id', $staff->scholarshipClub?->scholarship_program_id ?? $staff->scholarship_program_id),
+                ])
+                <p class="staff-muted" style="margin:6px 0 0">Province and Municipality/City are the official address of this Scholarship Club.</p>
+                @error('scholarship_program_id')
+                    <p class="staff-field-error">{{ $message }}</p>
+                @enderror
             </div>
             <div class="staff-form-group">
                 <label for="email">Email Address</label>
@@ -18,7 +36,10 @@
             </div>
             <div class="staff-form-group">
                 <label for="contact">Contact Number</label>
-                <input type="text" id="contact" value="{{ $staff->phone ?? '' }}" readonly>
+                <input type="text" id="contact" name="cellphone_number" value="{{ old('cellphone_number', $staff->contactNumber()) }}" maxlength="50" autocomplete="tel">
+                @error('cellphone_number')
+                    <p class="staff-field-error">{{ $message }}</p>
+                @enderror
             </div>
             <div class="staff-form-group">
                 <label for="language">System Language</label>
@@ -26,10 +47,44 @@
                     <option selected>English</option>
                 </select>
             </div>
+            <div class="staff-form-group" style="grid-column:1/-1;text-align:right;margin:0">
+                <button type="submit" class="staff-btn staff-btn-primary">Save Changes</button>
+            </div>
         </form>
-        <div style="text-align:right;margin-top:16px">
-            <button type="button" class="staff-btn staff-btn-primary">Save Changes</button>
+    </div>
+
+    <div class="staff-card">
+        <div class="staff-card-header">
+            <h2>🏫 School/University Management</h2>
+            @if($staff->scholarship_club_id)
+                <a href="{{ route('staff.settings.schools.create') }}" class="staff-card-link">+ Add School/University</a>
+            @endif
         </div>
+        <p class="staff-muted" style="margin:0 0 16px">Scholars who register under {{ $staff->scholarshipClubName() }} can only choose from these School/University names.</p>
+        @if(! $staff->scholarship_club_id)
+            <p class="staff-muted" style="margin:0">Save your Scholarship Club in General Settings before adding School/University names.</p>
+        @elseif(($schools ?? collect())->isEmpty())
+            <p class="staff-muted" style="margin:0 0 12px">No School/University has been added yet.</p>
+            <a href="{{ route('staff.settings.schools.create') }}" class="staff-btn staff-btn-primary">+ Add School/University</a>
+        @else
+            <div class="staff-school-list">
+                @foreach($schools as $school)
+                    <div class="staff-school-row">
+                        <div>
+                            <strong>{{ $school->name }}</strong>
+                        </div>
+                        <div class="staff-school-actions">
+                            <a href="{{ route('staff.settings.schools.edit', $school) }}" class="staff-btn staff-btn-sm">Edit</a>
+                            <form method="POST" action="{{ route('staff.settings.schools.destroy', $school) }}" data-confirm="Remove {{ $school->name }} from this Scholarship Club?" data-confirm-title="Remove School/University?" data-confirm-yes="Remove" data-confirm-no="Cancel">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger">Remove</button>
+                            </form>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        @endif
     </div>
 
     <div class="staff-card">
@@ -141,6 +196,16 @@
 @push('styles')
 <style>
 .staff-muted{color:#6b7280;font-size:13px}
+.staff-form-group-wide{grid-column:1/-1}
+.staff-school-list{display:flex;flex-direction:column;gap:10px}
+.staff-school-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--staff-border,#e5e7eb)}
+.staff-school-row:last-child{border-bottom:none;padding-bottom:0}
+.staff-school-actions{display:flex;align-items:center;gap:8px}
+.staff-settings-grid .location-cascade{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.staff-settings-grid .location-cascade-label{display:block;font-size:13px;font-weight:600;color:#374151;margin:0 0 6px}
+.staff-settings-grid .location-cascade select.form-input{width:100%;padding:10px 12px;border:1px solid var(--staff-border,#e5e7eb);border-radius:8px;background:#fff;font:inherit;box-sizing:border-box}
+.staff-settings-grid .location-cascade select:disabled{color:#9ca3af;cursor:not-allowed;background:#f3f4f6}
+@media (max-width:720px){.staff-settings-grid .location-cascade{grid-template-columns:1fr}}
 .staff-change-password-btn{border-color:#1890ff;color:#1890ff}
 .staff-password-dialog{
     position:relative;

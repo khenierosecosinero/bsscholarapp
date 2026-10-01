@@ -16,7 +16,11 @@ class UserFactory extends Factory
         return [
             'full_name' => fake()->name(),
             'school_university' => fake()->company(),
-            'course_year_level' => fake()->randomElement(['BS IT', 'BS Education', 'BS Nursing']),
+            'course_year_level' => fake()->randomElement([
+                'Bachelor of Science in Information Technology',
+                'Bachelor of Elementary Education',
+                'Bachelor of Science in Nursing',
+            ]),
             'year_level' => fake()->randomElement(['1st Year', '2nd Year', '3rd Year', '4th Year']),
             'cellphone_number' => fake()->phoneNumber(),
             'status' => 'approved',

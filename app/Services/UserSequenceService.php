@@ -25,6 +25,8 @@ class UserSequenceService
         ['events', 'attendance_closed_by'],
         ['academic_settings', 'updated_by'],
         ['google_drive_connections', 'connected_by'],
+        ['scholarship_clubs', 'created_by'],
+        ['scholarship_club_schools', 'created_by'],
         ['sessions', 'user_id'],
     ];
 

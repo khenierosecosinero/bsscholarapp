@@ -42,7 +42,7 @@
         white-space: nowrap;
         font-family: inherit;
         cursor: pointer;
-        transition: background 0.2s, transform 0.15s, border-color 0.2s;
+        transition: background 0.2s, transform 0.15s, border-color 0.2s, box-shadow 0.2s;
     }
 
     .auth-page .welcome-action-btn-filled {
@@ -57,13 +57,24 @@
     }
 
     .auth-page .welcome-action-btn-outline {
-        background: transparent;
-        color: #fff;
-        border: 2px solid #fff;
+        background: #fff;
+        color: #1E6E1E;
+        border: 2px solid #1E6E1E;
     }
 
     .auth-page .welcome-action-btn-outline:hover {
-        background: rgba(255, 255, 255, 0.12);
+        background: #f3faf3;
+        color: #185a18;
+        border-color: #185a18;
+    }
+
+    .auth-page .welcome-action-btn-outline:focus,
+    .auth-page .welcome-action-btn-outline:active {
+        background: #fff;
+        color: #1E6E1E;
+        border-color: #1E6E1E;
+        box-shadow: 0 4px 16px #1f2937;
+        outline: none;
     }
 
     .auth-page .welcome-action-btn:active {
@@ -96,7 +107,7 @@
         <h2>BATANG<br>SURIGAONON<br>SCHOLAR'S APP!</h2>
         <p>Manage your service hours, join events, submit documents, and stay updated.</p>
         <div class="welcome-actions">
-            <a href="{{ $ctaRoute }}" class="welcome-action-btn welcome-action-btn-filled">{{ $ctaLabel }}</a>
+            <a href="{{ $ctaRoute }}" class="welcome-action-btn {{ ($ctaVariant ?? 'filled') === 'outline' ? 'welcome-action-btn-outline' : 'welcome-action-btn-filled' }}">{{ $ctaLabel }}</a>
             @if(!empty($staffRegisterRoute))
                 <a href="{{ $staffRegisterRoute }}" class="welcome-action-btn welcome-action-btn-outline">City's Scholar Registration</a>
             @endif

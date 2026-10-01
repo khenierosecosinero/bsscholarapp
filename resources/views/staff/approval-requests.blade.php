@@ -56,10 +56,10 @@
                             </div>
                         </td>
                         <td data-label="Municipality / City">
-                            <div class="staff-stack-value">{{ $request->municipalityName() ?? '—' }}</div>
+                            <div class="staff-stack-value">{{ $request->scholarshipClubCity() ?? '—' }}</div>
                         </td>
                         <td data-label="Province">
-                            <div class="staff-stack-value">{{ $request->provinceName() ?? '—' }}</div>
+                            <div class="staff-stack-value">{{ $request->scholarshipClubProvince() ?? '—' }}</div>
                         </td>
                         <td data-label="Date Registered">
                             <div class="staff-stack-value">{{ $request->created_at->format('M j, Y g:i A') }}</div>

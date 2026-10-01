@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
+use App\Models\ScholarshipClub;
+use App\Models\ScholarshipClubSchool;
 use App\Models\ScholarshipProgram;
+use App\Models\User;
+use App\Support\CourseCatalog;
 use App\Services\AccountService;
 use App\Services\ScholarshipProgramAssignmentService;
 use Illuminate\Http\Request;
@@ -97,7 +100,8 @@ class AuthController extends Controller
     public function showRegister()
     {
         return view('auth.register', [
-            'locationTree' => ScholarshipProgram::locationTree(),
+            'clubs' => ScholarshipClub::registrationOptions(),
+            'yearLevels' => CourseCatalog::yearLevels(),
         ]);
     }
 
@@ -115,34 +119,59 @@ class AuthController extends Controller
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
             'scholar_id' => ['required', 'string', 'max:100', 'unique:users,scholar_id'],
-            'scholarship_program_id' => [
+            'scholarship_club_id' => [
                 'required',
                 'integer',
-                Rule::exists('scholarship_programs', 'id')->where(fn ($query) => $query->where('is_active', true)),
+                Rule::exists('scholarship_clubs', 'id')->where(fn ($query) => $query->where('is_active', true)),
             ],
-            'school_university' => ['nullable', 'string', 'max:255'],
-            'course_year_level' => ['nullable', 'string', 'max:255'],
+            'scholarship_club_school_id' => [
+                'required',
+                'integer',
+                Rule::exists('scholarship_club_schools', 'id')->where(
+                    fn ($query) => $query->where('scholarship_club_id', $request->integer('scholarship_club_id'))
+                ),
+            ],
+            'course_year_level' => [
+                'nullable',
+                'string',
+                'max:255',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    if (CourseCatalog::looksLikeAbbreviation(is_string($value) ? $value : null)) {
+                        $fail('Enter the complete official course name, not initials such as BSICT, BSCE, or BSIS. Example: Bachelor of Science in Information Technology.');
+                    }
+                },
+            ],
+            'year_level' => ['nullable', 'string', 'max:50', Rule::in(CourseCatalog::yearLevels())],
             'cellphone_number' => ['nullable', 'string', 'max:50'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'confirmed', PasswordRule::min(8)],
         ], [
-            'scholarship_program_id.required' => 'Please select your province and designated scholarship program area.',
-            'scholarship_program_id.exists' => 'Please select a valid City or Province Scholarship Program for your area.',
+            'scholarship_club_id.required' => 'Please select a Scholarship Club.',
+            'scholarship_club_id.exists' => 'Please select a valid Scholarship Club.',
+            'scholarship_club_school_id.required' => 'Please select your School/University.',
+            'scholarship_club_school_id.exists' => 'Please select a School/University for the selected Scholarship Club.',
+            'year_level.in' => 'Please select a year level.',
             'email.unique' => 'An account with this email already exists.',
             'scholar_id.unique' => 'This scholar ID is already registered.',
         ]);
 
-        $assignment = $this->programAssignment->resolveRegistrationAssignment((int) $data['scholarship_program_id']);
+        $assignment = $this->programAssignment->resolveClubAssignment((int) $data['scholarship_club_id']);
+        $school = ScholarshipClubSchool::query()
+            ->where('scholarship_club_id', $assignment['scholarship_club_id'])
+            ->findOrFail((int) $data['scholarship_club_school_id']);
 
-        DB::transaction(function () use ($data, $assignment) {
+        DB::transaction(function () use ($data, $assignment, $school) {
             $user = User::register([
                 'full_name' => $data['full_name'],
                 'scholar_id' => $data['scholar_id'],
                 'scholarship_program_id' => $assignment['scholarship_program_id'],
+                'scholarship_club_id' => $assignment['scholarship_club_id'],
+                'scholarship_club_school_id' => $school->id,
                 'city' => $assignment['city'],
                 'province' => $assignment['province'],
-                'school_university' => $data['school_university'] ?? null,
-                'course_year_level' => $data['course_year_level'] ?? null,
+                'school_university' => $school->name,
+                'course_year_level' => CourseCatalog::normalize($data['course_year_level'] ?? null),
+                'year_level' => $data['year_level'] ?? null,
                 'cellphone_number' => $data['cellphone_number'] ?? null,
                 'email' => $data['email'],
                 'password' => $data['password'],
@@ -169,13 +198,18 @@ class AuthController extends Controller
             'scholarship_program_id' => [
                 'required',
                 'integer',
-                Rule::exists('scholarship_programs', 'id')->where(fn ($query) => $query->where('is_active', true)),
+                Rule::exists('scholarship_programs', 'id')->where(
+                    fn ($query) => $query->where('is_active', true)->where('location_type', 'city_municipality')
+                ),
             ],
+            'scholarship_club_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
+            'cellphone_number' => ['nullable', 'string', 'max:50'],
             'password' => ['required', 'confirmed', PasswordRule::min(8)],
         ], [
-            'scholarship_program_id.required' => 'Please select your province and designated scholarship program area.',
-            'scholarship_program_id.exists' => 'Please select a valid City or Province Scholarship Program for your area.',
+            'scholarship_program_id.required' => 'Please select the Province and Municipality or City where the Scholarship Club is located.',
+            'scholarship_program_id.exists' => 'Please select a valid Municipality or City for the Scholarship Club address.',
+            'scholarship_club_name.required' => 'Please enter a Scholarship Club Name.',
         ]);
 
         $this->assertStaffRegistrationIsUnique($data);
@@ -183,17 +217,27 @@ class AuthController extends Controller
         $assignment = $this->programAssignment->resolveRegistrationAssignment((int) $data['scholarship_program_id']);
 
         DB::transaction(function () use ($data, $assignment) {
+            $club = ScholarshipClub::createForProgram(
+                $data['scholarship_club_name'],
+                $assignment['scholarship_program_id'],
+            );
+
             $user = User::register([
                 'full_name' => $data['full_name'],
                 'scholar_id' => $data['scholar_id'],
                 'scholarship_program_id' => $assignment['scholarship_program_id'],
+                'scholarship_club_id' => $club->id,
                 'city' => $assignment['city'],
                 'province' => $assignment['province'],
                 'email' => $data['email'],
+                'cellphone_number' => $data['cellphone_number'] ?? null,
                 'password' => $data['password'],
                 'role' => User::ROLE_SCHOLAR_STAFF,
                 'status' => User::STATUS_PENDING,
             ]);
+
+            $club->created_by = $user->id;
+            $club->save();
 
             $this->accounts->provisionNewStaffAccount($user);
         });

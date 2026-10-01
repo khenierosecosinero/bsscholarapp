@@ -1,7 +1,7 @@
 @php
     $active = $active ?? 'dashboard';
     $pendingApprovalsCount = $pendingApprovalsCount ?? 0;
-    $programName = $staff->locationLabel();
+    $programName = $staff->scholarshipClubLabel();
 
     $sections = [
         'Dashboard' => [

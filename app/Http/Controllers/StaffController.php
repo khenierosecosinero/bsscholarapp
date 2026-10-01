@@ -4,17 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendance;
 use App\Models\Event;
+use App\Models\ScholarshipClub;
 use App\Models\EventRegistration;
+use App\Models\ScholarshipProgram;
 use App\Models\User;
 use App\Services\AccountService;
 use App\Services\AttendanceSessionService;
 use App\Services\ScholarService;
+use App\Services\ScholarshipProgramAssignmentService;
 use App\Services\StaffDashboardService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -25,6 +30,7 @@ class StaffController extends Controller
         private StaffDashboardService $staffData,
         private AccountService $accounts,
         private AttendanceSessionService $attendanceSessions,
+        private ScholarshipProgramAssignmentService $programAssignment,
     ) {}
 
     private function layoutData(string $active, string $title, string $subtitle = '', ?string $breadcrumb = null): array
@@ -42,7 +48,7 @@ class StaffController extends Controller
         $this->scholar->syncCompletedEventHoursForPrograms($programIds);
 
         return view('staff.dashboard', array_merge(
-            $this->layoutData('dashboard', 'Dashboard', "Welcome back, {$staff->full_name}! Here's what's happening in {$staff->locationLabel()}."),
+            $this->layoutData('dashboard', 'Dashboard', "Welcome back, {$staff->full_name}! Here's what's happening in {$staff->scholarshipClubName()}."),
             [
                 'stats' => $this->staffData->dashboardStats($programIds, $staff),
                 'pendingApprovals' => $this->staffData->pendingApprovals($programIds),
@@ -60,8 +66,8 @@ class StaffController extends Controller
         $programIds = $this->staffData->programIds($staff);
         $search = trim((string) $request->get('search', ''));
 
-        $scholars = $this->staffData->scholarsQuery($programIds)
-            ->with('scholarshipProgram')
+        $scholars = $this->staffData->scholarsQuery($programIds, $staff)
+            ->with(['scholarshipProgram', 'scholarshipClub'])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('full_name', 'like', "%{$search}%")
@@ -73,10 +79,10 @@ class StaffController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $stats = $this->staffData->scholarPageStats($programIds);
+        $stats = $this->staffData->scholarPageStats($programIds, $staff);
 
         return view('staff.scholars', array_merge(
-            $this->layoutData('scholars', 'Scholars', 'Scholars registered in '.$staff->locationLabel().'.'),
+            $this->layoutData('scholars', 'Scholars', 'Scholars registered in '.$staff->scholarshipClubLabel().'.'),
             compact('scholars', 'search', 'stats')
         ));
     }
@@ -89,7 +95,7 @@ class StaffController extends Controller
         $programIds = $this->staffData->programIds($staff);
         $presence = [];
 
-        $this->staffData->scholarsQuery($programIds)
+        $this->staffData->scholarsQuery($programIds, $staff)
             ->get(['id', 'role', 'last_seen_at'])
             ->each(function (User $scholar) use (&$presence) {
                 $presence[(string) $scholar->id] = [
@@ -112,7 +118,7 @@ class StaffController extends Controller
             'You can only manage scholars assigned to your municipality, city, or province.'
         );
 
-        $scholar->load('scholarshipProgram');
+        $scholar->load(['scholarshipProgram', 'scholarshipClub']);
         $this->scholar->ensureUserDocuments($scholar);
         $this->scholar->syncMissedCheckInsForUser($scholar);
         $this->scholar->syncCompletedEventHoursForUser($scholar);
@@ -309,8 +315,8 @@ class StaffController extends Controller
         $programIds = $this->staffData->programIds($staff);
         $search = trim((string) $request->get('search', ''));
 
-        $requests = $this->staffData->scholarsQuery($programIds)
-            ->with('scholarshipProgram')
+        $requests = $this->staffData->scholarsQuery($programIds, $staff)
+            ->with(['scholarshipProgram', 'scholarshipClub'])
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($scoped) use ($search) {
                     $scoped->where('full_name', 'like', "%{$search}%")
@@ -323,7 +329,7 @@ class StaffController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $stats = $this->staffData->approvalRequestStats($programIds);
+        $stats = $this->staffData->approvalRequestStats($programIds, $staff);
 
         return view('staff.approval-requests', array_merge(
             $this->layoutData('approval-requests', 'Approval Requests', 'Review and process newly registered scholar accounts.'),
@@ -362,7 +368,63 @@ class StaffController extends Controller
 
     public function settings()
     {
-        return view('staff.settings', $this->layoutData('settings', 'Settings', 'Manage system preferences and configurations.'));
+        $staff = Auth::user()->load(['scholarshipClub.schools']);
+
+        return view('staff.settings', array_merge(
+            $this->layoutData('settings', 'Settings', 'Manage system preferences and configurations.'),
+            [
+                'locationTree' => ScholarshipProgram::locationTree(),
+                'schools' => $staff->scholarshipClub?->schools ?? collect(),
+            ]
+        ));
+    }
+
+    public function updateClubName(Request $request)
+    {
+        $staff = Auth::user()->load('scholarshipClub', 'scholarshipProgram');
+
+        $validated = $request->validate([
+            'scholarship_club_name' => ['required', 'string', 'max:255'],
+            'scholarship_program_id' => [
+                'required',
+                'integer',
+                Rule::exists('scholarship_programs', 'id')->where(
+                    fn ($query) => $query->where('is_active', true)->where('location_type', 'city_municipality')
+                ),
+            ],
+            'cellphone_number' => ['nullable', 'string', 'max:50'],
+        ], [
+            'scholarship_club_name.required' => 'Please enter a Scholarship Club Name.',
+            'scholarship_program_id.required' => 'Please select the Province and Municipality or City where the Scholarship Club is located.',
+            'scholarship_program_id.exists' => 'Please select a valid Municipality or City for the Scholarship Club address.',
+        ]);
+
+        $assignment = $this->programAssignment->resolveRegistrationAssignment((int) $validated['scholarship_program_id']);
+
+        DB::transaction(function () use ($staff, $validated, $assignment) {
+            if ($staff->scholarshipClub) {
+                $staff->scholarshipClub->updateDetails(
+                    $validated['scholarship_club_name'],
+                    (int) $assignment['scholarship_program_id']
+                );
+            } else {
+                $club = ScholarshipClub::createForProgram(
+                    $validated['scholarship_club_name'],
+                    (int) $assignment['scholarship_program_id'],
+                    $staff->id
+                );
+                $staff->scholarship_club_id = $club->id;
+            }
+
+            $staff->scholarship_program_id = $assignment['scholarship_program_id'];
+            $staff->city = $assignment['city'];
+            $staff->province = $assignment['province'];
+            $contactNumber = trim((string) ($validated['cellphone_number'] ?? ''));
+            $staff->cellphone_number = $contactNumber !== '' ? $contactNumber : $staff->scholar_id;
+            $staff->save();
+        });
+
+        return back()->with('success', 'Scholarship Club details and contact number were saved.');
     }
 
     public function changePassword(Request $request)
@@ -426,7 +488,7 @@ class StaffController extends Controller
         return view('staff.reports.service-hours', array_merge(
             $this->layoutData('service-hours-reports', 'Service Hours Reports', 'Track and analyze scholar service hours and completion status.', 'Service Hours Reports'),
             $context,
-            ['report' => $this->staffData->serviceHoursReport($programIds, $context['reportFilter'])]
+            ['report' => $this->staffData->serviceHoursReport($programIds, $context['reportFilter'], $staff)]
         ));
     }
 
@@ -466,7 +528,7 @@ class StaffController extends Controller
         return view('staff.reports.completion', array_merge(
             $this->layoutData('completion-reports', 'Completion Reports', 'Track and analyze scholar completion and achievement status.', 'Completion Reports'),
             $context,
-            ['report' => $this->staffData->completionReport($programIds, $context['reportFilter'])]
+            ['report' => $this->staffData->completionReport($programIds, $context['reportFilter'], $staff)]
         ));
     }
 
@@ -524,9 +586,10 @@ class StaffController extends Controller
 
     private function approvalActionSucceeded(Request $request, string $message, array $extra = [])
     {
-        $programIds = $this->staffData->programIds(Auth::user());
-        $this->staffData->forgetPendingApprovalsCache($programIds);
-        $stats = $this->staffData->approvalRequestStats($programIds);
+        $staff = Auth::user();
+        $programIds = $this->staffData->programIds($staff);
+        $this->staffData->forgetPendingApprovalsCache($programIds, $staff);
+        $stats = $this->staffData->approvalRequestStats($programIds, $staff);
 
         if ($request->expectsJson()) {
             return response()->json(array_merge([

@@ -1,6 +1,6 @@
 @php
     $staffName = $staff->full_name ?? 'Scholar Staff';
-    $programLabel = $program->name ?? 'Scholarship Program Management';
+    $programLabel = isset($staff) ? $staff->scholarshipClubLabel() : ($program?->clubName() ?? 'Scholarship Club Management');
 @endphp
 
 <header class="topbar">

@@ -48,13 +48,13 @@
                             </div>
                         </td>
                         <td data-label="Scholar ID"><div class="staff-stack-value">{{ $scholar->scholar_id }}</div></td>
-                        <td data-label="Municipality / City"><div class="staff-stack-value">{{ $scholar->municipalityName() ?? '—' }}</div></td>
-                        <td data-label="Province"><div class="staff-stack-value">{{ $scholar->provinceName() ?? '—' }}</div></td>
+                        <td data-label="Municipality / City"><div class="staff-stack-value">{{ $scholar->scholarshipClubCity() ?? '—' }}</div></td>
+                        <td data-label="Province"><div class="staff-stack-value">{{ $scholar->scholarshipClubProvince() ?? '—' }}</div></td>
                         <td data-label="School"><div class="staff-stack-value">{{ $scholar->school_university ?? '—' }}</div></td>
                         <td data-label="Status"><div class="staff-stack-value"><span class="staff-badge {{ $scholar->status === 'approved' ? 'green' : ($scholar->status === 'pending' ? 'orange' : 'red') }}">{{ ucfirst($scholar->status) }}</span></div></td>
                     </tr>
                 @empty
-                    <tr class="staff-table-empty"><td colspan="6">No scholars found for this location.</td></tr>
+                    <tr class="staff-table-empty"><td colspan="6">No scholars found for this Scholarship Club.</td></tr>
                 @endforelse
             </tbody>
         </table>

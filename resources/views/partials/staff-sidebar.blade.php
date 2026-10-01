@@ -1,6 +1,6 @@
 @php
     $active = $active ?? 'dashboard';
-    $programName = $program->location_name ?? 'Scholarship Program';
+    $programName = isset($staff) ? $staff->scholarshipClubLabel() : ($program?->clubName() ?? 'Scholarship Club');
     $navItems = [
         'dashboard' => ['label' => 'Dashboard', 'route' => 'staff.dashboard', 'icon' => '&#9632;'],
         'scholars' => ['label' => 'Manage Scholars', 'route' => 'staff.scholars', 'icon' => '&#128101;'],

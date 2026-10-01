@@ -62,8 +62,16 @@
             <div class="staff-card-header"><h2>Academic Information</h2></div>
             <div class="admin-scholar-fields">
                 <div class="admin-scholar-field admin-scholar-field-wide">
-                    <span>Scholarship Program</span>
-                    <strong>{{ $value($scholar->scholarshipProgram?->programLabel()) }}</strong>
+                    <span>Scholarship Club</span>
+                    <strong>{{ $value($scholar->scholarshipClubName()) }}</strong>
+                </div>
+                <div class="admin-scholar-field">
+                    <span>Scholarship Club Municipality / City</span>
+                    <strong>{{ $value($scholar->scholarshipClubCity()) }}</strong>
+                </div>
+                <div class="admin-scholar-field">
+                    <span>Scholarship Club Province</span>
+                    <strong>{{ $value($scholar->scholarshipClubProvince()) }}</strong>
                 </div>
                 <div class="admin-scholar-field">
                     <span>Program Type</span>

@@ -31,6 +31,8 @@ class OperationalDataResetService
         'event_registrations',
         'events',
         'announcements',
+        'scholarship_club_schools',
+        'scholarship_clubs',
         'password_reset_tokens',
         'sessions',
         'cache',
