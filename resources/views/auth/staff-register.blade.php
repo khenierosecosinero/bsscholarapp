@@ -4,8 +4,7 @@
 <div class="auth-page">
     <div class="auth-container">
         <div class="auth-card">
-            <h1>City's Scholar Registration</h1>
-            <p class="lead">Register as scholar staff and set up your Scholarship Club. Enter the club name, then select the official Province and Municipality/City of the club. New accounts require administrator approval before you can log in or access the Scholar Staff section.</p>
+            <h1>Scholarship Club Registration</h1>
 
             @if($errors->any())
                 <div class="errors">{{ implode(' ', $errors->all()) }}</div>
@@ -18,17 +17,11 @@
                     <input class="form-input" type="text" name="scholar_id" placeholder="Scholar Staff Number" value="{{ old('scholar_id') }}" required />
                     <label class="location-cascade-label" for="scholarship_club_name" style="display:block;font-size:12px;font-weight:600;color:#6b7280;margin:0 0 6px;padding-left:4px">Scholarship Club Name</label>
                     <input class="form-input" type="text" id="scholarship_club_name" name="scholarship_club_name" placeholder="Scholarship Club Name" value="{{ old('scholarship_club_name') }}" required maxlength="255" />
-                    <p class="muted small" style="margin:-4px 0 12px;padding-left:4px">
-                        Enter the Scholarship Club Name scholars will select when they register. This name is saved to your staff account and shown as Application Name in Settings.
-                    </p>
                     @include('partials.staff-location-select', [
                         'locationTree' => $locationTree,
                         'requireCity' => true,
                         'addressMode' => true,
                     ])
-                    <p class="muted small" style="margin:-4px 0 12px;padding-left:4px">
-                        Select the Province, then the Municipality/City. These are the official address of the Scholarship Club.
-                    </p>
                     <input class="form-input" type="email" name="email" placeholder="Email" value="{{ old('email') }}" required autocomplete="email" />
                     <input class="form-input" type="text" name="cellphone_number" placeholder="Contact Number" value="{{ old('cellphone_number') }}" maxlength="50" autocomplete="tel" />
                     <input class="form-input" type="password" name="password" placeholder="Password" required autocomplete="new-password" minlength="8" />

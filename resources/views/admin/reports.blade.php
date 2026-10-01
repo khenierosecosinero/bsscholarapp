@@ -2,15 +2,25 @@
 
 @section('page-content')
 
-@include('partials.admin-scope-banner')
+<div class="staff-card staff-report-period admin-report-year">
+    <div class="staff-card-header">
+        <h2>Academic Year</h2>
+    </div>
+    <form method="GET" action="{{ route('admin.reports') }}" class="staff-report-period-form">
+        <div class="staff-report-period-field">
+            <label for="report-year">Academic Year</label>
+            <select id="report-year" name="year" class="staff-select" onchange="this.form.submit()">
+                @foreach($reportYearOptions as $year => $label)
+                    <option value="{{ $year }}" @selected((int) $reportFilter['year_start'] === (int) $year)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+    </form>
+    <p class="staff-report-period-banner admin-report-year-banner">
+        Showing <strong>Luzon</strong>, <strong>Visayas</strong>, and <strong>Mindanao</strong> for <strong>{{ $reportFilter['academic_year'] }}</strong>
+    </p>
+</div>
 
-<section class="staff-stat-grid">
-    <div class="staff-stat-card"><div class="staff-stat-icon blue">👥</div><div class="staff-stat-body"><h3>Scholars</h3><div class="value">{{ $stats['total_scholars'] }}</div><div class="sub">Active: {{ $stats['active_scholars'] ?? 0 }}</div></div></div>
-    <div class="staff-stat-card"><div class="staff-stat-icon teal">🧑‍💼</div><div class="staff-stat-body"><h3>Staff</h3><div class="value">{{ $stats['total_staff'] ?? 0 }}</div></div></div>
-    <div class="staff-stat-card"><div class="staff-stat-icon green">🎓</div><div class="staff-stat-body"><h3>Completed</h3><div class="value">{{ $completionReport['completed'] }}</div><div class="sub">{{ $completionReport['completed_pct'] }}% completion</div></div></div>
-    <div class="staff-stat-card"><div class="staff-stat-icon orange">🤝</div><div class="staff-stat-body"><h3>Participation</h3><div class="value">{{ $participationReport['participated'] }}</div><div class="sub">Registered: {{ $participationReport['registered'] }}</div></div></div>
-</section>
-
-@include('partials.admin-report-pies')
+@include('partials.admin-regional-reports')
 
 @endsection

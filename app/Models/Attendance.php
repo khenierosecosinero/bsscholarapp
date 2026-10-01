@@ -50,6 +50,11 @@ class Attendance extends Model
             && Storage::disk('public')->exists($this->photo_path);
     }
 
+    public function hasApprovedPhoto(): bool
+    {
+        return $this->status === self::STATUS_APPROVED && $this->hasPhoto();
+    }
+
     public function canReplacePhoto(): bool
     {
         return $this->hasCheckedIn()

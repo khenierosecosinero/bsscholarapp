@@ -67,9 +67,9 @@ class StaffDashboardService
         );
     }
 
-    public function scholarPageStats(array $programIds, ?User $staff = null): array
+    public function scholarPageStats(array $programIds, ?User $staff = null, ?array $clubIds = null): array
     {
-        $statusCounts = $this->scholarStatusCounts($programIds, $staff);
+        $statusCounts = $this->scholarStatusCounts($programIds, $staff, $clubIds);
 
         return [
             'total_scholars' => array_sum($statusCounts),
@@ -77,33 +77,27 @@ class StaffDashboardService
             'pending_scholars' => $statusCounts['pending'] ?? 0,
             'pending_documents' => Document::query()
                 ->where('status', 'pending')
-                ->whereHas('user', function ($q) use ($programIds, $staff) {
+                ->whereHas('user', function ($q) use ($programIds, $staff, $clubIds) {
                     $q->where('role', User::ROLE_SCHOLAR)
                         ->whereIn('scholarship_program_id', $programIds ?: [0]);
-                    if ($staff?->scholarship_club_id) {
-                        $q->where('scholarship_club_id', $staff->scholarship_club_id);
-                    }
+                    $this->constrainClubs($q, $staff, $clubIds);
                 })
                 ->count(),
         ];
     }
 
-    public function scholarsQuery(array $programIds, ?User $staff = null)
+    public function scholarsQuery(array $programIds, ?User $staff = null, ?array $clubIds = null)
     {
         $query = User::query()
             ->where('role', User::ROLE_SCHOLAR)
             ->whereIn('scholarship_program_id', $programIds ?: [0]);
 
-        if ($staff?->scholarship_club_id) {
-            $query->where('scholarship_club_id', $staff->scholarship_club_id);
-        }
-
-        return $query;
+        return $this->constrainClubs($query, $staff, $clubIds);
     }
 
-    public function dashboardStats(array $programIds, ?User $staff = null): array
+    public function dashboardStats(array $programIds, ?User $staff = null, ?array $clubIds = null): array
     {
-        $statusCounts = $this->scholarStatusCounts($programIds, $staff);
+        $statusCounts = $this->scholarStatusCounts($programIds, $staff, $clubIds);
         $totalScholars = array_sum($statusCounts);
 
         $events = Event::query()
@@ -237,11 +231,11 @@ class StaffDashboardService
         ];
     }
 
-    public function serviceHoursReport(array $programIds, ?array $filter = null, ?User $staff = null): array
+    public function serviceHoursReport(array $programIds, ?array $filter = null, ?User $staff = null, ?array $clubIds = null): array
     {
         $filter ??= $this->defaultReportFilter();
         $required = (float) $this->scholar->periodHourStatsFromRecords([], $filter)['required'];
-        $scholars = $this->scholarsQuery($programIds, $staff)->with(['scholarshipProgram', 'scholarshipClub'])->orderBy('full_name')->get();
+        $scholars = $this->scholarsQuery($programIds, $staff, $clubIds)->with(['scholarshipProgram', 'scholarshipClub'])->orderBy('full_name')->get();
 
         $periodQuery = $this->attendanceQuery($programIds, $filter);
 
@@ -377,11 +371,11 @@ class StaffDashboardService
         return array_merge($counts, ['events' => $events, 'period' => $filter]);
     }
 
-    public function completionCounts(array $programIds): array
+    public function completionCounts(array $programIds, ?array $clubIds = null): array
     {
         $period = $this->academic->current();
         $required = ScholarService::REQUIRED_HOURS;
-        $total = $this->scholarsQuery($programIds)->count();
+        $total = $this->scholarsQuery($programIds, null, $clubIds)->count();
 
         $hourRows = $this->attendanceQuery($programIds)
             ->whereNotNull('check_in')
@@ -435,14 +429,25 @@ class StaffDashboardService
         ];
     }
 
-    private function scholarStatusCounts(array $programIds, ?User $staff = null): array
+    private function scholarStatusCounts(array $programIds, ?User $staff = null, ?array $clubIds = null): array
     {
-        return $this->scholarsQuery($programIds, $staff)
+        return $this->scholarsQuery($programIds, $staff, $clubIds)
             ->selectRaw('status, count(*) as aggregate')
             ->groupBy('status')
             ->pluck('aggregate', 'status')
             ->map(fn ($count) => (int) $count)
             ->all();
+    }
+
+    private function constrainClubs($query, ?User $staff, ?array $clubIds)
+    {
+        if ($staff?->scholarship_club_id) {
+            $query->where('scholarship_club_id', $staff->scholarship_club_id);
+        } elseif ($clubIds !== null) {
+            $query->whereIn('scholarship_club_id', $clubIds ?: [0]);
+        }
+
+        return $query;
     }
 
     private function programCacheKey(array $programIds, ?User $staff = null): string

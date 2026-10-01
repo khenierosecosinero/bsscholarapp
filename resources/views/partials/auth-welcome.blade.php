@@ -109,7 +109,7 @@
         <div class="welcome-actions">
             <a href="{{ $ctaRoute }}" class="welcome-action-btn {{ ($ctaVariant ?? 'filled') === 'outline' ? 'welcome-action-btn-outline' : 'welcome-action-btn-filled' }}">{{ $ctaLabel }}</a>
             @if(!empty($staffRegisterRoute))
-                <a href="{{ $staffRegisterRoute }}" class="welcome-action-btn welcome-action-btn-outline">City's Scholar Registration</a>
+                <a href="{{ $staffRegisterRoute }}" class="welcome-action-btn welcome-action-btn-outline">Scholarship Club Registration</a>
             @endif
         </div>
     </div>

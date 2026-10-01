@@ -46,7 +46,7 @@
                         <td data-label="Status"><span class="staff-badge {{ $scholar->status === 'approved' ? 'green' : ($scholar->status === 'pending' ? 'orange' : 'red') }}">{{ ucfirst($scholar->status) }}</span></td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">No scholars found for this scope.</td></tr>
+                    <tr><td colspan="6">No scholars found for this location.</td></tr>
                 @endforelse
             </tbody>
         </table>

@@ -15,8 +15,7 @@ function initSidebar() {
     const shell = document.getElementById('app-shell');
     if (!toggle || !shell) return;
 
-    const isStaff = shell.classList.contains('staff-shell');
-    const mq = window.matchMedia(isStaff ? '(max-width: 900px)' : '(max-width: 1000px)');
+    const mq = window.matchMedia('(max-width: 1000px)');
     const overlay = document.getElementById('nav-overlay');
     const sidebar = document.getElementById('sidebar');
 
@@ -319,10 +318,10 @@ function initAvatarPreview() {
         document.body.classList.remove('avatar-preview-open');
     };
 
-    const open = (url, name) => {
+    const open = (url, name, alt) => {
         if (!url) return;
         image.src = url;
-        image.alt = name ? `Profile photo of ${name}` : 'Profile photo';
+        image.alt = alt || (name ? `Profile photo of ${name}` : 'Profile photo');
         caption.textContent = name || '';
         modal.hidden = false;
         document.body.classList.add('avatar-preview-open');
@@ -337,7 +336,11 @@ function initAvatarPreview() {
 
         event.preventDefault();
         event.stopPropagation();
-        open(trigger.getAttribute('data-avatar-preview'), trigger.getAttribute('data-avatar-name') || '');
+        open(
+            trigger.getAttribute('data-avatar-preview'),
+            trigger.getAttribute('data-avatar-name') || '',
+            trigger.getAttribute('data-avatar-alt') || ''
+        );
     });
 
     modal.querySelectorAll('[data-avatar-preview-close]').forEach((el) => {

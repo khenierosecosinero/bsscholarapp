@@ -95,15 +95,12 @@ Route::get('/dashboard', function () {
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
     Route::get('/sidebar-badges', [AdminController::class, 'sidebarBadges'])->name('sidebar-badges');
-    Route::get('/locations', [AdminController::class, 'locations'])->name('locations');
-    Route::post('/locations', [AdminController::class, 'storeLocation'])->name('locations.store');
-    Route::get('/locations/{location}/edit', [AdminController::class, 'editLocation'])->name('locations.edit');
-    Route::put('/locations/{location}', [AdminController::class, 'updateLocation'])->name('locations.update');
     Route::get('/scholars', [AdminController::class, 'scholars'])->name('scholars');
     Route::get('/scholars/{scholar}', [AdminController::class, 'showScholar'])->name('scholars.show');
     Route::get('/staff', [AdminController::class, 'staff'])->name('staff');
     Route::get('/events', [AdminController::class, 'events'])->name('events');
     Route::get('/events/{event}', [AdminController::class, 'showEvent'])->name('events.show');
+    Route::get('/events/{event}/attendances/{attendance}/photo', [AdminController::class, 'viewAttendancePhoto'])->name('events.attendances.photo');
     Route::get('/service-hours', [AdminController::class, 'serviceHours'])->name('service-hours');
     Route::get('/documents', [AdminController::class, 'documents'])->name('documents');
     Route::get('/documents/scholars/{scholar}', [AdminController::class, 'showScholarDocuments'])->name('documents.scholar');

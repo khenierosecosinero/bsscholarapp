@@ -54,9 +54,11 @@ class ScholarshipClubRegistrationTest extends TestCase
             ->assertSee('data-province="Surigao del Norte"', false)
             ->assertSee('name="scholarship_club_school_id"', false)
             ->assertSee('name="course_year_level"', false)
-            ->assertSee('placeholder="Bachelor of Science in Information Technology"', false)
+            ->assertSee('placeholder="Bachelor of Science in ..."', false)
             ->assertDontSee('<select class="form-input form-select" id="course_year_level"', false)
-            ->assertSee('Do not use initials such as BSICT')
+            ->assertDontSee('Create your scholar account to get started. Select the Scholarship Club you want to register under. Its Province, Municipality/City, and School/University options come from that club.')
+            ->assertDontSee('Type the complete official course name. Do not use initials such as BSICT, BSCE, or BSIS.')
+            ->assertDontSee('Course and Year Level are saved to your account and shown in User Settings.')
             ->assertDontSee('value="BSICT"', false)
 
             ->assertSee('1st Year')

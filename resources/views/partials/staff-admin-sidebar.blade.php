@@ -38,6 +38,20 @@
         @if(!empty($programName))
             <div class="staff-brand-program">{{ $programName }}</div>
         @endif
+        @php $sidebarUser = $staff ?? null; @endphp
+        @if($sidebarUser)
+            <div class="staff-user-chip">
+                <x-user-avatar :user="$sidebarUser" class="staff-user-avatar" />
+                <div class="staff-user-meta">
+                    <div class="staff-user-name" title="{{ $sidebarUser->full_name }}">{{ $sidebarUser->full_name ?? 'Scholar Staff' }}</div>
+                    @if($sidebarUser->scholar_id)
+                        <div class="staff-user-role">{{ $sidebarUser->scholar_id }}</div>
+                    @else
+                        <div class="staff-user-role">{{ $programName }}</div>
+                    @endif
+                </div>
+            </div>
+        @endif
     </div>
 
     <nav class="staff-nav" aria-label="Staff navigation">
@@ -60,14 +74,6 @@
     </nav>
 
     <div class="staff-sidebar-footer">
-        <div class="staff-user-chip">
-            <div class="staff-user-avatar">{{ strtoupper(substr($staff->full_name ?? 'S', 0, 1)) }}</div>
-            <div class="staff-user-meta">
-                <div class="staff-user-name">{{ $staff->full_name ?? 'Scholar Staff' }}</div>
-                <div class="staff-user-role">{{ $programName }}</div>
-            </div>
-            <span class="staff-user-chevron">&#9662;</span>
-        </div>
         <form method="POST" action="{{ route('logout') }}" class="staff-logout-form">
             @csrf
             <button type="submit" class="staff-logout-btn">Logout</button>

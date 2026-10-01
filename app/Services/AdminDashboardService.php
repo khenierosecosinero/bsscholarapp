@@ -7,9 +7,13 @@ use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\Event;
 use App\Models\EventRegistration;
+use App\Models\ScholarshipClub;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
+use App\Support\PhilippineIslandGroup;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
@@ -18,53 +22,182 @@ class AdminDashboardService
     public function __construct(
         private StaffDashboardService $staff,
         private ProgramScopeService $programScope,
+        private AcademicSettingsService $academic,
+        private ScholarService $scholar,
     ) {}
 
     public function syncProgramType(?string $programType): string
     {
-        $programType = $programType ?: 'all';
+        $programType = $programType ?: 'city_municipality';
 
-        return in_array($programType, ['all', 'city_municipality', 'province'], true)
+        if ($programType === 'all') {
+            return 'city_municipality';
+        }
+
+        return in_array($programType, ['city_municipality', 'province'], true)
             ? $programType
-            : 'all';
-    }
-
-    private function filterProgramsByType(Collection $programs, string $programType): Collection
-    {
-        if ($programType === 'city_municipality') {
-            return $programs->where('location_type', 'city_municipality');
-        }
-
-        if ($programType === 'province') {
-            return $programs->where('location_type', 'province');
-        }
-
-        return $programs;
+            : 'city_municipality';
     }
 
     /**
      * Resolve program IDs for admin queries.
-     * Always returns an explicit list so city and province records never mix unintentionally.
+     * City Scholar and Province Scholar stay separate. A selected province
+     * under City Scholar includes that province's city programs only.
      */
-    public function resolveAdminProgramIds(?string $locationKey, string $programType = 'all'): array
+    public function resolveAdminProgramIds(?string $locationKey, string $programType = 'city_municipality'): array
     {
+        $programType = $this->syncProgramType($programType);
+
         if ($locationKey !== null && $locationKey !== '' && $locationKey !== 'all') {
             $program = ScholarshipProgram::find((int) $locationKey);
 
-            return $program ? $program->coveredLocationIds() : [0];
+            if (! $program) {
+                return [0];
+            }
+
+            if ($programType === 'city_municipality') {
+                if ($program->isCityOrMunicipality()) {
+                    return [$program->id];
+                }
+
+                return ScholarshipProgram::active()
+                    ->cities()
+                    ->where('province_name', $program->location_name)
+                    ->pluck('id')
+                    ->all() ?: [0];
+            }
+
+            if ($program->isProvince()) {
+                return [$program->id];
+            }
+
+            $province = ScholarshipProgram::active()
+                ->provinces()
+                ->where('location_name', $program->province_name)
+                ->first();
+
+            return $province ? [$province->id] : [0];
         }
 
-        $query = ScholarshipProgram::active();
+        if ($programType === 'city_municipality') {
+            return ScholarshipProgram::active()->cities()->pluck('id')->all() ?: [0];
+        }
+
+        return ScholarshipProgram::active()->provinces()->pluck('id')->all() ?: [0];
+    }
+
+    /**
+     * Program IDs for Admin Dashboard cards: Province and Municipality/City
+     * only. City Scholar / Province Scholar category is not used here.
+     *
+     * @return list<int>
+     */
+    public function resolveGeographicProgramIds(?string $locationKey): array
+    {
+        if ($locationKey === null || $locationKey === '' || $locationKey === 'all') {
+            return ScholarshipProgram::active()->pluck('id')->all() ?: [0];
+        }
+
+        $program = ScholarshipProgram::find((int) $locationKey);
+
+        if (! $program) {
+            return [0];
+        }
+
+        if ($program->isCityOrMunicipality()) {
+            return [$program->id];
+        }
+
+        $ids = ScholarshipProgram::active()
+            ->cities()
+            ->where('province_name', $program->location_name)
+            ->pluck('id')
+            ->all();
+
+        $ids[] = $program->id;
+
+        return array_values(array_unique(array_map('intval', $ids))) ?: [0];
+    }
+
+    /**
+     * Scholarship Clubs registered in the selected Province / Municipality/City.
+     */
+    public function geographicClubs(?string $locationKey)
+    {
+        $address = $this->selectedAddress($locationKey);
+
+        return ScholarshipClub::query()
+            ->active()
+            ->forLocation($address['province'], $address['city'])
+            ->orderBy('name')
+            ->orderBy('city')
+            ->get();
+    }
+
+    /**
+     * @return array{province: ?string, city: ?string}
+     */
+    public function selectedAddress(?string $locationKey): array
+    {
+        $program = $this->selectedLocation($locationKey);
+
+        if (! $program) {
+            return ['province' => null, 'city' => null];
+        }
+
+        $location = $program->registrationLocation();
+
+        return [
+            'province' => $location['province'] ?: null,
+            'city' => $location['city'] ?: null,
+        ];
+    }
+
+    /**
+     * Scholarship Clubs registered under the admin's selected location.
+     */
+    public function clubsForAdminLocation(?string $locationKey, string $programType = 'city_municipality')
+    {
+        $programType = $this->syncProgramType($programType);
+        $address = $this->selectedAddress($locationKey);
+
+        $query = ScholarshipClub::query()
+            ->active()
+            ->forLocation($address['province'], $programType === 'city_municipality' ? $address['city'] : null)
+            ->orderBy('name')
+            ->orderBy('city');
 
         if ($programType === 'city_municipality') {
-            return $query->cities()->pluck('id')->all() ?: [0];
+            $query->whereHas('program', fn ($q) => $q->where('location_type', 'city_municipality'));
+        } elseif (! filled($address['province'])) {
+            $query->whereHas('program', fn ($q) => $q->where('location_type', 'province'));
+        }
+
+        return $query->get();
+    }
+
+    /**
+     * Club IDs used to filter City Scholar lists when a location is selected.
+     * Null means do not extra-filter (category overview).
+     *
+     * @return list<int>|null
+     */
+    public function clubIdsForAdminQueries(?string $locationKey, string $programType = 'city_municipality'): ?array
+    {
+        $programType = $this->syncProgramType($programType);
+
+        if ($locationKey === null || $locationKey === '' || $locationKey === 'all') {
+            return null;
         }
 
         if ($programType === 'province') {
-            return $query->provinces()->pluck('id')->all() ?: [0];
+            return null;
         }
 
-        return $query->pluck('id')->all() ?: [0];
+        return $this->clubsForAdminLocation($locationKey, $programType)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     /**
@@ -113,10 +246,21 @@ class AdminDashboardService
         return ScholarshipProgram::sortAlphabetically($locations);
     }
 
+    private function filterProgramsByType(Collection $programs, string $programType): Collection
+    {
+        $programType = $this->syncProgramType($programType);
+
+        if ($programType === 'city_municipality') {
+            return $programs->where('location_type', 'city_municipality');
+        }
+
+        return $programs->where('location_type', 'province');
+    }
+
     /**
      * @return array{cities: Collection, provinces: Collection}
      */
-    public function locationOptionGroups(?string $locationKey = null, string $programType = 'all'): array
+    public function locationOptionGroups(?string $locationKey = null, string $programType = 'city_municipality'): array
     {
         $locations = $this->filterProgramsByType($this->locationOptions($locationKey), $programType);
 
@@ -130,18 +274,23 @@ class AdminDashboardService
         ];
     }
 
-    public function dashboardStats(array $programIds): array
+    public function dashboardStats(array $programIds, ?array $clubIds = null, ?int $totalClubs = null): array
     {
-        $stats = $this->staff->dashboardStats($programIds);
+        $stats = $this->staff->dashboardStats($programIds, null, $clubIds);
         $participation = $this->staff->participationCounts($programIds);
-        $completion = $this->staff->completionCounts($programIds);
+        $completion = $this->staff->completionCounts($programIds, $clubIds);
 
         return array_merge($stats, [
-            'total_staff' => $this->approvedStaffQuery($programIds)->count(),
-            'pending_staff' => $this->pendingStaffQuery($programIds)->count(),
+            'total_staff' => $this->approvedStaffQuery($programIds, $clubIds)->count(),
+            'pending_staff' => $this->pendingStaffQuery($programIds, $clubIds)->count(),
             'total_documents' => Document::query()
-                ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds))
+                ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds, $clubIds))
                 ->count(),
+            'total_clubs' => $totalClubs ?? (
+                $clubIds !== null
+                    ? count($clubIds)
+                    : ScholarshipClub::query()->active()->count()
+            ),
             'total_participation' => $participation['participated'] ?? 0,
             'completed_scholars' => $completion['completed'] ?? 0,
             'pending_records' => ($stats['pending_scholars'] ?? 0)
@@ -151,112 +300,253 @@ class AdminDashboardService
     }
 
     /**
-     * City and Province each get their own Scholars, Staff, Completed, and Participation pies.
+     * Academic Year selector for Admin Reports (no semester; all three regions share this year).
      *
-     * @return array{city: array<string, mixed>, province: array<string, mixed>}
+     * @return array{reportFilter: array<string, mixed>, reportYearOptions: array<int, string>}
      */
-    public function programTypeCategoryCharts(?string $locationKey = null): array
+    public function reportContext(Request $request): array
     {
+        $yearRaw = $request->query('year', session('admin_report_year'));
+        $year = is_numeric($yearRaw) ? (int) $yearRaw : null;
+        $filter = $this->academic->resolveReportFilter($year, AcademicSettingsService::SEMESTER_ALL);
+        session(['admin_report_year' => $filter['year_start']]);
+
         return [
-            'city' => [
-                'title' => 'City Scholarship Program Data',
-                'subtitle' => 'City Scholarship Programs only. Province records are not included.',
-                'charts' => $this->categoryChartsForProgramIds(
-                    $this->programIdsForType('city_municipality', $locationKey)
-                ),
-            ],
-            'province' => [
-                'title' => 'Province Scholarship Program Data',
-                'subtitle' => 'Province Scholarship Programs only. City records are not included.',
-                'charts' => $this->categoryChartsForProgramIds(
-                    $this->programIdsForType('province', $locationKey)
-                ),
-            ],
+            'reportFilter' => $filter,
+            'reportYearOptions' => $this->academic->reportYearOptions(),
         ];
     }
 
     /**
-     * @return array<int, int>
+     * Luzon, Visayas, and Mindanao reports for one Academic Year.
+     *
+     * @param  array{year_start: int, year_end: int, semester: string, academic_year: string}  $filter
+     * @return array<string, array<string, mixed>>
      */
-    private function programIdsForType(string $programType, ?string $locationKey = null): array
+    public function regionalReports(array $filter): array
     {
-        if ($locationKey !== null && $locationKey !== '' && $locationKey !== 'all') {
-            $selected = ScholarshipProgram::find((int) $locationKey);
+        $programIdsByIsland = $this->programIdsByIsland();
+        [, $ayEnd] = $this->academic->eventBoundsForReport($filter);
 
-            if ($selected && $selected->location_type === $programType) {
-                return [(int) $selected->id];
+        $regions = [];
+        foreach (PhilippineIslandGroup::LABELS as $key => $label) {
+            $regions[$key] = $this->regionReport(
+                $key,
+                $label,
+                $programIdsByIsland[$key] ?? [],
+                $filter,
+                $ayEnd
+            );
+        }
+
+        return $regions;
+    }
+
+    /**
+     * @return array{luzon: array<int, int>, visayas: array<int, int>, mindanao: array<int, int>}
+     */
+    public function programIdsByIsland(): array
+    {
+        $programs = ScholarshipProgram::query()
+            ->get(['id', 'region_name', 'psgc_code', 'province_name', 'location_name', 'location_type']);
+
+        $classified = [
+            PhilippineIslandGroup::LUZON => [],
+            PhilippineIslandGroup::VISAYAS => [],
+            PhilippineIslandGroup::MINDANAO => [],
+        ];
+        $assigned = [];
+        $provinceMap = [];
+
+        foreach ($programs as $program) {
+            $island = PhilippineIslandGroup::fromProgram($program);
+            if (! $island) {
+                continue;
+            }
+
+            $classified[$island][] = (int) $program->id;
+            $assigned[(int) $program->id] = true;
+
+            if ($program->isProvince() && filled($program->location_name)) {
+                $provinceMap[mb_strtolower((string) $program->location_name)] = $island;
             }
         }
 
-        return $this->resolveAdminProgramIds('all', $programType);
+        foreach ($programs as $program) {
+            if (isset($assigned[(int) $program->id])) {
+                continue;
+            }
+
+            $province = $program->isProvince()
+                ? $program->location_name
+                : $program->province_name;
+            $island = $provinceMap[mb_strtolower(trim((string) $province))] ?? null;
+            if (! $island) {
+                continue;
+            }
+
+            $classified[$island][] = (int) $program->id;
+        }
+
+        return $classified;
     }
 
     /**
      * @param  array<int, int>  $programIds
-     * @return array{scholars: array<string, mixed>, staff: array<string, mixed>, completed: array<string, mixed>, participation: array<string, mixed>}
+     * @param  array{year_start: int, semester: string, academic_year: string}  $filter
+     * @return array<string, mixed>
      */
-    private function categoryChartsForProgramIds(array $programIds): array
-    {
-        $stats = $this->dashboardStats($programIds);
-        $completion = $this->staff->completionCounts($programIds);
-        $participation = $this->staff->participationCounts($programIds);
+    private function regionReport(
+        string $key,
+        string $label,
+        array $programIds,
+        array $filter,
+        CarbonInterface $ayEnd,
+    ): array {
+        $ids = $programIds ?: [0];
+        $year = (int) $filter['year_start'];
+        $hourFilter = [
+            'year_start' => $year,
+            'semester' => AcademicSettingsService::SEMESTER_ALL,
+        ];
+        $required = (float) ScholarService::REQUIRED_HOURS;
 
-        return $this->categoryReportCharts($programIds, $stats, $completion, $participation);
-    }
-
-    /**
-     * Four pie charts, one per report category, for a single program-type ID list.
-     *
-     * @param  array<string, mixed>  $stats
-     * @param  array<string, mixed>  $completionReport
-     * @param  array<string, mixed>  $participationReport
-     * @return array{scholars: array<string, mixed>, staff: array<string, mixed>, completed: array<string, mixed>, participation: array<string, mixed>}
-     */
-    public function categoryReportCharts(array $programIds, array $stats, array $completionReport, array $participationReport): array
-    {
-        $staffStatus = User::query()
-            ->where('role', User::ROLE_SCHOLAR_STAFF)
-            ->whereIn('scholarship_program_id', $programIds ?: [0])
+        $scholarCounts = $this->regionScholarsQuery($ids, $year, $ayEnd)
             ->selectRaw('status, count(*) as aggregate')
             ->groupBy('status')
             ->pluck('aggregate', 'status')
             ->map(fn ($count) => (int) $count);
 
-        $participationSlices = [
-            ['label' => 'Participated', 'value' => (int) ($participationReport['participated'] ?? 0), 'color' => '#16a34a'],
-            ['label' => 'Pending', 'value' => (int) ($participationReport['pending'] ?? 0), 'color' => '#f59e0b'],
-            ['label' => 'Failed check-in', 'value' => (int) ($participationReport['failed'] ?? 0), 'color' => '#ef4444'],
-        ];
+        $approvedScholars = (int) ($scholarCounts[User::STATUS_APPROVED] ?? 0);
+        $pendingScholars = (int) ($scholarCounts[User::STATUS_PENDING] ?? 0);
+        $rejectedScholars = (int) ($scholarCounts[User::STATUS_REJECTED] ?? 0);
+        $totalScholars = $approvedScholars + $pendingScholars + $rejectedScholars;
 
-        if (array_sum(array_column($participationSlices, 'value')) === 0 && (int) ($participationReport['registered'] ?? 0) > 0) {
-            $participationSlices = [
-                ['label' => 'Registered', 'value' => (int) $participationReport['registered'], 'color' => '#2563eb'],
-            ];
+        $totalClubs = ScholarshipClub::query()
+            ->active()
+            ->whereIn('scholarship_program_id', $ids)
+            ->where('created_at', '<=', $ayEnd)
+            ->count();
+
+        $hourRows = Attendance::query()
+            ->where('academic_year_start', $year)
+            ->whereNotNull('check_in')
+            ->whereIn('status', [Attendance::STATUS_APPROVED, Attendance::STATUS_PENDING])
+            ->whereHas('user', fn ($query) => $query
+                ->where('role', User::ROLE_SCHOLAR)
+                ->whereIn('scholarship_program_id', $ids))
+            ->get(['user_id', 'academic_year_start', 'semester', 'status', 'hours_earned'])
+            ->groupBy('user_id');
+
+        $completed = 0;
+        $inProgress = 0;
+
+        foreach ($hourRows as $records) {
+            $stats = $this->scholar->periodHourStatsFromRecords($records, $hourFilter);
+            $approvedHours = (float) $stats['approved'];
+            $pendingHours = (float) $stats['pending'];
+
+            if ($approvedHours >= $required) {
+                $completed++;
+            } elseif ($approvedHours > 0 || $pendingHours > 0) {
+                $inProgress++;
+            }
         }
 
+        $notStarted = max(0, $totalScholars - $completed - $inProgress);
+        $completedPct = $totalScholars > 0 ? round(($completed / $totalScholars) * 100, 1) : 0.0;
+
+        $participationBase = Attendance::query()
+            ->where('academic_year_start', $year)
+            ->whereHas('user', fn ($query) => $query
+                ->where('role', User::ROLE_SCHOLAR)
+                ->whereIn('scholarship_program_id', $ids));
+
+        $approvedParticipation = (clone $participationBase)
+            ->where('status', Attendance::STATUS_APPROVED)
+            ->whereNotNull('check_in')
+            ->count();
+        $pendingParticipation = (clone $participationBase)
+            ->where('status', Attendance::STATUS_PENDING)
+            ->whereNotNull('check_in')
+            ->count();
+        $failedParticipation = (clone $participationBase)
+            ->where('status', Attendance::STATUS_FAILED_CHECK_IN)
+            ->count();
+        $rejectedParticipation = (clone $participationBase)
+            ->where('status', Attendance::STATUS_REJECTED)
+            ->count();
+        $totalParticipation = (clone $participationBase)->count();
+
         return [
-            'scholars' => $this->buildPieChart('Scholars', [
-                ['label' => 'Approved', 'value' => (int) ($stats['active_scholars'] ?? 0), 'color' => '#16a34a'],
-                ['label' => 'Pending', 'value' => (int) ($stats['pending_scholars'] ?? 0), 'color' => '#f59e0b'],
-                ['label' => 'Rejected', 'value' => (int) ($stats['rejected_scholars'] ?? 0), 'color' => '#ef4444'],
-            ]),
-            'staff' => $this->buildPieChart('Staff', [
-                ['label' => 'Approved', 'value' => (int) ($staffStatus[User::STATUS_APPROVED] ?? $stats['total_staff'] ?? 0), 'color' => '#16a34a'],
-                ['label' => 'Pending', 'value' => (int) ($staffStatus[User::STATUS_PENDING] ?? $stats['pending_staff'] ?? 0), 'color' => '#f59e0b'],
-                ['label' => 'Rejected', 'value' => (int) ($staffStatus[User::STATUS_REJECTED] ?? 0), 'color' => '#ef4444'],
-            ]),
-            'completed' => $this->buildPieChart('Completed', [
-                ['label' => 'Completed', 'value' => (int) ($completionReport['completed'] ?? 0), 'color' => '#16a34a'],
-                ['label' => 'In progress', 'value' => (int) ($completionReport['in_progress'] ?? 0), 'color' => '#f59e0b'],
-                ['label' => 'Not started', 'value' => (int) ($completionReport['not_started'] ?? 0), 'color' => '#94a3b8'],
-            ]),
-            'participation' => $this->buildPieChart('Participation', $participationSlices),
+            'key' => $key,
+            'label' => $label,
+            'academic_year' => $filter['academic_year'],
+            'scholars' => [
+                'total' => $totalScholars,
+                'approved' => $approvedScholars,
+                'pending' => $pendingScholars,
+                'rejected' => $rejectedScholars,
+                'chart' => $this->buildPieChart('Scholars', [
+                    ['label' => 'Approved', 'value' => $approvedScholars, 'color' => '#16a34a'],
+                    ['label' => 'Pending', 'value' => $pendingScholars, 'color' => '#f59e0b'],
+                    ['label' => 'Rejected', 'value' => $rejectedScholars, 'color' => '#ef4444'],
+                ]),
+            ],
+            'clubs' => [
+                'total' => $totalClubs,
+                'chart' => $this->buildPieChart('Scholarship Clubs', [
+                    ['label' => 'Registered', 'value' => $totalClubs, 'color' => '#c2410c'],
+                ]),
+            ],
+            'completed' => [
+                'total' => $completed,
+                'in_progress' => $inProgress,
+                'not_started' => $notStarted,
+                'required' => $required,
+                'completed_pct' => $completedPct,
+                'chart' => $this->buildPieChart('Completed Students', [
+                    ['label' => 'Completed', 'value' => $completed, 'color' => '#16a34a'],
+                    ['label' => 'In progress', 'value' => $inProgress, 'color' => '#f59e0b'],
+                    ['label' => 'Not started', 'value' => $notStarted, 'color' => '#94a3b8'],
+                ]),
+            ],
+            'participation' => [
+                'total' => $totalParticipation,
+                'approved' => $approvedParticipation,
+                'pending' => $pendingParticipation,
+                'failed' => $failedParticipation,
+                'rejected' => $rejectedParticipation,
+                'chart' => $this->buildPieChart('Participation', [
+                    ['label' => 'Approved', 'value' => $approvedParticipation, 'color' => '#16a34a'],
+                    ['label' => 'Pending', 'value' => $pendingParticipation, 'color' => '#f59e0b'],
+                    ['label' => 'Failed check-in', 'value' => $failedParticipation, 'color' => '#ef4444'],
+                    ['label' => 'Rejected', 'value' => $rejectedParticipation, 'color' => '#94a3b8'],
+                ]),
+            ],
         ];
+    }
+
+    private function regionScholarsQuery(array $programIds, int $year, CarbonInterface $ayEnd): Builder
+    {
+        return User::query()
+            ->where('role', User::ROLE_SCHOLAR)
+            ->whereIn('scholarship_program_id', $programIds)
+            ->where(function ($query) use ($year, $ayEnd) {
+                $query->where(function ($withinYear) use ($year, $ayEnd) {
+                    $withinYear->where('created_at', '<=', $ayEnd)
+                        ->where(function ($academicYear) use ($year) {
+                            $academicYear->where('academic_year_start', $year)
+                                ->orWhereNull('academic_year_start');
+                        });
+                })->orWhereHas('attendances', fn ($attendance) => $attendance
+                    ->where('academic_year_start', $year));
+            });
     }
 
     /**
      * @param  array<int, array{label: string, value: int|float, color: string}>  $slices
-     * @return array{title: string, total: int|float, gradient: string, slices: array<int, array<string, mixed>>}
+     * @return array{title: string, total: int|float, empty: bool, gradient: string, slices: array<int, array<string, mixed>>}
      */
     private function buildPieChart(string $title, array $slices): array
     {
@@ -311,163 +601,45 @@ class AdminDashboardService
         return [
             'title' => $title,
             'total' => $total,
+            'empty' => $total <= 0 || $gradient === '',
             'gradient' => $gradient,
             'slices' => $formatted,
         ];
     }
 
-    public function locationBoard(?string $locationKey = null, string $programType = 'all'): array
+    public function scholarsQuery(array $programIds, ?array $clubIds = null)
     {
-        $listType = $programType === 'province' ? 'province' : 'city_municipality';
-
-        $cityCount = ScholarshipProgram::query()->active()->cities()->count();
-        $provinceCount = ScholarshipProgram::query()->active()->provinces()->count();
-
-        $summaries = $this->locationSummaries($locationKey, $listType);
-
-        if ($locationKey !== null && $locationKey !== '' && $locationKey !== 'all') {
-            $summaries = $summaries
-                ->filter(fn (array $summary) => ($summary['program']->location_type ?? null) === $listType)
-                ->values();
-        }
-
-        $scholarTotals = User::query()
-            ->join('scholarship_programs', 'users.scholarship_program_id', '=', 'scholarship_programs.id')
-            ->where('users.role', User::ROLE_SCHOLAR)
-            ->where('scholarship_programs.is_active', true)
-            ->selectRaw('scholarship_programs.location_type, COUNT(*) as aggregate')
-            ->groupBy('scholarship_programs.location_type')
-            ->pluck('aggregate', 'location_type');
-
-        return [
-            'listType' => $listType,
-            'summaries' => $summaries,
-            'cityCount' => $cityCount,
-            'provinceCount' => $provinceCount,
-            'cityScholarCount' => (int) ($scholarTotals['city_municipality'] ?? 0),
-            'provinceScholarCount' => (int) ($scholarTotals['province'] ?? 0),
-        ];
-    }
-
-    public function locationSummaries(?string $locationKey = null, string $programType = 'all'): Collection
-    {
-        if ($locationKey !== null && $locationKey !== '' && $locationKey !== 'all') {
-            $program = ScholarshipProgram::find((int) $locationKey);
-
-            if (! $program) {
-                return collect();
-            }
-
-            $maps = $this->locationMetricMaps([$program->id]);
-
-            return collect([$this->buildLocationSummaryFromMaps($program, $maps)]);
-        }
-
-        $query = ScholarshipProgram::query()->where('is_active', true);
-
-        if (in_array($programType, ['city_municipality', 'province'], true)) {
-            $query->where('location_type', $programType);
-        }
-
-        $programs = ScholarshipProgram::sortAlphabetically($query->get());
-
-        $maps = $this->locationMetricMaps($programs->pluck('id')->all());
-
-        return $programs->map(fn (ScholarshipProgram $program) => $this->buildLocationSummaryFromMaps($program, $maps));
-    }
-
-    private function buildLocationSummary(ScholarshipProgram $program): array
-    {
-        return $this->buildLocationSummaryFromMaps($program, $this->locationMetricMaps($program->coveredLocationIds()));
-    }
-
-    private function buildLocationSummaryFromMaps(ScholarshipProgram $program, array $maps): array
-    {
-        $id = (int) $program->id;
-
-        return [
-            'program' => $program,
-            'scholars' => (int) ($maps['scholars'][$id] ?? 0),
-            'staff' => (int) ($maps['staff'][$id] ?? 0),
-            'events' => (int) ($maps['events'][$id] ?? 0),
-            'pending' => (int) ($maps['pending_scholars'][$id] ?? 0) + (int) ($maps['pending_attendances'][$id] ?? 0),
-        ];
-    }
-
-    /**
-     * @return array{scholars: Collection, staff: Collection, events: Collection, pending_scholars: Collection, pending_attendances: Collection}
-     */
-    private function locationMetricMaps(array $programIds): array
-    {
-        $programIds = $programIds ?: [0];
-
-        return [
-            'scholars' => User::query()
-                ->where('role', User::ROLE_SCHOLAR)
-                ->whereIn('scholarship_program_id', $programIds)
-                ->selectRaw('scholarship_program_id, count(*) as aggregate')
-                ->groupBy('scholarship_program_id')
-                ->pluck('aggregate', 'scholarship_program_id'),
-            'pending_scholars' => User::query()
-                ->where('role', User::ROLE_SCHOLAR)
-                ->where('status', User::STATUS_PENDING)
-                ->whereIn('scholarship_program_id', $programIds)
-                ->selectRaw('scholarship_program_id, count(*) as aggregate')
-                ->groupBy('scholarship_program_id')
-                ->pluck('aggregate', 'scholarship_program_id'),
-            'staff' => User::query()
-                ->where('role', User::ROLE_SCHOLAR_STAFF)
-                ->where('status', User::STATUS_APPROVED)
-                ->whereIn('scholarship_program_id', $programIds)
-                ->selectRaw('scholarship_program_id, count(*) as aggregate')
-                ->groupBy('scholarship_program_id')
-                ->pluck('aggregate', 'scholarship_program_id'),
-            'events' => Event::query()
-                ->whereIn('scholarship_program_id', $programIds)
-                ->selectRaw('scholarship_program_id, count(*) as aggregate')
-                ->groupBy('scholarship_program_id')
-                ->pluck('aggregate', 'scholarship_program_id'),
-            'pending_attendances' => Attendance::query()
-                ->join('users', 'attendances.user_id', '=', 'users.id')
-                ->where('attendances.status', Attendance::STATUS_PENDING)
-                ->whereNotNull('attendances.check_in')
-                ->where('users.role', User::ROLE_SCHOLAR)
-                ->whereIn('users.scholarship_program_id', $programIds)
-                ->selectRaw('users.scholarship_program_id, count(*) as aggregate')
-                ->groupBy('users.scholarship_program_id')
-                ->pluck('aggregate', 'scholarship_program_id'),
-        ];
-    }
-
-    public function scholarsQuery(array $programIds)
-    {
-        return User::query()
+        $query = User::query()
             ->where('role', User::ROLE_SCHOLAR)
             ->whereIn('scholarship_program_id', $programIds ?: [0])
-            ->with('scholarshipProgram');
+            ->with(['scholarshipProgram', 'scholarshipClub']);
+
+        return $this->constrainClubs($query, $clubIds);
     }
 
-    public function staffQuery(array $programIds)
+    public function staffQuery(array $programIds, ?array $clubIds = null)
     {
-        return User::query()
+        $query = User::query()
             ->where('role', User::ROLE_SCHOLAR_STAFF)
             ->whereIn('scholarship_program_id', $programIds ?: [0])
-            ->with('scholarshipProgram');
+            ->with(['scholarshipProgram', 'scholarshipClub']);
+
+        return $this->constrainClubs($query, $clubIds);
     }
 
-    public function approvedStaffQuery(array $programIds)
+    public function approvedStaffQuery(array $programIds, ?array $clubIds = null)
     {
-        return $this->staffQuery($programIds)->where('status', User::STATUS_APPROVED);
+        return $this->staffQuery($programIds, $clubIds)->where('status', User::STATUS_APPROVED);
     }
 
-    public function visibleStaffQuery(array $programIds)
+    public function visibleStaffQuery(array $programIds, ?array $clubIds = null)
     {
-        return $this->staffQuery($programIds)->where('status', '!=', User::STATUS_PENDING);
+        return $this->staffQuery($programIds, $clubIds)->where('status', '!=', User::STATUS_PENDING);
     }
 
-    public function pendingStaffQuery(array $programIds)
+    public function pendingStaffQuery(array $programIds, ?array $clubIds = null)
     {
-        return $this->staffQuery($programIds)->where('status', User::STATUS_PENDING);
+        return $this->staffQuery($programIds, $clubIds)->where('status', User::STATUS_PENDING);
     }
 
     public function eventsQuery(array $programIds)
@@ -477,11 +649,11 @@ class AdminDashboardService
             ->whereIn('scholarship_program_id', $programIds ?: [0]);
     }
 
-    public function documentsQuery(array $programIds)
+    public function documentsQuery(array $programIds, ?array $clubIds = null)
     {
         return Document::query()
             ->with(['user', 'documentType'])
-            ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds));
+            ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds, $clubIds));
     }
 
     public function documentTypesCount(array $programIds): int
@@ -491,9 +663,9 @@ class AdminDashboardService
             ->count();
     }
 
-    public function documentOverviewStats(array $programIds): array
+    public function documentOverviewStats(array $programIds, ?array $clubIds = null): array
     {
-        $query = Document::query()->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds));
+        $query = Document::query()->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds, $clubIds));
 
         $total = (clone $query)->count();
         $approved = (clone $query)->where('status', 'approved')->count();
@@ -504,11 +676,22 @@ class AdminDashboardService
         return compact('total', 'approved', 'pending', 'rejected', 'notSubmitted');
     }
 
-    private function scopeScholars(Builder $query, array $programIds): Builder
+    private function scopeScholars(Builder $query, array $programIds, ?array $clubIds = null): Builder
     {
-        return $query
+        $query
             ->where('role', User::ROLE_SCHOLAR)
             ->whereIn('scholarship_program_id', $programIds ?: [0]);
+
+        return $this->constrainClubs($query, $clubIds);
+    }
+
+    private function constrainClubs(Builder $query, ?array $clubIds): Builder
+    {
+        if ($clubIds !== null) {
+            $query->whereIn('scholarship_club_id', $clubIds ?: [0]);
+        }
+
+        return $query;
     }
 
     /**
@@ -537,7 +720,7 @@ class AdminDashboardService
     private function sidebarBadgePayload(array $programIds): array
     {
         $programIds = $programIds ?: [0];
-        $cacheKey = 'admin.sidebar_badges.v2.'.md5(implode(',', array_map('intval', $programIds)));
+        $cacheKey = 'admin.sidebar_badges.v3.'.md5(implode(',', array_map('intval', $programIds)));
 
         return Cache::remember($cacheKey, 20, function () use ($programIds) {
             $pendingScholars = $this->scholarsQuery($programIds)
@@ -577,19 +760,6 @@ class AdminDashboardService
 
             $completion = $this->staff->completionCounts($programIds);
 
-            $pendingStaffProgramIds = $this->pendingStaffQuery($programIds)
-                ->pluck('scholarship_program_id');
-
-            $inactiveProgramIds = ScholarshipProgram::query()
-                ->whereIn('id', $programIds)
-                ->where('is_active', false)
-                ->pluck('id');
-
-            $locationsAttention = $pendingStaffProgramIds
-                ->merge($inactiveProgramIds)
-                ->unique()
-                ->count();
-
             $reportsAttention = (int) ($completion['in_progress'] ?? 0)
                 + (int) ($completion['not_started'] ?? 0);
 
@@ -599,7 +769,6 @@ class AdminDashboardService
                 'events' => $pendingEvents,
                 'service-hours' => $pendingServiceHours,
                 'documents' => $pendingDocuments,
-                'locations' => $locationsAttention,
                 'reports' => 0,
                 'settings' => 0,
             ];
@@ -608,8 +777,7 @@ class AdminDashboardService
                 + $pendingStaff
                 + $pendingEvents
                 + $pendingAttendances
-                + $pendingDocuments
-                + $locationsAttention;
+                + $pendingDocuments;
 
             return [
                 'badges' => $badges,

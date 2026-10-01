@@ -23,16 +23,7 @@ body:has(.admin-shell) {
 }
 
 .admin-shell .staff-nav-item.active {
-    box-shadow: 0 2px 8px rgba(194, 65, 12, 0.25);
-}
-
-.admin-shell .staff-sidebar-footer {
-    border-top-color: rgba(92, 26, 20, 0.12);
-}
-
-.admin-shell .staff-logout-btn {
-    background: rgba(255, 255, 255, 0.65);
-    border-color: rgba(92, 26, 20, 0.2);
+    box-shadow: 0 6px 18px rgba(24, 39, 75, 0.06);
 }
 
 .admin-shell .staff-user-avatar,
@@ -75,13 +66,35 @@ body:has(.admin-shell) {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    align-items: center;
+    align-items: flex-end;
     min-width: 0;
     max-width: 100%;
 }
 
-.admin-location-switcher select {
-    min-width: 220px;
+.admin-location-cascade {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: flex-end;
+    width: 100%;
+}
+
+.admin-location-cascade-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #5c1a14;
+    margin: 0 0 6px;
+}
+
+.admin-location-cascade-field {
+    flex: 1 1 180px;
+    min-width: 180px;
+}
+
+.admin-location-cascade select {
+    min-width: 180px;
+    flex: 1 1 180px;
     max-width: 100%;
     padding: 10px 12px;
     border: 1px solid #e5e7eb;
@@ -89,6 +102,43 @@ body:has(.admin-shell) {
     font-size: 14px;
     background: #fff;
     box-sizing: border-box;
+}
+
+.admin-scholarship-clubs {
+    width: 100%;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f5d0c8;
+}
+
+.admin-scholarship-clubs-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #5c1a14;
+    margin-bottom: 8px;
+}
+
+.admin-scholarship-clubs-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+}
+
+.admin-scholarship-clubs-list li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    align-items: baseline;
+}
+
+.admin-scholarship-clubs-empty {
+    margin: 0;
+}
+
+.admin-dashboard-scope-form .admin-location-cascade {
+    max-width: 720px;
 }
 
 .admin-location-pill {
@@ -115,7 +165,6 @@ body:has(.admin-shell) {
 }
 
 .admin-icon-pin::before { content: '📍'; font-size: 14px; }
-.admin-icon-locations::before { content: '🗺'; font-size: 14px; }
 
 .admin-compare-grid {
     display: grid;
@@ -173,7 +222,6 @@ body:has(.admin-shell) {
     overflow-wrap: break-word;
 }
 
-.admin-locations-page,
 .admin-staff-page,
 .admin-scholar-profile,
 .admin-scholar-documents {
@@ -208,6 +256,31 @@ body:has(.admin-shell) {
 .admin-scholar-profile-header,
 .admin-scholar-documents-header {
     margin-bottom: 20px;
+}
+
+.admin-attendance-photo-trigger {
+    display: inline-flex;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 8px;
+    line-height: 0;
+}
+
+.admin-attendance-photo-trigger:focus-visible {
+    outline: 2px solid #c2410c;
+    outline-offset: 2px;
+}
+
+.admin-attendance-photo {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #f5d0c8;
+    display: block;
+    background: #fff7ed;
 }
 
 .admin-document-file-name {
@@ -279,41 +352,6 @@ body:has(.admin-shell) {
     margin-top: 16px;
 }
 
-.admin-program-type-card {
-    margin-bottom: 20px;
-}
-
-.admin-program-type-copy {
-    margin: 0 0 14px;
-}
-
-.admin-program-type-switch {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    width: 100%;
-}
-
-.admin-program-type-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    text-decoration: none;
-    box-sizing: border-box;
-    min-height: 44px;
-    width: 100%;
-    cursor: pointer;
-    font-weight: 600;
-    overflow-wrap: break-word;
-    white-space: normal;
-    line-height: 1.3;
-}
-
-.admin-locations-table {
-    margin-bottom: 20px;
-}
-
 .admin-staff-notice {
     background: #fff2f1;
     border-color: #fecaca;
@@ -355,50 +393,89 @@ body:has(.admin-shell) {
     font-weight: 600;
 }
 
-.admin-report-program-split {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 20px;
-    align-items: start;
-    margin-bottom: 20px;
+.admin-report-year-banner {
+    background: #fff7ed;
+    border-color: #fed7aa;
+}
+
+.admin-regional-reports {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
     width: 100%;
     min-width: 0;
 }
 
-.admin-report-program-column {
+.admin-region-section {
     min-width: 0;
+}
+
+.admin-region-header {
     display: flex;
-    flex-direction: column;
-    gap: 16px;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin: 0 0 16px;
 }
 
-.admin-report-program-header {
+.admin-region-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #5c1a14;
+}
+
+.admin-region-header .staff-muted {
     margin: 0;
 }
 
-.admin-report-program-header .staff-muted {
-    margin: 0;
-}
-
-.admin-report-pies {
+.admin-region-charts {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
-    align-items: stretch;
-    margin-bottom: 0;
     width: 100%;
     min-width: 0;
 }
 
 .admin-pie-card {
     min-width: 0;
-    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
     box-sizing: border-box;
 }
 
-.admin-pie-card .staff-card-header h2 {
+.admin-pie-stat {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    min-width: 0;
+}
+
+.admin-pie-stat h3 {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
     overflow-wrap: anywhere;
-    word-break: break-word;
+}
+
+.admin-pie-stat .value {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.15;
+    color: #5c1a14;
+}
+
+.admin-pie-stat .sub {
+    margin-top: 4px;
+    font-size: 13px;
+    color: #6b7280;
+    overflow-wrap: anywhere;
 }
 
 .admin-pie-body {
@@ -406,6 +483,8 @@ body:has(.admin-shell) {
     align-items: center;
     gap: 20px;
     flex-wrap: wrap;
+    width: 100%;
+    min-width: 0;
 }
 
 .admin-pie-chart {
@@ -433,16 +512,6 @@ body:has(.admin-shell) {
     overflow-wrap: break-word;
 }
 
-.admin-pie-empty {
-    margin: 12px 0 0;
-    color: #6b7280;
-    font-size: 14px;
-}
-
-.staff-grid-2.admin-reports-lower {
-    grid-template-columns: 1fr;
-}
-
 .admin-pie-legend .staff-dot {
     flex-shrink: 0;
 }
@@ -452,7 +521,25 @@ body:has(.admin-shell) {
     white-space: nowrap;
 }
 
+.admin-pie-empty {
+    margin: 0;
+    color: #6b7280;
+    font-size: 14px;
+    padding: 24px 8px;
+    text-align: center;
+    background: #fff7ed;
+    border: 1px dashed #fed7aa;
+    border-radius: 8px;
+}
+
+.staff-grid-2.admin-reports-lower {
+    grid-template-columns: 1fr;
+}
+
 @media (max-width: 900px) {
+    .admin-region-charts {
+        grid-template-columns: 1fr;
+    }
     .admin-pie-body {
         justify-content: center;
     }
@@ -474,12 +561,11 @@ body:has(.admin-shell) {
     }
     .admin-location-banner,
     .admin-scope-banner,
-    .admin-locations-page,
     .admin-staff-page,
     .admin-scholar-profile,
     .admin-scholar-documents,
     .admin-event-attendance,
-    .admin-report-program-split {
+    .admin-regional-reports {
         min-width: 0;
         max-width: 100%;
     }
@@ -490,8 +576,11 @@ body:has(.admin-shell) {
 }
 
 @media (max-width: 700px) {
-    .admin-report-program-split {
-        grid-template-columns: 1fr;
+    .admin-pie-body {
+        justify-content: center;
+    }
+    .admin-pie-legend {
+        width: 100%;
     }
 }
 
@@ -499,6 +588,10 @@ body:has(.admin-shell) {
     .admin-location-banner {
         flex-direction: column;
         align-items: stretch;
+    }
+    .admin-attendance-photo {
+        width: 72px;
+        height: 72px;
     }
     .admin-location-switcher {
         width: 100%;
@@ -544,15 +637,8 @@ body:has(.admin-shell) {
         overflow: visible;
         text-overflow: unset;
     }
-    .admin-locations-page .staff-stat-body .value,
     .admin-staff-page .staff-stat-body .value {
         font-size: 24px;
-    }
-    .admin-locations-add .staff-form-grid {
-        grid-template-columns: 1fr;
-    }
-    .admin-program-type-switch {
-        grid-template-columns: 1fr;
     }
     .admin-staff-page .staff-action-group {
         width: 100%;

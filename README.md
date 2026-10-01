@@ -104,7 +104,7 @@ The system is a **role-based scholar portal** with three portals:
 
 The root URL `/` redirects to the login page. After login, users are sent to the dashboard that matches their role.
 
-City Scholarship Programs and Province Scholarship Programs are stored as separate `scholarship_programs` rows and are **not mixed** in staff or admin queries. Each program has its own scholars, staff, events, attendance, documents, reports, and statistics. Scope is always `scholarship_program_id` (see [§32](#32-scholarship-program-isolation)).
+City Scholarship Programs and Province Scholarship Programs are stored as separate `scholarship_programs` rows and are **not mixed** in staff or admin queries. Admin location filtering uses **City Scholar** and **Province Scholar** only (no combined Scholar / All Program Types option). Selecting a Province lists Scholarship Clubs registered in that province; selecting a Municipality/City further limits the list to clubs in that city. If none are registered, Admin shows **No registered Scholarship Club found**. Club records are not modified. Scope still uses `scholarship_program_id`, with City Scholar lists also limited to matching `scholarship_club_id` values when a location is selected (see [§32](#32-scholarship-program-isolation)).
 
 Required service hours for scholars: **30 per semester** (`ScholarService::REQUIRED_HOURS`). Approved hours are credited to the attendance row’s academic year and semester. Pending hours are not completed hours. Extra approved hours above 30 in a semester are carried into the next semester (`ScholarService::allocateHoursFromRecords`); they do not raise that semester’s completed total above 30. Staff → Scholar profile shows the current semester summary plus a 4-year progress grid from `ScholarService::programHourTracking`.
 
@@ -179,13 +179,11 @@ Account status (`users.status`):
 ### 3.3 Administrator
 
 - Full `/admin` portal (`EnsureAdmin`).
-- Can filter most admin pages by **program type** (all / city / province) and **specific program** (`partials/admin-location-filter` — the **Viewing** form). **Locations**, **Reports**, and **Admin Settings** do not include that filter form. Those pages still show the **Current Admin Scope** banner (`partials/admin-scope-banner`). The dashboard uses its own Location & Scholarship Program dropdown.
+- Can filter most admin pages by **program type** (City Scholar / Province Scholar) and **specific program** (`partials/admin-location-filter` — the **Viewing** form). **Admin Settings** does not include that filter form and still shows the **Current Admin Scope** banner (`partials/admin-scope-banner`). **Reports** has neither the Viewing form nor the scope banner; it uses an **Academic Year** dropdown and always shows Luzon, Visayas, and Mindanao together. The **Admin Dashboard** uses Province and Municipality/City only (no scope banner, no Scholarship category, no Scholarship Clubs list). There is **no Admin Locations page**.
 - Approves or rejects **scholar staff** only (not scholar accounts — those are staff’s job).
 - Can view scholars (click name for a view-only profile), events (click title for attendees), service hours, documents (click scholar name to preview/download that scholar’s files), and reports.
-- There is **no** Admin Participation page and **no** Admin Attendance page. Staff still own participation reports and attendance sessions.
-- Can manage location/program records (display name, active flag) and add locations.
+- There is **no** Admin Participation page, **no** Admin Attendance page, and **no** Admin Locations page. Staff still own participation reports and attendance sessions.
 - Can update their own name, email, and password.
-- Can add a location (`province` or `city_municipality`) and edit `display_name` / `is_active`.
 - Admin scholars list is **read-only** (search by name, email, scholar ID). Admin does **not** approve scholar accounts.
 - The designated Admin account is **permanent** and cannot be deleted through the application.
 - `AnnouncementService::publish()` exists for program-scoped notices, but **no staff or admin create-announcement route is wired** in `web.php`. Scholars can only list/read announcements that already exist.
@@ -407,18 +405,17 @@ Global academic year/semester can be updated from the scholar profile **only by 
 
 | Section | What it does |
 |---------|----------------|
-| **Dashboard** | Scope banner + **Location & Scholarship Program** dropdown (All Locations / All Programs, or a specific city/province program). Cards: Total Scholars, Approved Scholars, Pending Scholars, Rejected Scholars, Scholar Staff, Pending Staff, Events, Documents, Completed Scholars. Quick Actions: View Scholars, View Scholar Staff, View Events, Open Reports. Location Comparison UI and Attendance / Service Hours / Participation dashboard cards have been removed |
-| **Locations** | Scope banner plus **Scholarship Program Type** switcher (`.admin-program-type-switch`): City or Province list only, never both. No Viewing filter form. **Add:** `location_name`, `location_type` (`province` \| `city_municipality`), `province_name` (required for cities), `region_name`, `display_name`. **Edit:** `display_name`, `is_active` |
+| **Dashboard** | **Location** card with Province then Municipality/City (no Current Admin Scope banner, no Scholarship category, no Scholarship Clubs list). Cards: Total Scholars, Approved Scholars, Pending Scholars, Rejected Scholars, Scholar Staff, Pending Staff, Total Scholarship Clubs, Documents, Completed Scholars. Stats include only records in the selected Province (or that Municipality/City). Empty locations show **0**. Quick Actions: View Scholars, View Scholar Staff, View Events, Open Reports |
 | **Scholars** | Read-only list in current scope; search name / email / scholar ID. Click a scholar name (`.admin-scholar-name-link`) to open a view-only profile (`GET /admin/scholars/{scholar}`). No approve/reject here |
 | **Scholar Staff** | Pending registrations (Approve → `approved` and sets `events_visible_from` for a fresh Events list; Reject → `rejected`, account kept). All Scholar Staff Accounts shows approved/rejected, **not** pending |
-| **Events** | Scoped event monitoring (no create on admin). Click an event title (`.admin-event-name-link`) to open attendees (`GET /admin/events/{event}`): name, attendance status, check-in, hours |
+| **Events** | Scoped event monitoring (no create on admin). Click an event title (`.admin-event-name-link`) to open attendees (`GET /admin/events/{event}`): Scholar, Attendance Status, Check-In, Service Hours Earned, **Attendance Photo**. The photo column shows only **approved** participation photos for that scholar and event. Pending, rejected, and unverified photos are hidden (`No approved photo`). Click a thumbnail to open the existing photo preview modal. Photo files are served at `GET /admin/events/{event}/attendances/{attendance}/photo` (`admin.events.attendances.photo`) only when the attendance is approved and belongs to that event |
 | **Service Hours** | Scoped hours monitoring |
 | **Documents** | Scoped document monitoring. Click a scholar name to open that scholar’s submissions (`GET /admin/documents/scholars/{scholar}`): type, submitted date, status, Preview/Download when a file exists. Admin does not approve/reject documents (staff still does) |
-| **Reports** | Scope banner only (no Viewing filter). Summary cards: Scholars, Staff, Completed, Participation. Then **two columns**: City Scholarship Program Data (left) and Province Scholarship Program Data (right). Each column has four pies — Scholars (approved/pending/rejected), Staff (approved/pending/rejected), Completed (completed / in progress / not started), Participation (participated / pending / failed check-in; or registered if those slices are empty). **Completed** counts scholars who have met `ScholarService::REQUIRED_HOURS` (30) approved hours in the current academic period. **Participation** counts approved check-ins vs pending check-ins vs failed-check-in registrations. City and Province records are never combined in one chart. Attendance Report legend and Completion Status table have been removed |
+| **Reports** | No Viewing filter, no Current Admin Scope, no City/Province Scholarship Program Data columns. **Academic Year** dropdown (`AcademicSettingsService::reportYearOptions` / `resolveReportFilter`, session `admin_report_year`) applies to all three island groups at once. **LUZON**, **VISAYAS**, and **MINDANAO** stay visible together. Each region has four stats and **four separate pie charts** (12 charts total): Scholars (approved/pending/rejected), Scholarship Clubs (registered clubs), Completed Students (scholars who reached `ScholarService::REQUIRED_HOURS` (30) approved hours in that Academic Year), Participation (attendance records for that year). Region comes from `scholarship_programs.region_name` / PSGC (`App\Support\PhilippineIslandGroup`); Province and Municipality/City data are not deleted. Empty regions show **0** and **No data available** on the chart. Changing Academic Year refreshes every stat and chart |
 | **Admin Settings** | Scope banner only (no Viewing filter). Update admin `full_name` / `email` (unique); change password (`Password::min(8)`, current required, session regenerate) |
 | **Sidebar badge** | Polls `GET /admin/sidebar-badges` — JSON `{ staff: <pending count> }`. Red `.staff-nav-badge` only on **Scholar Staff**. Other admin keys may show `.staff-notif-badge` if a count is passed |
 
-Admin scope is stored in session: `admin_location`, `admin_program_type`. Queries use `AdminDashboardService::resolveAdminProgramIds()`.
+Admin scope is stored in session: `admin_location`, `admin_program_type` (`city_municipality` or `province` only). List/report queries use `AdminDashboardService::resolveAdminProgramIds()`. Scholarship Clubs for those pages come from `AdminDashboardService::clubsForAdminLocation()`. The Admin Dashboard ignores Scholarship category and uses `resolveGeographicProgramIds()` plus `geographicClubs()` so Province / Municipality/City drive the cards, including **Total Scholarship Clubs**.
 
 ---
 
@@ -478,7 +475,7 @@ Laravel 12 MVC. There is **no** `routes/api.php` public API. A few JSON response
 |---------|----------------|
 | `ScholarService` | Hours (`serviceHourStats`, `programHourTracking`, 30/semester cap + carry), documents, calendar, notifications, missed check-ins, activity log |
 | `StaffDashboardService` | Staff/admin stats and reports scoped by program IDs; staff report pages accept an Academic Year / Semester filter |
-| `AdminDashboardService` | Admin scope, staff queries, dashboard stats, City/Province report pie series |
+| `AdminDashboardService` | Admin scope, staff queries, dashboard stats, regional Reports (Luzon / Visayas / Mindanao pie charts) |
 | `AttendanceSessionService` | Open/close attendance, notify scholars, live status payload |
 | `AccountService` | Provision new scholar/staff; permanent delete (blocked for the designated Admin) |
 | `UserSequenceService` | After a user delete, compact remaining `users.id` to `1..n` and rewrite user foreign keys |
@@ -495,7 +492,7 @@ Laravel 12 MVC. There is **no** `routes/api.php` public API. A few JSON response
 
 ### Models
 
-`User`, `ScholarshipProgram`, `ScholarshipClub`, `ScholarshipClubSchool`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`, `GoogleDriveFolder`, `GoogleDriveConnection`. Scholar register Course is a typed full official name (`App\Support\CourseCatalog` rejects initials such as BSICT, BSCE, and BSIS). Year-level labels live in `CourseCatalog::yearLevels()`. Course and Year Level are saved on `users.course_year_level` and `users.year_level` and displayed from that account in User Settings.
+`User`, `ScholarshipProgram`, `ScholarshipClub`, `ScholarshipClubSchool`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`, `GoogleDriveFolder`, `GoogleDriveConnection`. Scholar register Course is a typed full official name (`App\Support\CourseCatalog` rejects initials such as BSICT, BSCE, and BSIS). Year-level labels live in `CourseCatalog::yearLevels()`. Course and Year Level are saved on `users.course_year_level` and `users.year_level` and displayed from that account in User Settings. Admin Reports map programs to Luzon, Visayas, or Mindanao with `App\Support\PhilippineIslandGroup` from `region_name` and PSGC codes.
 
 Passwords use the Eloquent `hashed` cast. `User::updatePassword()` and `User::register()` set the password through that cast (not mass assignment of `password`).
 
@@ -551,7 +548,7 @@ This documentation follows the **same tokens the app already uses**. Do not intr
 | Cards | White, 12px radius, `--shadow` |
 | Primary button `.btn` | `#2fa76a` fill, white text, 8px radius |
 | Auth submit `.login-btn` / `.register-btn` | `#1E6E1E` fill, white text (Login, Register, Register Scholar Staff) |
-| Auth welcome `.welcome-action-btn-outline` | White fill, `#1E6E1E` text; `:focus` / `:active` shadow `#1f2937` (Create an Account and City's Scholar Registration on login; Login on `/register` and `/register/staff`) |
+| Auth welcome `.welcome-action-btn-outline` | White fill, `#1E6E1E` text; `:focus` / `:active` shadow `#1f2937` (Create an Account and Scholarship Club Registration on login; Login on `/register` and `/register/staff`) |
 | Outline button `.btn.outline` | Transparent fill, `#2fa76a` border |
 | Program badge | White card, `#b6ebb9` border, `#166534` text |
 | Notification badge `.nav-notif-badge` | `#ef4444` pill, white count (`user-nav.css` + `styles.css`) |
@@ -584,8 +581,7 @@ Admin **reuses** staff components and only overrides colors:
 | Page background | `#faf6f5` |
 | Location banner / pills | `#fff2f1` fill, `#f5d0c8` border |
 | Scholar / event name links | `.admin-scholar-name-link`, `.admin-event-name-link` — underlined `#c2410c` |
-| Locations type switcher | `.admin-program-type-switch` / `.admin-program-type-btn` |
-| Reports split | `.admin-report-program-split` two columns (City left, Province right); stacks under 700px. Each column `.admin-report-pies` lists four `.admin-pie-card` charts |
+| Reports | `.admin-regional-reports` stacks Luzon / Visayas / Mindanao; each region `.admin-region-charts` is a 2-column grid of `.admin-pie-card` charts (1 column ≤900px) |
 
 ### UI patterns to keep
 
@@ -613,14 +609,14 @@ When adding README screenshots or UI notes, use these hex values. Do not switch 
 | `public/css/notifications-page.css` | `user/notifications.blade.php` | Main + 320px settings column; hidden extra items |
 | `public/css/profile-page.css` | `user/profile.blade.php` | Section cards 20px padding, 24px stack, sidebar help; Date of Birth `.date-input-wrap` centers the date value and pins the native picker on the right (`12px 42px` padding) so they stay aligned on phone/tablet/desktop |
 | `public/css/staff-admin.css` | Staff + admin layouts (`?v=filemtime`) | Staff tokens, `.staff-sidebar`, `.staff-nav-item`, `.staff-card`, `.staff-event-create-card`, `.staff-datetime-grid`, `.date-input-wrap` (centered date/datetime + right picker), `.staff-hours-card` / `.staff-hours-years` (scholar 4-year service hours), `.staff-report-period` (Academic Year Setup), `.staff-documents-table` (centered Status badge column), `.staff-stat-card`, `.staff-table`, `.staff-stack-table` (mobile card rows), `.staff-scholar-name-link`, `.staff-presence` / `.staff-presence-dot` (Active Now / Offline), `.staff-btn`, filters, confirm modal, stacked staff header |
-| `public/css/admin.css` | Admin layout **after** staff-admin | Recolors staff tokens to orange/peach; location banner/pills; name links; report pies; locations type switcher |
+| `public/css/admin.css` | Admin layout **after** staff-admin | Recolors staff tokens to orange/peach; location banner/pills; name links; regional report pie charts |
 
 ### Scholar component tokens (from `styles.css`)
 
 | Component | Classes / rules |
 |-----------|-----------------|
 | **Typography** | Inter 300–800; title 14px/700 `#0f1721`; topbar `h1` 26px; card headers 12px uppercase 0.3px tracking; muted `#8a8f98` |
-| **Sidebar** | 300px; gradient `#e7f7ef` → `#eaf9ef`; padding 28×20; gap 20px; collapsible `.sidebar.collapsed` |
+| **Sidebar** | 300px; gradient `#e7f7ef` → `#eaf9ef`; padding 28×20; gap 20px; logo 52px; overlay drawer ≤1000px (`300px` / `86vw`); profile chip under the logo; Logout at the bottom; collapsible `.sidebar.collapsed` |
 | **Nav** | `.nav-item` 12×14 padding, 10px radius, weight 600; `.active` fill `#2fa76a` + white + `--shadow`; disabled pending items are `<span class="nav-item is-disabled">` |
 | **Header / topbar** | Scholar shell (`user-nav.css`): stacked `.topbar` — hamburger + page title, then full-width `.profile-card` (avatar, wrapping name, dropdown). On Dashboard only (`.topbar-dashboard`): **Welcome back, [name]!**, **Here's what's happening in [city], [province] — [program].**, then `.topbar-date` right-aligned (`F j, Y`). Names and program text wrap; no ellipsis cutoff |
 | **Cards** | `.card` white, 12px radius, 16px padding, `--shadow` |
@@ -635,8 +631,8 @@ When adding README screenshots or UI notes, use these hex values. Do not switch 
 
 | Component | Classes / rules |
 |-----------|-----------------|
-| **Sidebar** | `.staff-sidebar`; staff `#e8f4fc` → `#eef8ff` text `#0b2d4d`; admin `#fff2f1` text `#5c1a14` |
-| **Nav** | `.staff-nav-item` 10px radius; hover translucent white (staff) or `rgba(194, 65, 12, 0.08)` (admin); `.active` solid primary + white |
+| **Sidebar** | `.staff-sidebar` 300px; padding 28×20; gap 20px; logo 52px; overlay drawer ≤1000px (`300px` / `86vw`). Staff `#e8f4fc` → `#eef8ff` text `#0b2d4d`; admin `#fff2f1` text `#5c1a14`. Profile chip under the logo; Logout pinned at the bottom |
+| **Nav** | `.staff-nav-item` 12×14 padding, 10px radius; hover translucent white (staff) or `rgba(194, 65, 12, 0.08)` (admin); `.active` solid primary + white |
 | **Stat cards** | `.staff-stat-grid` 5 columns 16px gap; `.staff-stat-card` white, 12px, 1px `#e5e7eb`, light shadow; icon 42px / 10px radius (blue/green/orange/purple/teal/red/gray) |
 | **Cards** | `.staff-card` 20px padding, 12px radius, 1px border. Create Event uses `.staff-event-create-card` (max-width 760px, full width on small screens) |
 | **Buttons** | `.staff-btn` 8px; `.staff-btn-primary` fill `--staff-primary` (blue or admin orange) |
@@ -646,7 +642,7 @@ When adding README screenshots or UI notes, use these hex values. Do not switch 
 | **Confirm modal** | `.staff-confirm-modal` / `.staff-confirm-dialog` 16px, backdrop `rgba(15, 39, 68, 0.45)` |
 | **Staff name links** | `.staff-scholar-name-link` — underlined `--staff-primary` `#1890ff`, hover `#096dd9`; opens `staff.scholars.show` |
 | **Admin name links** | `.admin-scholar-name-link`, `.admin-event-name-link` |
-| **Admin reports** | `.admin-report-program-split`, `.admin-report-pies`, `.admin-pie-card` |
+| **Admin reports** | `.admin-regional-reports`, `.admin-region-section`, `.admin-pie-card`, `.admin-pie-chart` |
 
 Page layouts that a mobile port must preserve (same data, stacked on small screens): notifications/documents **1fr + 320px**; service hours **1fr + 340px**; staff dashboard **5-stat row** then **2fr / 1fr** grids.
 
@@ -803,8 +799,6 @@ Named routes use prefixes `admin.*`, `staff.*`, `user.*`.
 |--------|------|------|
 | GET | `/admin/dashboard` | `admin.dashboard` |
 | GET | `/admin/sidebar-badges` | `admin.sidebar-badges` |
-| GET/POST | `/admin/locations` | `admin.locations`, `admin.locations.store` |
-| GET/PUT | `/admin/locations/{location}` | `admin.locations.edit`, `admin.locations.update` |
 | GET | `/admin/scholars` | `admin.scholars` |
 | GET | `/admin/scholars/{scholar}` | `admin.scholars.show` |
 | GET | `/admin/staff` | `admin.staff` |
@@ -812,6 +806,7 @@ Named routes use prefixes `admin.*`, `staff.*`, `user.*`.
 | POST | `/admin/staff/{staffMember}/reject` | `admin.staff.reject` |
 | GET | `/admin/events` | `admin.events` |
 | GET | `/admin/events/{event}` | `admin.events.show` |
+| GET | `/admin/events/{event}/attendances/{attendance}/photo` | `admin.events.attendances.photo` |
 | GET | `/admin/service-hours` | `admin.service-hours` |
 | GET | `/admin/documents` | `admin.documents` |
 | GET | `/admin/documents/scholars/{scholar}` | `admin.documents.scholar` |
@@ -1207,7 +1202,7 @@ No other demo scholar or staff passwords are defined in seeders.
 - Uploaded files go through authenticated download/view routes, not raw public listing.
 - Mass assignment: login credentials, `is_permanent`, `events_visible_from`, and `last_seen_at` are not in `$fillable` on `User`. Presence writes use `forceFill` from the heartbeat/leave/logout paths only.
 - Event images: staff/admin/scholar may view only if the event is in their program (`viewEventImage`).
-- Attendance photos: scholar route is owner-only; staff route is staff-controlled.
+- Attendance photos: scholar route is owner-only; staff route is staff-controlled; admin route (`admin.events.attendances.photo`) serves only approved photos for that event and scholar.
 - Documents: scholar download owner-only; upload rejects types from another `scholarship_program_id` (`403`).
 - Notifications: mark-read is owner-only (`notification.user_id === Auth::id()`).
 - Global academic settings: admin only (`403` for scholars).
@@ -1242,7 +1237,7 @@ Uncaught exceptions follow Laravel’s default handler (`bootstrap/app.php` has 
 | Attendance buttons disabled | Staff have not opened the session |
 | Pending staff missing from All Staff | Intended — pending only on Admin pending list |
 | Session/cache/queue tables missing | Run all migrations |
-| Wrong dashboard numbers in admin | Confirm Location & Scholarship Program selection; stats use `programIds` on the server |
+| Wrong dashboard numbers in admin | Confirm Province / Municipality/City on the Admin Dashboard; stats use geographic program IDs and clubs in that location only |
 | Blade looks stale | `php artisan view:clear` |
 | CSRF 419 | Refresh the page; check `SESSION_*` and `APP_URL` |
 | Forgot Password code never arrives | Confirm Gmail accepted SMTP (`php artisan mail:inspect --send=you@gmail.com`). `MAIL_PASSWORD` must be a quoted Google App Password. Run `php artisan optimize:clear`. Check Spam |
@@ -1346,13 +1341,12 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 ### Administrator
 
 - Dashboard scoped by location/program (real queries, no invented totals)
-- Locations add/edit (City/Province type switcher; one list at a time)
 - Scholars monitor + view-only profile
 - Staff approve/reject + all-staff list (no pending in all-staff)
 - Events monitor + attendee details
 - Service hours monitor
 - Documents monitor + scholar file Preview/Download (no approve/reject)
-- Reports: City vs Province columns, four pies each
+- Reports: Academic Year filter; Luzon, Visayas, and Mindanao each with Scholars, Scholarship Clubs, Completed Students, and Participation pie charts
 - Settings name/email/password
 - Sidebar pending-staff badge poll
 - Permanent Admin account cannot be deleted
@@ -1388,9 +1382,8 @@ Treat [§10](#10-visual-identity-existing-css) as the design system. Recreate th
 | Staff reports period | `partials/staff-report-period-filter` on all four report pages | `.staff-report-period` | Academic Year + All/1st/2nd Semester; GET refresh; banner shows the selected period |
 | Staff confirm | `partials/staff-confirm-modal` | `.staff-confirm-*` | RN modal / action sheet |
 | Admin shell | `layouts/admin` | `staff-admin.css` + `admin.css` | Orange/peach chrome, same staff components |
-| Admin locations | `admin/locations` | `.admin-program-type-switch` | City vs Province tabs, one list |
-| Admin reports | `admin/reports` + `partials/admin-report-pies` | `.admin-report-program-split` | Two columns × four pies |
-| Admin scholar / event / documents | `admin/scholars`, `admin/events`, `admin/scholar-documents` | `.admin-scholar-name-link`, `.admin-event-name-link` | Name/title opens a dedicated page |
+| Admin reports | `admin/reports` + `partials/admin-regional-reports` | `.admin-regional-reports` | Three regions × four pie charts |
+| Admin scholar / event / documents | `admin/scholars`, `admin/events`, `admin/event-show`, `admin/scholar-documents` | `.admin-scholar-name-link`, `.admin-event-name-link`, `.admin-attendance-photo` | Name/title opens a dedicated page. Event attendees include an approved-only Attendance Photo thumbnail that opens the shared photo preview modal |
 
 Icons today are HTML entities / CSS `::before` (⌂ 👥 📅 etc.) and `ui-avatars.com` logo marks (`2fa76a` scholar, `2563eb` staff, `c2410c` admin). Keep those brand colors on mobile; you may swap to vector icons **with the same colors and sizes**.
 
@@ -1491,7 +1484,7 @@ Adapt layout, not behavior.
 |---------------------------------|-------------------|
 | Scholar `.sidebar` 300px | Drawer (hamburger) **or** bottom tabs: Dashboard, Events, Hours, Documents, Notifications, Profile. Pending scholars: disable the same items the web sidebar disables |
 | Scholar dashboard topbar | Keep the stack: hamburger + **Dashboard**, then avatar/name card, then welcome + city/province/program, then date on the right. Wrap long names; no mid-word clip |
-| Staff / admin `.staff-sidebar` | Role-colored drawer; keep section headings (DASHBOARD / MANAGEMENT / REPORTS / SYSTEM, ADMINISTRATION) |
+| Staff / admin `.staff-sidebar` 300px | Role-colored drawer; keep section headings (DASHBOARD / MANAGEMENT / REPORTS / SYSTEM, ADMINISTRATION) |
 | `.staff-table` / `.staff-stack-table` / `.table` | Card list (name, status badge, actions) **or** horizontal scroll — do not hide Approve/Reject/Open/Close; scholar information must wrap inside the card. On Staff → Scholars the **name** is the view action (no separate eye button) |
 | `.staff-stat-grid` 5 columns | 2-column wrap or horizontal snap; **same stat queries** |
 | `.staff-grid-2` / notifications 2-column | Single column; settings/help cards below the list |
@@ -1538,8 +1531,8 @@ Prefix suggestion: `/api/v1`. Each path should call the **same service methods**
 | Scholar event/attendance/document/notification/profile verbs | Same as [§12](#12-routes) scholar table |
 | Staff CRUD / open-close / reports | Same as staff table |
 | Admin scope + locations + staff approve | Same as admin table; persist `admin_location` / `admin_program_type` per user or query params |
-| Admin scholar / event / document details | Same as `admin.scholars.show`, `admin.events.show`, `admin.documents.scholar` / `view` / `download` |
-| Admin reports | Same City/Province pie series from `AdminDashboardService::programTypeCategoryCharts` |
+| Admin scholar / event / document details | Same as `admin.scholars.show`, `admin.events.show`, `admin.events.attendances.photo` (approved photos only), `admin.documents.scholar` / `view` / `download` |
+| Admin reports | Same Academic Year + Luzon/Visayas/Mindanao pie series from `AdminDashboardService::regionalReports` |
 
 Return JSON instead of Blade. **Do not** return placeholder arrays. If a program has zero scholars, the API returns `0`.
 

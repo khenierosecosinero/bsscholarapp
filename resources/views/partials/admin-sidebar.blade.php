@@ -2,17 +2,19 @@
     $active = $active ?? 'dashboard';
     $adminName = $admin->full_name ?? 'Administrator';
     $navLocation = (string) ($locationKey ?? session('admin_location', 'all'));
-    $navProgramType = (string) ($programType ?? session('admin_program_type', 'all'));
+    $navProgramType = (string) ($programType ?? session('admin_program_type', 'city_municipality'));
+    if ($navProgramType === 'all') {
+        $navProgramType = 'city_municipality';
+    }
     $navQuery = array_filter([
         'location' => $navLocation !== 'all' ? $navLocation : null,
-        'program_type' => $navProgramType !== 'all' ? $navProgramType : null,
+        'program_type' => $navProgramType,
     ]);
 
     $badges = $adminSidebarBadges ?? [];
 
     $navItems = [
         ['key' => 'dashboard', 'label' => 'Dashboard', 'route' => 'admin.dashboard', 'icon' => 'home', 'badgeLabel' => 'items requiring attention'],
-        ['key' => 'locations', 'label' => 'Locations', 'route' => 'admin.locations', 'icon' => 'locations', 'badgeLabel' => 'locations needing attention'],
         ['key' => 'scholars', 'label' => 'Scholars', 'route' => 'admin.scholars', 'icon' => 'users', 'badgeLabel' => 'pending scholar registrations'],
         ['key' => 'staff', 'label' => 'Scholar Staff', 'route' => 'admin.staff', 'icon' => 'users', 'badgeLabel' => 'pending staff registrations'],
         ['key' => 'events', 'label' => 'Events', 'route' => 'admin.events', 'icon' => 'calendar', 'badgeLabel' => 'pending events'],
@@ -31,6 +33,16 @@
             </div>
             <div class="staff-brand-text">Batang Surigaonon<br>Admin Portal</div>
         </div>
+        @php $sidebarUser = $admin ?? auth()->user(); @endphp
+        @if($sidebarUser)
+            <div class="staff-user-chip">
+                <x-user-avatar :user="$sidebarUser" class="staff-user-avatar" />
+                <div class="staff-user-meta">
+                    <div class="staff-user-name" title="{{ $sidebarUser->full_name }}">{{ $adminName }}</div>
+                    <div class="staff-user-role">System Administrator</div>
+                </div>
+            </div>
+        @endif
     </div>
 
     <nav class="staff-nav" aria-label="Admin navigation">
@@ -38,10 +50,7 @@
             <div class="staff-nav-heading">ADMINISTRATION</div>
             @foreach($navItems as $item)
                 @php
-                    $iconClass = match ($item['icon']) {
-                        'locations' => 'admin-icon-locations',
-                        default => 'staff-icon-'.$item['icon'],
-                    };
+                    $iconClass = 'staff-icon-'.$item['icon'];
                     $badgeCount = (int) ($badges[$item['key']] ?? 0);
                 @endphp
                 <a href="{{ route($item['route'], $navQuery) }}" class="staff-nav-item {{ $active === $item['key'] ? 'active' : '' }}" @if($item['key'] === 'staff') data-admin-nav="staff" @endif>
@@ -56,13 +65,6 @@
     </nav>
 
     <div class="staff-sidebar-footer">
-        <div class="staff-user-chip">
-            <div class="staff-user-avatar">{{ strtoupper(substr($adminName, 0, 1)) }}</div>
-            <div class="staff-user-meta">
-                <div class="staff-user-name">{{ $adminName }}</div>
-                <div class="staff-user-role">System Administrator</div>
-            </div>
-        </div>
         <form method="POST" action="{{ route('logout') }}" class="staff-logout-form">
             @csrf
             <button type="submit" class="staff-logout-btn">Logout</button>

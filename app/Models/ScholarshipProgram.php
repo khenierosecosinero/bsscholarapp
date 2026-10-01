@@ -253,18 +253,22 @@ class ScholarshipProgram extends Model
 
     /**
      * Provinces with nested municipalities/cities for registration pickers.
+     *
+     * @return list<array<string, mixed>>
      */
-    public static function locationTree(): array
+    public static function locationTree(bool $includeClubs = true): array
     {
         $programs = static::active()
             ->orderBy('location_name')
             ->get(['id', 'location_name', 'location_type', 'province_name', 'region_name', 'name', 'display_name']);
 
-        $clubsByProgram = ScholarshipClub::query()
-            ->active()
-            ->orderBy('name')
-            ->get(['id', 'name', 'scholarship_program_id'])
-            ->groupBy('scholarship_program_id');
+        $clubsByProgram = $includeClubs
+            ? ScholarshipClub::query()
+                ->active()
+                ->orderBy('name')
+                ->get(['id', 'name', 'scholarship_program_id'])
+                ->groupBy('scholarship_program_id')
+            : collect();
 
         $clubPayload = function (?int $programId) use ($clubsByProgram): array {
             if (! $programId) {

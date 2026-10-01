@@ -2,7 +2,6 @@
 
 @section('page-content')
 
-@include('partials.admin-scope-banner')
 @include('partials.admin-dashboard-scope-select')
 
 <div class="staff-date-banner">
@@ -59,11 +58,11 @@
         </div>
     </div>
     <div class="staff-stat-card">
-        <div class="staff-stat-icon green">📅</div>
+        <div class="staff-stat-icon green">🏫</div>
         <div class="staff-stat-body">
-            <h3>Events</h3>
-            <div class="value">{{ $stats['total_events'] }}</div>
-            <div class="sub">Upcoming: {{ $stats['upcoming_events'] ?? 0 }}</div>
+            <h3>Total Scholarship Clubs</h3>
+            <div class="value">{{ $stats['total_clubs'] ?? 0 }}</div>
+            <div class="sub">Registered in this location</div>
         </div>
     </div>
     <div class="staff-stat-card">
@@ -123,23 +122,4 @@
 }
 @media (max-width: 900px) { .staff-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>
-@endpush
-
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    var form = document.getElementById('admin-dashboard-scope-form');
-    var select = document.getElementById('admin-dashboard-location-select');
-    var typeInput = document.getElementById('dashboard-program-type');
-    if (!form || !select) return;
-
-    select.addEventListener('change', function () {
-        var option = this.options[this.selectedIndex];
-        if (typeInput) {
-            typeInput.value = option.getAttribute('data-program-type') || 'all';
-        }
-        form.submit();
-    });
-});
-</script>
 @endpush

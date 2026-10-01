@@ -5,7 +5,7 @@
 
 <header class="staff-topbar">
     <div class="staff-topbar-left">
-        <button class="staff-hamburger" id="sidebar-toggle" type="button" aria-label="Toggle menu">&#9776;</button>
+        <button class="staff-hamburger" id="sidebar-toggle" type="button" aria-label="Toggle menu" aria-expanded="false">&#9776;</button>
         <div class="staff-topbar-titles">
             <h1>{{ $pageTitle }}</h1>
             @if(!empty($pageSubtitle))

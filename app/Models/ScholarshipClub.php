@@ -51,6 +51,23 @@ class ScholarshipClub extends Model
         return $query->where('is_active', true);
     }
 
+    /**
+     * Clubs registered at a province and optional municipality/city.
+     * Does not create, update, or delete club records.
+     */
+    public function scopeForLocation(Builder $query, ?string $province, ?string $city = null): Builder
+    {
+        if (filled($province)) {
+            $query->where('province', $province);
+        }
+
+        if (filled($city)) {
+            $query->where('city', $city);
+        }
+
+        return $query;
+    }
+
     public function addressLine(): string
     {
         if ($this->city && $this->province) {

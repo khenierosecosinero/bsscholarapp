@@ -23,25 +23,101 @@
     @vite(['resources/js/user-app.js'])
     <script>
     document.addEventListener('DOMContentLoaded', function () {
-        var locationSelect = document.getElementById('admin-location-select');
-        if (locationSelect) {
-            locationSelect.addEventListener('change', function () {
-                this.form.submit();
-            });
-        }
+        var bindAdminLocationForm = function (form) {
+            var treeEl = form.querySelector('[data-admin-location-tree]');
+            var typeSelect = form.querySelector('[data-admin-program-type]');
+            var provinceSelect = form.querySelector('[data-admin-province]');
+            var citySelect = form.querySelector('[data-admin-city]');
+            var locationInput = form.querySelector('[data-admin-location-value]');
+            var selectedCityEl = form.querySelector('[data-admin-selected-city]');
+            if (!treeEl || !provinceSelect || !citySelect || !locationInput) {
+                return;
+            }
 
-        var dashboardSelect = document.getElementById('admin-dashboard-location-select');
-        var dashboardForm = document.getElementById('admin-dashboard-scope-form');
-        var dashboardType = document.getElementById('dashboard-program-type');
-        if (dashboardSelect && dashboardForm) {
-            dashboardSelect.addEventListener('change', function () {
-                var option = this.options[this.selectedIndex];
-                if (dashboardType) {
-                    dashboardType.value = option.getAttribute('data-program-type') || 'all';
+            var tree = [];
+            try {
+                tree = JSON.parse(treeEl.textContent || '[]');
+            } catch (error) {
+                tree = [];
+            }
+
+            var selectedCity = selectedCityEl ? selectedCityEl.value : '';
+
+            var provinceNode = function () {
+                return tree.find(function (province) {
+                    return province.name === provinceSelect.value;
+                }) || null;
+            };
+
+            var fillCities = function (keepCity) {
+                var isCityScholar = !typeSelect || typeSelect.value === 'city_municipality';
+                citySelect.disabled = !isCityScholar;
+                citySelect.innerHTML = '';
+                var empty = document.createElement('option');
+                empty.value = '';
+                empty.textContent = isCityScholar ? 'Select municipality or city' : 'Not used for Province Scholar';
+                citySelect.appendChild(empty);
+
+                if (!isCityScholar) {
+                    return;
                 }
-                dashboardForm.submit();
+
+                var node = provinceNode();
+                (node && node.cities ? node.cities : []).forEach(function (city) {
+                    var option = document.createElement('option');
+                    option.value = city.name;
+                    option.setAttribute('data-id', city.id || '');
+                    option.textContent = city.name;
+                    if (keepCity && city.name === selectedCity) {
+                        option.selected = true;
+                    }
+                    citySelect.appendChild(option);
+                });
+            };
+
+            var syncLocation = function () {
+                var node = provinceNode();
+                if (!node) {
+                    locationInput.value = 'all';
+                    return;
+                }
+
+                if ((typeSelect && typeSelect.value === 'province') || !citySelect.value) {
+                    locationInput.value = node.id ? String(node.id) : 'all';
+                    return;
+                }
+
+                var city = (node.cities || []).find(function (item) {
+                    return item.name === citySelect.value;
+                });
+                locationInput.value = city && city.id ? String(city.id) : (node.id ? String(node.id) : 'all');
+            };
+
+            fillCities(true);
+            syncLocation();
+
+            if (typeSelect) {
+                typeSelect.addEventListener('change', function () {
+                    selectedCity = '';
+                    fillCities(false);
+                    syncLocation();
+                    form.submit();
+                });
+            }
+            provinceSelect.addEventListener('change', function () {
+                selectedCity = '';
+                fillCities(false);
+                syncLocation();
+                form.submit();
             });
-        }
+            citySelect.addEventListener('change', function () {
+                selectedCity = citySelect.value;
+                syncLocation();
+                form.submit();
+            });
+        };
+
+        document.querySelectorAll('[data-admin-location-form]').forEach(bindAdminLocationForm);
 
         var staffNav = document.querySelector('[data-admin-nav="staff"]');
         if (staffNav) {
