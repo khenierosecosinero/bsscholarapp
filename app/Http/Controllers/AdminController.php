@@ -2,16 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AcademicSetting;
 use App\Models\Attendance;
 use App\Models\Document;
 use App\Models\Event;
+use App\Models\ScholarshipClub;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
+use App\Services\AcademicSettingsService;
 use App\Services\AccountService;
 use App\Services\AdminDashboardService;
 use App\Services\DocumentStorageService;
 use App\Services\ScholarService;
 use App\Services\StaffDashboardService;
+use App\Support\PhilippineIslandGroup;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -22,12 +26,15 @@ class AdminController extends Controller
 {
     private ?array $resolvedScope = null;
 
+    private ?string $resolvedScopeKey = null;
+
     public function __construct(
         private AdminDashboardService $admin,
         private StaffDashboardService $staff,
         private ScholarService $scholar,
         private AccountService $accounts,
         private DocumentStorageService $files,
+        private AcademicSettingsService $academic,
     ) {}
 
     private function syncLocation(Request $request): string
@@ -50,12 +57,15 @@ class AdminController extends Controller
 
     private function scope(Request $request): array
     {
-        if ($this->resolvedScope !== null) {
+        $locationKey = $this->syncLocation($request);
+        $programType = $this->syncProgramType($request);
+        $cacheKey = $locationKey.'|'.$programType;
+
+        if ($this->resolvedScope !== null && $this->resolvedScopeKey === $cacheKey) {
             return $this->resolvedScope;
         }
 
-        $locationKey = $this->syncLocation($request);
-        $programType = $this->syncProgramType($request);
+        $this->resolvedScopeKey = $cacheKey;
 
         return $this->resolvedScope = [
             'locationKey' => $locationKey,
@@ -77,27 +87,76 @@ class AdminController extends Controller
         ];
     }
 
-    private function assertStaffInScope(array $programIds, User $staffMember): void
+    private function assertStaffInDirectoryScope(Request $request, User $staffMember): void
     {
-        abort_unless(
-            $staffMember->scholarship_program_id
-                && in_array((int) $staffMember->scholarship_program_id, array_map('intval', $programIds), true),
-            403,
-            'This scholar staff account is outside your current admin scope.'
-        );
+        abort_unless($staffMember->isScholarStaff(), 404);
+
+        $scope = $this->scope($request);
+        $locationKey = $scope['locationKey'];
+        $clubId = $request->integer('club') ?: null;
+        $region = (string) $request->get('region', '');
+
+        if ($locationKey !== 'all' && $locationKey !== '' && $locationKey !== null) {
+            $ids = array_map('intval', $this->admin->resolveGeographicProgramIds($locationKey));
+            abort_unless(
+                $staffMember->scholarship_program_id
+                    && in_array((int) $staffMember->scholarship_program_id, $ids, true),
+                403,
+                'This scholar staff account is outside the selected location.'
+            );
+        }
+
+        if (PhilippineIslandGroup::isValid($region)) {
+            $ids = array_map('intval', $this->admin->programIdsForIsland($region));
+            abort_unless(
+                $staffMember->scholarship_program_id
+                    && in_array((int) $staffMember->scholarship_program_id, $ids, true),
+                403,
+                'This scholar staff account is outside the selected region.'
+            );
+        }
+
+        if ($clubId) {
+            abort_unless((int) $staffMember->scholarship_club_id === $clubId, 403, 'This scholar staff account is not assigned to the selected Scholarship Club.');
+        }
     }
 
     private function assertScholarInAdminScope(Request $request, User $scholar): void
     {
         abort_unless($scholar->isScholar(), 404);
 
-        $scope = $this->scope($request);
+        if (! $request->has('location')) {
+            $request->merge(['location' => 'all']);
+        }
 
-        abort_unless(
-            $scholar->scholarship_program_id
-                && in_array((int) $scholar->scholarship_program_id, array_map('intval', $scope['programIds']), true),
-            404
-        );
+        $programId = (int) $scholar->scholarship_program_id;
+        abort_unless($programId > 0, 404);
+
+        $locationKey = $this->syncLocation($request);
+        $clubId = $request->integer('club') ?: null;
+        $region = (string) $request->get('region', '');
+
+        if (! PhilippineIslandGroup::isValid($region)) {
+            $region = '';
+        }
+
+        if ($locationKey !== 'all' && $locationKey !== '' && $locationKey !== null) {
+            abort_unless(
+                in_array($programId, array_map('intval', $this->admin->resolveGeographicProgramIds($locationKey)), true),
+                404
+            );
+        }
+
+        if ($region !== '') {
+            abort_unless(
+                in_array($programId, array_map('intval', $this->admin->programIdsForIsland($region)), true),
+                404
+            );
+        }
+
+        if ($clubId) {
+            abort_unless((int) $scholar->scholarship_club_id === $clubId, 404);
+        }
     }
 
     private function assertAdminDocument(Request $request, Document $document): void
@@ -111,13 +170,39 @@ class AdminController extends Controller
 
     private function assertEventInAdminScope(Request $request, Event $event): void
     {
-        $scope = $this->scope($request);
+        if (! $request->has('location')) {
+            $request->merge(['location' => 'all']);
+        }
 
-        abort_unless(
-            $event->scholarship_program_id
-                && in_array((int) $event->scholarship_program_id, array_map('intval', $scope['programIds']), true),
-            404
-        );
+        abort_unless($event->scholarship_program_id, 404);
+
+        $programId = (int) $event->scholarship_program_id;
+        $locationKey = $this->syncLocation($request);
+        $clubId = $request->integer('club') ?: null;
+        $region = (string) $request->get('region', '');
+
+        if (! PhilippineIslandGroup::isValid($region)) {
+            $region = '';
+        }
+
+        if ($locationKey !== 'all' && $locationKey !== '' && $locationKey !== null) {
+            abort_unless(
+                in_array($programId, array_map('intval', $this->admin->resolveGeographicProgramIds($locationKey)), true),
+                404
+            );
+        }
+
+        if ($region !== '') {
+            abort_unless(
+                in_array($programId, array_map('intval', $this->admin->programIdsForIsland($region)), true),
+                404
+            );
+        }
+
+        if ($clubId) {
+            $clubProgramId = (int) (ScholarshipClub::query()->whereKey($clubId)->value('scholarship_program_id') ?? 0);
+            abort_unless($clubProgramId > 0 && $programId === $clubProgramId, 404);
+        }
     }
 
     private function layoutData(Request $request, string $active, string $title, string $subtitle = ''): array
@@ -183,10 +268,19 @@ class AdminController extends Controller
 
     public function scholars(Request $request)
     {
+        if (! $request->has('location')) {
+            $request->merge(['location' => 'all']);
+        }
+
         $scope = $this->scope($request);
         $search = trim((string) $request->get('search', ''));
+        $clubId = $request->integer('club') ?: null;
 
-        $scholars = $this->admin->scholarsQuery($scope['programIds'], $scope['clubIds'])
+        if ($clubId && ! ScholarshipClub::query()->whereKey($clubId)->exists()) {
+            $clubId = null;
+        }
+
+        $scholars = $this->admin->scholarDirectoryQuery($scope['locationKey'], $clubId)
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($scoped) use ($search) {
                     $scoped->where('full_name', 'like', "%{$search}%")
@@ -200,7 +294,12 @@ class AdminController extends Controller
 
         return view('admin.scholars', array_merge(
             $this->layoutData($request, 'scholars', 'Scholars', 'View all scholars across the system or by location.'),
-            compact('scholars', 'search')
+            [
+                'scholars' => $scholars,
+                'search' => $search,
+                'selectedClubId' => $clubId,
+                'scholarshipClubs' => $this->admin->scholarshipClubFilterOptions(),
+            ]
         ));
     }
 
@@ -218,26 +317,48 @@ class AdminController extends Controller
 
     public function staff(Request $request)
     {
+        if (! $request->has('location')) {
+            $request->merge(['location' => 'all']);
+        }
+
         $scope = $this->scope($request);
         $search = trim((string) $request->get('search', ''));
+        $clubId = $request->integer('club') ?: null;
+        $region = (string) $request->get('region', '');
 
-        $staffMembers = $this->admin->visibleStaffQuery($scope['programIds'], $scope['clubIds'])
-            ->when($search !== '', function ($q) use ($search) {
-                $q->where(function ($scoped) use ($search) {
-                    $scoped->where('full_name', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%")
-                        ->orWhere('scholar_id', 'like', "%{$search}%");
-                });
-            })
+        if (! PhilippineIslandGroup::isValid($region)) {
+            $region = '';
+        }
+
+        if ($clubId && ! ScholarshipClub::query()->whereKey($clubId)->exists()) {
+            $clubId = null;
+        }
+
+        $directory = fn () => $this->admin->staffDirectoryQuery(
+            $scope['locationKey'],
+            $clubId,
+            $region !== '' ? $region : null
+        )->when($search !== '', function ($q) use ($search) {
+            $q->where(function ($scoped) use ($search) {
+                $scoped->where('full_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('cellphone_number', 'like', "%{$search}%");
+            });
+        });
+
+        $staffMembers = $directory()
+            ->where('status', '!=', User::STATUS_PENDING)
             ->orderByRaw("CASE WHEN status = 'approved' THEN 0 ELSE 1 END")
             ->orderBy('full_name')
             ->paginate(15)
             ->withQueryString();
 
-        $pendingStaff = $this->admin->pendingStaffQuery($scope['programIds'], $scope['clubIds'])
+        $pendingStaff = $directory()
+            ->where('status', User::STATUS_PENDING)
             ->orderBy('created_at')
             ->get();
-        $approvedCount = $this->admin->approvedStaffQuery($scope['programIds'], $scope['clubIds'])->count();
+        $approvedCount = $directory()->where('status', User::STATUS_APPROVED)->count();
+        $rejectedCount = $directory()->where('status', User::STATUS_REJECTED)->count();
 
         return view('admin.staff', array_merge(
             $this->layoutData($request, 'staff', 'Scholar Staff', 'Review scholar staff accounts and approve new registrations.'),
@@ -245,24 +366,38 @@ class AdminController extends Controller
                 'staffMembers' => $staffMembers,
                 'pendingStaff' => $pendingStaff,
                 'search' => $search,
+                'selectedClubId' => $clubId,
+                'selectedRegion' => $region,
+                'scholarshipClubs' => $this->admin->scholarshipClubFilterOptions(),
                 'staffStats' => [
                     'total' => $approvedCount,
                     'pending' => $pendingStaff->count(),
                     'approved' => $approvedCount,
-                    'rejected' => $this->admin->staffQuery($scope['programIds'], $scope['clubIds'])->where('status', User::STATUS_REJECTED)->count(),
+                    'rejected' => $rejectedCount,
                 ],
             ]
+        ));
+    }
+
+    public function showStaff(Request $request, User $staffMember)
+    {
+        abort_unless($staffMember->isScholarStaff(), 404);
+
+        $staffMember->load(['scholarshipProgram', 'scholarshipClub']);
+
+        return view('admin.staff-show', array_merge(
+            $this->layoutData($request, 'staff', $staffMember->full_name, 'View-only information from Scholar Staff registration.'),
+            ['member' => $staffMember]
         ));
     }
 
     public function approveStaff(Request $request, User $staffMember)
     {
         abort_unless(Auth::user()?->isAdmin(), 403);
-        $scope = $this->scope($request);
 
         abort_unless($staffMember->isScholarStaff(), 404);
         abort_unless($staffMember->status === User::STATUS_PENDING, 422, 'This scholar staff account is not pending approval.');
-        $this->assertStaffInScope($scope['programIds'], $staffMember);
+        $this->assertStaffInDirectoryScope($request, $staffMember);
 
         $staffMember->update(['status' => User::STATUS_APPROVED]);
         $staffMember->activateFreshStaffEventList();
@@ -281,11 +416,10 @@ class AdminController extends Controller
     public function rejectStaff(Request $request, User $staffMember)
     {
         abort_unless(Auth::user()?->isAdmin(), 403);
-        $scope = $this->scope($request);
 
         abort_unless($staffMember->isScholarStaff(), 404);
         abort_unless($staffMember->status === User::STATUS_PENDING, 422, 'Only pending scholar staff accounts can be rejected.');
-        $this->assertStaffInScope($scope['programIds'], $staffMember);
+        $this->assertStaffInDirectoryScope($request, $staffMember);
 
         $staffMember->update(['status' => User::STATUS_REJECTED]);
 
@@ -300,12 +434,112 @@ class AdminController extends Controller
         return back()->with('success', "{$staffMember->full_name}'s scholar staff registration has been rejected.");
     }
 
+    public function activateStaff(Request $request, User $staffMember)
+    {
+        abort_unless(Auth::user()?->isAdmin(), 403);
+        $this->assertManagedStaff($request, $staffMember);
+
+        if ($staffMember->status === User::STATUS_APPROVED) {
+            return $this->staffListRedirect($request)
+                ->with('success', "{$staffMember->full_name}'s scholar staff account is already active.");
+        }
+
+        $staffMember->update(['status' => User::STATUS_APPROVED]);
+        $staffMember->activateFreshStaffEventList();
+
+        $this->scholar->logActivity($staffMember, 'account', 'Scholar staff account activated by administrator');
+        $this->scholar->notify(
+            $staffMember,
+            'Scholar Staff Account Activated',
+            'Your scholar staff account has been activated. You can log in and access the Scholar Staff section.',
+            'system'
+        );
+
+        return $this->staffListRedirect($request)
+            ->with('success', "{$staffMember->full_name}'s scholar staff account has been activated.");
+    }
+
+    public function deactivateStaff(Request $request, User $staffMember)
+    {
+        abort_unless(Auth::user()?->isAdmin(), 403);
+        $this->assertManagedStaff($request, $staffMember);
+
+        if ($staffMember->status === User::STATUS_INACTIVE) {
+            return $this->staffListRedirect($request)
+                ->with('success', "{$staffMember->full_name}'s scholar staff account is already deactivated.");
+        }
+
+        $staffMember->update(['status' => User::STATUS_INACTIVE]);
+
+        $this->scholar->logActivity($staffMember, 'account', 'Scholar staff account deactivated by administrator');
+        $this->scholar->notify(
+            $staffMember,
+            'Scholar Staff Account Deactivated',
+            'Your scholar staff account has been deactivated. You cannot log in or access the Scholar Staff section until an administrator activates it again.',
+            'system'
+        );
+
+        return $this->staffListRedirect($request)
+            ->with('success', "{$staffMember->full_name}'s scholar staff account has been deactivated.");
+    }
+
+    public function deleteStaff(Request $request, User $staffMember)
+    {
+        abort_unless(Auth::user()?->isAdmin(), 403);
+        $this->assertManagedStaff($request, $staffMember);
+
+        $name = $staffMember->full_name;
+        $this->accounts->permanentlyDelete($staffMember);
+
+        return $this->staffListRedirect($request)
+            ->with('success', "{$name}'s scholar staff account has been permanently deleted.");
+    }
+
+    private function assertManagedStaff(Request $request, User $staffMember): void
+    {
+        abort_unless($staffMember->isScholarStaff(), 404);
+        abort_unless(
+            $staffMember->status !== User::STATUS_PENDING,
+            422,
+            'Pending scholar staff registrations must be approved or rejected first.'
+        );
+        $this->assertStaffInDirectoryScope($request, $staffMember);
+    }
+
+    private function staffListRedirect(Request $request)
+    {
+        return redirect()->route('admin.staff', array_filter([
+            'region' => $request->get('region') ?: null,
+            'location' => $request->get('location', 'all'),
+            'club' => $request->get('club') ?: null,
+            'search' => $request->get('search') ?: null,
+        ], fn ($value) => $value !== null && $value !== ''));
+    }
+
     public function events(Request $request)
     {
+        if (! $request->has('location')) {
+            $request->merge(['location' => 'all']);
+        }
+
         $scope = $this->scope($request);
         $search = trim((string) $request->get('search', ''));
+        $clubId = $request->integer('club') ?: null;
+        $region = (string) $request->get('region', '');
 
-        $events = $this->admin->eventsQuery($scope['programIds'])
+        if (! PhilippineIslandGroup::isValid($region)) {
+            $region = '';
+        }
+
+        if ($clubId && ! ScholarshipClub::query()->whereKey($clubId)->exists()) {
+            $clubId = null;
+        }
+
+        $events = $this->admin->eventsDirectoryQuery(
+            $scope['locationKey'],
+            $clubId,
+            $region !== '' ? $region : null
+        )
             ->when($search !== '', fn ($q) => $q->where('title', 'like', "%{$search}%"))
             ->orderByDesc('starts_at')
             ->paginate(15)
@@ -315,7 +549,13 @@ class AdminController extends Controller
 
         return view('admin.events', array_merge(
             $this->layoutData($request, 'events', 'Events', 'Monitor events across all locations.'),
-            compact('events', 'search')
+            [
+                'events' => $events,
+                'search' => $search,
+                'selectedClubId' => $clubId,
+                'selectedRegion' => $region,
+                'scholarshipClubs' => $this->admin->scholarshipClubFilterOptions(),
+            ]
         ));
     }
 
@@ -323,7 +563,9 @@ class AdminController extends Controller
     {
         $this->assertEventInAdminScope($request, $event);
 
-        $event->load('scholarshipProgram');
+        $event->load([
+            'scholarshipProgram.clubs' => fn ($clubs) => $clubs->active()->orderBy('name'),
+        ]);
         $event->syncStatusFromSchedule();
 
         $attendances = $event->attendances()->with('user')->get()->keyBy('user_id');
@@ -394,29 +636,129 @@ class AdminController extends Controller
 
     public function serviceHours(Request $request)
     {
+        if (! $request->has('location')) {
+            $request->merge(['location' => 'all']);
+        }
+
         $scope = $this->scope($request);
+        $search = trim((string) $request->get('search', ''));
+        $clubId = $request->integer('club') ?: null;
+        $region = (string) $request->get('region', '');
+
+        if (! PhilippineIslandGroup::isValid($region)) {
+            $region = '';
+        }
+
+        if ($clubId && ! ScholarshipClub::query()->whereKey($clubId)->exists()) {
+            $clubId = null;
+        }
+
+        $programIds = $this->admin->directoryProgramIds(
+            $scope['locationKey'],
+            $region !== '' ? $region : null
+        );
+        $clubIds = $clubId ? [$clubId] : null;
+        $report = $this->staff->serviceHoursReport($programIds, null, null, $clubIds);
+        $report = $this->filterServiceHoursReport($report, $search);
 
         return view('admin.service-hours', array_merge(
-            $this->layoutData($request, 'service-hours', 'Service Hours', 'Track service hours for the selected City or Province Scholarship Program scope.'),
-            ['report' => $this->staff->serviceHoursReport($scope['programIds'], null, null, $scope['clubIds'])]
+            $this->layoutData($request, 'service-hours', 'Service Hours', 'Track scholar service hours across all locations.'),
+            [
+                'report' => $report,
+                'search' => $search,
+                'selectedClubId' => $clubId,
+                'selectedRegion' => $region,
+                'scholarshipClubs' => $this->admin->scholarshipClubFilterOptions(),
+                'locationLabel' => $this->dashboardLocationLabel($scope),
+            ]
         ));
+    }
+
+    /**
+     * @param  array<string, mixed>  $report
+     * @return array<string, mixed>
+     */
+    private function filterServiceHoursReport(array $report, string $search): array
+    {
+        if ($search === '') {
+            return $report;
+        }
+
+        $needle = mb_strtolower($search);
+        $rows = collect($report['rows'])->filter(function (array $row) use ($needle) {
+            $scholar = $row['scholar'];
+
+            return str_contains(mb_strtolower((string) $scholar->full_name), $needle)
+                || str_contains(mb_strtolower((string) $scholar->email), $needle)
+                || str_contains(mb_strtolower((string) $scholar->scholar_id), $needle);
+        })->values();
+
+        $report['rows'] = $rows;
+        $report['completed'] = $rows->where('status', 'Completed')->count();
+        $report['in_progress'] = $rows->where('status', 'In Progress')->count();
+        $report['not_started'] = $rows->where('status', 'Not Started')->count();
+        $report['overview']['approved_hours'] = round((float) $rows->sum('approved'), 2);
+        $report['overview']['pending_hours'] = round((float) $rows->sum('pending'), 2);
+
+        return $report;
     }
 
     public function documents(Request $request)
     {
-        $scope = $this->scope($request);
+        if (! $request->has('location')) {
+            $request->merge(['location' => 'all']);
+        }
 
-        $documents = $this->admin->documentsQuery($scope['programIds'], $scope['clubIds'])
+        $scope = $this->scope($request);
+        $search = trim((string) $request->get('search', ''));
+        $clubId = $request->integer('club') ?: null;
+        $region = (string) $request->get('region', '');
+
+        if (! PhilippineIslandGroup::isValid($region)) {
+            $region = '';
+        }
+
+        if ($clubId && ! ScholarshipClub::query()->whereKey($clubId)->exists()) {
+            $clubId = null;
+        }
+
+        $documentsQuery = $this->admin->documentsDirectoryQuery(
+            $scope['locationKey'],
+            $clubId,
+            $region !== '' ? $region : null
+        )->when($search !== '', function ($q) use ($search) {
+            $q->where(function ($scoped) use ($search) {
+                $scoped->whereHas('user', function ($user) use ($search) {
+                    $user->where('full_name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('scholar_id', 'like', "%{$search}%");
+                })->orWhereHas('documentType', function ($type) use ($search) {
+                    $type->where('name', 'like', "%{$search}%");
+                });
+            });
+        });
+
+        $documents = (clone $documentsQuery)
             ->latest()
             ->paginate(15)
             ->withQueryString();
 
+        $programIds = $this->admin->directoryProgramIds(
+            $scope['locationKey'],
+            $region !== '' ? $region : null
+        );
+
         return view('admin.documents', array_merge(
-            $this->layoutData($request, 'documents', 'Documents', 'Monitor scholar document submissions.'),
+            $this->layoutData($request, 'documents', 'Documents', 'Monitor scholar document submissions across all locations.'),
             [
                 'documents' => $documents,
-                'documentTypesCount' => $this->admin->documentTypesCount($scope['programIds']),
-                'documentOverview' => $this->admin->documentOverviewStats($scope['programIds'], $scope['clubIds']),
+                'search' => $search,
+                'selectedClubId' => $clubId,
+                'selectedRegion' => $region,
+                'scholarshipClubs' => $this->admin->scholarshipClubFilterOptions(),
+                'documentTypesCount' => $this->admin->documentTypesCount($programIds),
+                'documentOverview' => $this->admin->documentOverviewFromQuery($documentsQuery),
+                'locationLabel' => $this->dashboardLocationLabel($scope),
             ]
         ));
     }
@@ -425,7 +767,7 @@ class AdminController extends Controller
     {
         $this->assertScholarInAdminScope($request, $scholar);
 
-        $scholar->load('scholarshipProgram');
+        $scholar->load(['scholarshipProgram', 'scholarshipClub']);
 
         $documents = Document::query()
             ->with('documentType')
@@ -437,7 +779,8 @@ class AdminController extends Controller
 
         return view('admin.scholar-documents', array_merge(
             $this->layoutData($request, 'documents', $scholar->full_name, 'Documents submitted by this scholar.'),
-            compact('scholar', 'documents')
+            compact('scholar', 'documents'),
+            ['locationLabel' => $this->dashboardLocationLabel($this->scope($request))]
         ));
     }
 
@@ -471,11 +814,25 @@ class AdminController extends Controller
         ));
     }
 
-    public function settings()
+    public function settings(Request $request)
     {
+        $editingId = $request->integer('edit') ?: null;
+        $editingAcademicYear = $editingId
+            ? AcademicSetting::query()->find($editingId)
+            : null;
+
+        $academicYears = $this->academic->managedYears();
+
         return view('admin.settings', array_merge(
-            $this->layoutData(request(), 'settings', 'Admin Settings', 'Manage your administrator account and security settings.'),
-            ['admins' => User::query()->where('is_admin', true)->orWhere('role', User::ROLE_ADMIN)->orderBy('full_name')->get()]
+            $this->layoutData($request, 'settings', 'Admin Settings', 'Manage your administrator account, academic year, and security settings.'),
+            [
+                'admins' => User::query()->where('is_admin', true)->orWhere('role', User::ROLE_ADMIN)->orderBy('full_name')->get(),
+                'academicYears' => $academicYears,
+                'activeAcademicYear' => $this->academic->current(),
+                'editingAcademicYear' => $editingAcademicYear,
+                'academicYearUsage' => $this->academic->usageByYear($academicYears),
+                'hideAdminLocationPill' => true,
+            ]
         ));
     }
 
@@ -512,6 +869,67 @@ class AdminController extends Controller
         $request->session()->regenerate();
 
         return back()->with('success', 'Password changed successfully.');
+    }
+
+    public function storeAcademicYear(Request $request)
+    {
+        $validated = $request->validate([
+            'academic_year' => ['required', 'string', 'max:32'],
+        ]);
+
+        $year = $this->academic->createYear($validated['academic_year'], Auth::user());
+
+        return redirect()
+            ->route('admin.settings')
+            ->with('success', $year->periodLabel().' was added.');
+    }
+
+    public function updateAcademicYear(Request $request, AcademicSetting $academicYear)
+    {
+        $validated = $request->validate([
+            'academic_year' => ['required', 'string', 'max:32'],
+        ]);
+
+        $year = $this->academic->updateYear($academicYear, $validated['academic_year'], Auth::user());
+
+        return redirect()
+            ->route('admin.settings')
+            ->with('success', 'Academic year updated to '.$year->periodLabel().'.');
+    }
+
+    public function activateAcademicYear(AcademicSetting $academicYear)
+    {
+        $previous = $this->academic->current();
+        $year = $this->academic->activate($academicYear, Auth::user());
+        $message = $year->periodLabel().' is now the active academic year.';
+
+        if ($previous->id !== $year->id) {
+            $message .= ' '.$previous->periodLabel().' was deactivated.';
+        }
+
+        return redirect()
+            ->route('admin.settings')
+            ->with('success', $message);
+    }
+
+    public function deactivateAcademicYear(AcademicSetting $academicYear)
+    {
+        $year = $this->academic->deactivate($academicYear, Auth::user());
+        $active = $this->academic->current();
+
+        return redirect()
+            ->route('admin.settings')
+            ->with('success', $year->periodLabel().' was deactivated. '.$active->periodLabel().' is now active.');
+    }
+
+    public function destroyAcademicYear(AcademicSetting $academicYear)
+    {
+        $label = $academicYear->periodLabel();
+        $this->academic->deleteYear($academicYear, Auth::user());
+
+        return redirect()
+            ->route('admin.settings')
+            ->with('success', $label.' was deleted.');
     }
 
     public function sidebarBadges(Request $request)

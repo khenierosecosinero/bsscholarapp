@@ -15,7 +15,9 @@
     </div>
     <div class="staff-topbar-right">
         <div class="staff-topbar-actions">
-            <span class="admin-location-pill">📍 {{ $locationLabel ?? 'Overall / All Locations' }}</span>
+            @if(empty($hideAdminLocationPill))
+                <span class="admin-location-pill">📍 {{ $locationLabel ?? 'Overall / All Locations' }}</span>
+            @endif
             <div class="staff-profile-chip">
                 <div class="staff-profile-avatar">{{ strtoupper(substr($adminName, 0, 1)) }}</div>
                 <span>{{ $adminName }}</span>

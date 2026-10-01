@@ -1,14 +1,14 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AnnouncementActionController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\DocumentActionController;
 use App\Http\Controllers\EventActionController;
-use App\Http\Controllers\NotificationActionController;
-use App\Http\Controllers\ProfileActionController;
-use App\Http\Controllers\AdminController;
 use App\Http\Controllers\GoogleDriveController;
+use App\Http\Controllers\NotificationActionController;
+use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\ProfileActionController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\StaffDocumentController;
 use App\Http\Controllers\StaffSchoolController;
@@ -65,29 +65,29 @@ Route::get('/dashboard', function () {
             ->with('error', 'Your account has been rejected and can no longer access the system. Please contact Scholar Staff for assistance.');
     }
 
-        if ($user->isAdmin()) {
-            return redirect()->route('admin.dashboard');
+    if ($user->isAdmin()) {
+        return redirect()->route('admin.dashboard');
+    }
+
+    if ($user->isScholarStaff()) {
+        if ($user->isStaffPendingApproval() || $user->isStaffRejected()) {
+            $isRejected = $user->isStaffRejected();
+
+            Auth::logout();
+            request()->session()->invalidate();
+            request()->session()->regenerateToken();
+
+            $message = $isRejected
+                ? 'Your scholar staff account has been rejected and can no longer access the system. Please contact the system administrator for assistance.'
+                : 'Your scholar staff account is pending administrator approval. You cannot log in until your registration has been approved.';
+
+            return redirect()
+                ->route('login')
+                ->with($isRejected ? 'error' : 'warning', $message);
         }
 
-        if ($user->isScholarStaff()) {
-            if ($user->isStaffPendingApproval() || $user->isStaffRejected()) {
-                $isRejected = $user->isStaffRejected();
-
-                Auth::logout();
-                request()->session()->invalidate();
-                request()->session()->regenerateToken();
-
-                $message = $isRejected
-                    ? 'Your scholar staff account has been rejected and can no longer access the system. Please contact the system administrator for assistance.'
-                    : 'Your scholar staff account is pending administrator approval. You cannot log in until your registration has been approved.';
-
-                return redirect()
-                    ->route('login')
-                    ->with($isRejected ? 'error' : 'warning', $message);
-            }
-
-            return redirect()->route('staff.dashboard');
-        }
+        return redirect()->route('staff.dashboard');
+    }
 
     return redirect()->route('user.dashboard');
 })->middleware('auth')->name('dashboard');
@@ -98,6 +98,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/scholars', [AdminController::class, 'scholars'])->name('scholars');
     Route::get('/scholars/{scholar}', [AdminController::class, 'showScholar'])->name('scholars.show');
     Route::get('/staff', [AdminController::class, 'staff'])->name('staff');
+    Route::get('/staff/{staffMember}', [AdminController::class, 'showStaff'])->name('staff.show');
     Route::get('/events', [AdminController::class, 'events'])->name('events');
     Route::get('/events/{event}', [AdminController::class, 'showEvent'])->name('events.show');
     Route::get('/events/{event}/attendances/{attendance}/photo', [AdminController::class, 'viewAttendancePhoto'])->name('events.attendances.photo');
@@ -110,8 +111,16 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/settings', [AdminController::class, 'settings'])->name('settings');
     Route::put('/settings', [AdminController::class, 'updateSettings'])->name('settings.update');
     Route::put('/settings/password', [AdminController::class, 'changePassword'])->name('settings.password');
+    Route::post('/settings/academic-years', [AdminController::class, 'storeAcademicYear'])->name('settings.academic-years.store');
+    Route::put('/settings/academic-years/{academicYear}', [AdminController::class, 'updateAcademicYear'])->name('settings.academic-years.update');
+    Route::post('/settings/academic-years/{academicYear}/activate', [AdminController::class, 'activateAcademicYear'])->name('settings.academic-years.activate');
+    Route::post('/settings/academic-years/{academicYear}/deactivate', [AdminController::class, 'deactivateAcademicYear'])->name('settings.academic-years.deactivate');
+    Route::delete('/settings/academic-years/{academicYear}', [AdminController::class, 'destroyAcademicYear'])->name('settings.academic-years.destroy');
     Route::post('/staff/{staffMember}/approve', [AdminController::class, 'approveStaff'])->name('staff.approve');
     Route::post('/staff/{staffMember}/reject', [AdminController::class, 'rejectStaff'])->name('staff.reject');
+    Route::post('/staff/{staffMember}/activate', [AdminController::class, 'activateStaff'])->name('staff.activate');
+    Route::post('/staff/{staffMember}/deactivate', [AdminController::class, 'deactivateStaff'])->name('staff.deactivate');
+    Route::delete('/staff/{staffMember}', [AdminController::class, 'deleteStaff'])->name('staff.delete');
 });
 
 Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->group(function () {
@@ -119,46 +128,46 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
     Route::post('/dismiss-pending-modal', [StaffController::class, 'dismissPendingStaffModal'])->name('dismiss-pending-modal');
 
     Route::middleware('scholar.staff.approved')->group(function () {
-    Route::get('/dashboard', [StaffController::class, 'dashboard'])->name('dashboard');
-    Route::get('/scholars', [StaffController::class, 'scholars'])->name('scholars');
-    Route::get('/scholar-presence', [StaffController::class, 'scholarPresence'])->name('scholars.presence');
-    Route::get('/scholars/{scholar}', [StaffController::class, 'showScholar'])->name('scholars.show');
-    Route::get('/events', [StaffController::class, 'events'])->name('events');
-    Route::get('/events/create', [StaffController::class, 'createEvent'])->name('events.create');
-    Route::post('/events', [StaffController::class, 'storeEvent'])->name('events.store');
-    Route::get('/events/{event}', [StaffController::class, 'showEvent'])->name('events.show');
+        Route::get('/dashboard', [StaffController::class, 'dashboard'])->name('dashboard');
+        Route::get('/scholars', [StaffController::class, 'scholars'])->name('scholars');
+        Route::get('/scholar-presence', [StaffController::class, 'scholarPresence'])->name('scholars.presence');
+        Route::get('/scholars/{scholar}', [StaffController::class, 'showScholar'])->name('scholars.show');
+        Route::get('/events', [StaffController::class, 'events'])->name('events');
+        Route::get('/events/create', [StaffController::class, 'createEvent'])->name('events.create');
+        Route::post('/events', [StaffController::class, 'storeEvent'])->name('events.store');
+        Route::get('/events/{event}', [StaffController::class, 'showEvent'])->name('events.show');
         Route::get('/attendance', [StaffController::class, 'attendance'])->name('attendance');
         Route::post('/events/{event}/attendance/open', [StaffController::class, 'openAttendance'])->name('attendance.open');
         Route::post('/events/{event}/attendance/close', [StaffController::class, 'closeAttendance'])->name('attendance.close');
         Route::get('/attendances/{attendance}/photo', [StaffController::class, 'viewAttendancePhoto'])->name('attendances.photo');
         Route::post('/attendances/{attendance}/approve', [StaffController::class, 'approveAttendance'])->name('attendances.approve');
         Route::post('/attendances/{attendance}/reject', [StaffController::class, 'rejectAttendance'])->name('attendances.reject');
-    Route::get('/documents', [StaffDocumentController::class, 'index'])->name('documents');
-    Route::get('/documents/create', [StaffDocumentController::class, 'create'])->name('documents.create');
-    Route::post('/documents', [StaffDocumentController::class, 'store'])->name('documents.store');
-    Route::get('/documents/types/{documentType}', [StaffDocumentController::class, 'show'])->name('documents.show');
-    Route::get('/documents/types/{documentType}/edit', [StaffDocumentController::class, 'edit'])->name('documents.edit');
-    Route::put('/documents/types/{documentType}', [StaffDocumentController::class, 'update'])->name('documents.update');
-    Route::delete('/documents/types/{documentType}', [StaffDocumentController::class, 'destroy'])->name('documents.destroy');
-    Route::get('/documents/{document}/view', [StaffDocumentController::class, 'view'])->name('documents.view');
-    Route::get('/documents/{document}/download', [StaffDocumentController::class, 'download'])->name('documents.download');
-    Route::patch('/documents/{document}/status', [StaffDocumentController::class, 'updateStatus'])->name('documents.status');
-    Route::get('/approval-requests', [StaffController::class, 'approvalRequests'])->name('approval-requests');
-    Route::get('/calendar', [StaffController::class, 'calendar'])->name('calendar');
-    Route::get('/settings', [StaffController::class, 'settings'])->name('settings');
-    Route::put('/settings/club', [StaffController::class, 'updateClubName'])->name('settings.club');
-    Route::put('/settings/password', [StaffController::class, 'changePassword'])->name('settings.password');
-    Route::get('/settings/schools/create', [StaffSchoolController::class, 'create'])->name('settings.schools.create');
-    Route::post('/settings/schools', [StaffSchoolController::class, 'store'])->name('settings.schools.store');
-    Route::get('/settings/schools/{school}/edit', [StaffSchoolController::class, 'edit'])->name('settings.schools.edit');
-    Route::put('/settings/schools/{school}', [StaffSchoolController::class, 'update'])->name('settings.schools.update');
-    Route::delete('/settings/schools/{school}', [StaffSchoolController::class, 'destroy'])->name('settings.schools.destroy');
-    Route::get('/reports/service-hours', [StaffController::class, 'serviceHoursReports'])->name('reports.service-hours');
-    Route::get('/reports/attendance', [StaffController::class, 'attendanceReports'])->name('reports.attendance');
-    Route::get('/reports/participation', [StaffController::class, 'participationReports'])->name('reports.participation');
-    Route::get('/reports/completion', [StaffController::class, 'completionReports'])->name('reports.completion');
-    Route::post('/scholars/{scholar}/approve', [StaffController::class, 'approveScholar'])->name('scholars.approve');
-    Route::post('/scholars/{scholar}/reject', [StaffController::class, 'rejectScholar'])->name('scholars.reject');
+        Route::get('/documents', [StaffDocumentController::class, 'index'])->name('documents');
+        Route::get('/documents/create', [StaffDocumentController::class, 'create'])->name('documents.create');
+        Route::post('/documents', [StaffDocumentController::class, 'store'])->name('documents.store');
+        Route::get('/documents/types/{documentType}', [StaffDocumentController::class, 'show'])->name('documents.show');
+        Route::get('/documents/types/{documentType}/edit', [StaffDocumentController::class, 'edit'])->name('documents.edit');
+        Route::put('/documents/types/{documentType}', [StaffDocumentController::class, 'update'])->name('documents.update');
+        Route::delete('/documents/types/{documentType}', [StaffDocumentController::class, 'destroy'])->name('documents.destroy');
+        Route::get('/documents/{document}/view', [StaffDocumentController::class, 'view'])->name('documents.view');
+        Route::get('/documents/{document}/download', [StaffDocumentController::class, 'download'])->name('documents.download');
+        Route::patch('/documents/{document}/status', [StaffDocumentController::class, 'updateStatus'])->name('documents.status');
+        Route::get('/approval-requests', [StaffController::class, 'approvalRequests'])->name('approval-requests');
+        Route::get('/calendar', [StaffController::class, 'calendar'])->name('calendar');
+        Route::get('/settings', [StaffController::class, 'settings'])->name('settings');
+        Route::put('/settings/club', [StaffController::class, 'updateClubName'])->name('settings.club');
+        Route::put('/settings/password', [StaffController::class, 'changePassword'])->name('settings.password');
+        Route::get('/settings/schools/create', [StaffSchoolController::class, 'create'])->name('settings.schools.create');
+        Route::post('/settings/schools', [StaffSchoolController::class, 'store'])->name('settings.schools.store');
+        Route::get('/settings/schools/{school}/edit', [StaffSchoolController::class, 'edit'])->name('settings.schools.edit');
+        Route::put('/settings/schools/{school}', [StaffSchoolController::class, 'update'])->name('settings.schools.update');
+        Route::delete('/settings/schools/{school}', [StaffSchoolController::class, 'destroy'])->name('settings.schools.destroy');
+        Route::get('/reports/service-hours', [StaffController::class, 'serviceHoursReports'])->name('reports.service-hours');
+        Route::get('/reports/attendance', [StaffController::class, 'attendanceReports'])->name('reports.attendance');
+        Route::get('/reports/participation', [StaffController::class, 'participationReports'])->name('reports.participation');
+        Route::get('/reports/completion', [StaffController::class, 'completionReports'])->name('reports.completion');
+        Route::post('/scholars/{scholar}/approve', [StaffController::class, 'approveScholar'])->name('scholars.approve');
+        Route::post('/scholars/{scholar}/reject', [StaffController::class, 'rejectScholar'])->name('scholars.reject');
     });
 });
 

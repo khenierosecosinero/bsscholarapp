@@ -2,9 +2,17 @@
 
 @section('page-content')
 
+@php
+    $staffListQuery = array_filter([
+        'region' => $selectedRegion ?: null,
+        'location' => $locationKey ?? 'all',
+        'club' => $selectedClubId ?: null,
+        'search' => filled($search ?? '') ? $search : null,
+    ], fn ($value) => $value !== null && $value !== '');
+@endphp
+
 <div class="admin-staff-page">
-@include('partials.admin-location-filter')
-@include('partials.admin-scope-banner')
+@include('partials.admin-staff-filter')
 
 <section class="staff-stat-grid staff-stat-grid-4">
     <div class="staff-stat-card">
@@ -38,15 +46,6 @@
     </div>
 </section>
 
-<div class="staff-info-banner admin-staff-notice">
-    <strong>Scholar Staff Registration Approval System</strong>
-    <p>
-        New scholar staff registrations appear below with a <strong>Pending</strong> status. Pending accounts cannot log in or access Scholar Staff features.
-        Use <strong>Approve</strong> to activate an account, or <strong>Reject</strong> to deny access and mark the registration as rejected.
-        Approvals are scoped to the selected City or Province Scholarship Program filter.
-    </p>
-</div>
-
 @if($pendingStaff->isNotEmpty())
 <div class="staff-card admin-staff-pending-card">
     <div class="staff-card-header">
@@ -59,7 +58,7 @@
                 <tr>
                     <th>Staff Member</th>
                     <th>Account Details</th>
-                    <th>Assigned Program</th>
+                    <th>Scholarship Club</th>
                     <th>Date Registered</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -73,24 +72,32 @@
                                 <div class="staff-scholar-avatar">{{ strtoupper(substr($member->full_name, 0, 1)) }}</div>
                                 <div class="staff-scholar-meta">
                                     <strong>{{ $member->full_name }}</strong>
-                                    <small>{{ $member->scholar_id }}</small>
+                                    <small>{{ $member->contactNumber() !== '' ? $member->contactNumber() : '—' }}</small>
                                 </div>
                             </div>
                         </td>
                         <td data-label="Account Details">{{ $member->email }}</td>
-                        <td data-label="Assigned Program">{{ $member->scholarshipProgram?->programLabel() ?? 'Unassigned' }}</td>
+                        <td data-label="Scholarship Club">{{ $member->scholarshipClub?->name ?: '—' }}</td>
                         <td data-label="Date Registered">{{ $member->created_at->format('M j, Y g:i A') }}</td>
                         <td data-label="Status"><span class="staff-badge orange">Pending</span></td>
                         <td data-label="Actions">
                             <div class="staff-action-group">
+                                <a href="{{ route('admin.staff.show', array_merge(['staffMember' => $member], $staffListQuery)) }}" class="staff-btn staff-btn-sm staff-btn-view" title="View this scholar staff account">View</a>
                                 <form method="POST" action="{{ route('admin.staff.approve', $member) }}">
                                     @csrf
-                                    @include('partials.admin-scope-fields')
+                                    @include('partials.admin-staff-return-fields')
                                     <button type="submit" class="staff-btn staff-btn-primary staff-btn-sm" title="Approve and activate this scholar staff account">Approve</button>
                                 </form>
-                                <form method="POST" action="{{ route('admin.staff.reject', $member) }}" onsubmit="return confirm('Reject this scholar staff registration? The account will be marked as Rejected and will not be able to log in.');">
+                                <form method="POST" action="{{ route('admin.staff.reject', $member) }}"
+                                    data-no-loading="true"
+                                    data-confirm="The account will be marked as Rejected and will not be able to log in."
+                                    data-confirm-title="Reject this scholar staff registration?"
+                                    data-confirm-name="{{ $member->full_name }}"
+                                    data-confirm-yes="Reject"
+                                    data-confirm-no="Cancel"
+                                    data-confirm-variant="danger">
                                     @csrf
-                                    @include('partials.admin-scope-fields')
+                                    @include('partials.admin-staff-return-fields')
                                     <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger" title="Reject this registration">Reject</button>
                                 </form>
                             </div>
@@ -103,15 +110,6 @@
 </div>
 @endif
 
-<form method="GET" class="staff-filter-bar">
-    @include('partials.admin-scope-fields')
-    <div class="staff-search">
-        <span>🔍</span>
-        <input type="search" name="search" value="{{ $search }}" placeholder="Search by name, email, or staff number...">
-    </div>
-    <button type="submit" class="staff-btn staff-btn-primary">Search</button>
-</form>
-
 <div class="staff-card">
     <div class="staff-card-header"><h2>All Scholar Staff Accounts</h2></div>
     <div class="staff-table-wrap">
@@ -120,7 +118,8 @@
                 <tr>
                     <th>Staff Member</th>
                     <th>Email</th>
-                    <th>Assigned Program</th>
+                    <th>Contact Number</th>
+                    <th>Scholarship Club</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
@@ -133,29 +132,33 @@
                                 <div class="staff-scholar-avatar">{{ strtoupper(substr($member->full_name, 0, 1)) }}</div>
                                 <div class="staff-scholar-meta">
                                     <strong>{{ $member->full_name }}</strong>
-                                    <small>{{ $member->scholar_id }}</small>
                                 </div>
                             </div>
                         </td>
                         <td data-label="Email">{{ $member->email }}</td>
-                        <td data-label="Assigned Program">{{ $member->scholarshipProgram?->programLabel() ?? 'Unassigned' }}</td>
+                        <td data-label="Contact Number">{{ $member->contactNumber() !== '' ? $member->contactNumber() : '—' }}</td>
+                        <td data-label="Scholarship Club">{{ $member->scholarshipClub?->name ?: '—' }}</td>
                         <td data-label="Status">
-                            @php
-                                $statusClass = match($member->status) {
-                                    'approved' => 'green',
-                                    'pending' => 'orange',
-                                    'rejected' => 'red',
-                                    default => 'gray',
-                                };
-                            @endphp
-                            <span class="staff-badge {{ $statusClass }}">{{ ucfirst($member->status ?? 'approved') }}</span>
+                            <span class="staff-badge {{ $member->staffStatusBadgeClass() }}">{{ $member->staffStatusLabel() }}</span>
                         </td>
                         <td data-label="Actions">
-                            <span class="staff-muted">—</span>
+                            <div class="staff-action-group">
+                                <a href="{{ route('admin.staff.show', array_merge(['staffMember' => $member], $staffListQuery)) }}" class="staff-btn staff-btn-sm staff-btn-view" title="View this scholar staff account">View</a>
+                                <button
+                                    type="button"
+                                    class="staff-btn staff-btn-sm staff-btn-more"
+                                    data-staff-more
+                                    data-staff-name="{{ $member->full_name }}"
+                                    data-activate-url="{{ route('admin.staff.activate', $member) }}"
+                                    data-deactivate-url="{{ route('admin.staff.deactivate', $member) }}"
+                                    data-delete-url="{{ route('admin.staff.delete', $member) }}"
+                                    title="More staff account actions"
+                                >More</button>
+                            </div>
                         </td>
                     </tr>
                 @empty
-                    <tr class="staff-table-empty"><td colspan="5">No approved or rejected scholar staff found for this scope.</td></tr>
+                    <tr class="staff-table-empty"><td colspan="6">No records found</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -163,5 +166,7 @@
     <div class="staff-pagination">{{ $staffMembers->links() }}</div>
 </div>
 </div>
+
+@include('partials.admin-staff-more-modal')
 
 @endsection

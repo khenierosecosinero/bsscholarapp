@@ -4,11 +4,17 @@ namespace App\Services;
 
 use App\Models\AcademicSetting;
 use App\Models\Attendance;
+use App\Models\Document;
+use App\Models\Event;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class AcademicSettingsService
 {
@@ -21,13 +27,35 @@ class AcademicSettingsService
     public function current(): AcademicSetting
     {
         return Cache::remember(self::CACHE_KEY, 3600, function () {
-            return AcademicSetting::query()->first()
-                ?? AcademicSetting::create([
-                    'year_start' => (int) now()->year,
-                    'year_end' => (int) now()->year + 1,
-                    'semester' => '2nd Semester',
-                ]);
+            $active = AcademicSetting::query()->active()->orderByDesc('year_start')->first();
+            if ($active) {
+                return $active;
+            }
+
+            $existing = AcademicSetting::query()->orderByDesc('year_start')->first();
+            if ($existing) {
+                $existing->forceFill(['is_active' => true])->save();
+
+                return $existing;
+            }
+
+            return AcademicSetting::create([
+                'year_start' => (int) now()->year,
+                'year_end' => (int) now()->year + 1,
+                'semester' => '2nd Semester',
+                'is_active' => true,
+            ]);
         });
+    }
+
+    public function managedYears()
+    {
+        $this->current();
+
+        return AcademicSetting::query()
+            ->orderByDesc('year_start')
+            ->orderByDesc('id')
+            ->get();
     }
 
     public function clearCache(): void
@@ -53,12 +81,306 @@ class AcademicSettingsService
     public function updateGlobal(array $data, User $user): AcademicSetting
     {
         $validated = $this->validatePeriod($data);
+        $setting = AcademicSetting::query()->firstOrCreate(
+            ['year_start' => $validated['year_start']],
+            [
+                'year_end' => $validated['year_end'],
+                'semester' => $validated['semester'],
+                'is_active' => false,
+            ]
+        );
 
-        $setting = $this->current();
-        $setting->update(array_merge($validated, ['updated_by' => $user->id]));
+        $setting->update([
+            'year_end' => $validated['year_end'],
+            'semester' => $validated['semester'],
+            'updated_by' => $user->id,
+        ]);
+
+        return $this->activate($setting, $user);
+    }
+
+    public function createYear(string $label, User $user): AcademicSetting
+    {
+        $period = $this->parseYearLabel($label);
+        $this->assertYearAvailable($period['year_start']);
+
+        $hasYears = AcademicSetting::query()->exists();
+        $semester = $hasYears
+            ? ($this->current()->semester ?: '2nd Semester')
+            : '2nd Semester';
+
+        $setting = AcademicSetting::create([
+            'year_start' => $period['year_start'],
+            'year_end' => $period['year_end'],
+            'semester' => $semester,
+            'is_active' => ! $hasYears,
+            'updated_by' => $user->id,
+        ]);
+
+        if (! $hasYears) {
+            $this->clearCache();
+        }
+
+        $this->syncAttendanceDriveYears();
+
+        return $setting;
+    }
+
+    public function updateYear(AcademicSetting $setting, string $label, User $user): AcademicSetting
+    {
+        $period = $this->parseYearLabel($label);
+        $this->assertYearAvailable($period['year_start'], $setting->id);
+
+        $setting->update([
+            'year_start' => $period['year_start'],
+            'year_end' => $period['year_end'],
+            'updated_by' => $user->id,
+        ]);
+
         $this->clearCache();
+        $this->syncAttendanceDriveYears();
 
         return $setting->fresh();
+    }
+
+    public function activate(AcademicSetting $setting, User $user): AcademicSetting
+    {
+        DB::transaction(function () use ($setting, $user) {
+            AcademicSetting::query()
+                ->where('is_active', true)
+                ->whereKeyNot($setting->id)
+                ->update(['is_active' => false]);
+
+            $setting->update([
+                'is_active' => true,
+                'updated_by' => $user->id,
+            ]);
+        });
+
+        $this->clearCache();
+        $this->forgetReportYearSessions();
+        $this->syncAttendanceDriveYears();
+
+        return $setting->fresh();
+    }
+
+    public function deactivate(AcademicSetting $setting, User $user): AcademicSetting
+    {
+        if (! $setting->is_active) {
+            return $setting;
+        }
+
+        $replacement = AcademicSetting::query()
+            ->whereKeyNot($setting->id)
+            ->orderByDesc('year_start')
+            ->first();
+
+        if (! $replacement) {
+            throw ValidationException::withMessages([
+                'academic_year' => 'Keep at least one academic year active.',
+            ]);
+        }
+
+        DB::transaction(function () use ($setting, $replacement, $user) {
+            $setting->update([
+                'is_active' => false,
+                'updated_by' => $user->id,
+            ]);
+
+            $replacement->update([
+                'is_active' => true,
+                'updated_by' => $user->id,
+            ]);
+        });
+
+        $this->clearCache();
+        $this->forgetReportYearSessions();
+        $this->syncAttendanceDriveYears();
+
+        return $setting->fresh();
+    }
+
+    public function deleteYear(AcademicSetting $setting, User $user): void
+    {
+        if ($setting->is_active) {
+            throw ValidationException::withMessages([
+                'academic_year' => 'Activate another academic year before deleting '.$setting->periodLabel().'.',
+            ]);
+        }
+
+        if (AcademicSetting::query()->count() <= 1) {
+            throw ValidationException::withMessages([
+                'academic_year' => 'Keep at least one academic year.',
+            ]);
+        }
+
+        DB::transaction(function () use ($setting) {
+            User::query()
+                ->where('academic_year_start', $setting->year_start)
+                ->update([
+                    'academic_year_start' => null,
+                    'semester' => null,
+                ]);
+
+            $setting->delete();
+        });
+
+        $this->clearCache();
+        $this->forgetReportYearSessions();
+        $this->syncAttendanceDriveYears();
+    }
+
+    /**
+     * @return array{
+     *     scholars: int,
+     *     events: int,
+     *     attendances: int,
+     *     documents: int,
+     *     service_hours: int,
+     *     has_records: bool,
+     *     warning: string
+     * }
+     */
+    public function usageSummary(AcademicSetting $setting): array
+    {
+        [$start, $end] = $this->eventBoundsForReport([
+            'year_start' => (int) $setting->year_start,
+            'semester' => self::SEMESTER_ALL,
+        ]);
+
+        $scholars = User::query()
+            ->where('role', User::ROLE_SCHOLAR)
+            ->where('academic_year_start', $setting->year_start)
+            ->count();
+
+        $events = Event::query()
+            ->whereNotNull('starts_at')
+            ->whereBetween('starts_at', [$start, $end])
+            ->count();
+
+        $attendances = Attendance::query()
+            ->where('academic_year_start', $setting->year_start)
+            ->count();
+
+        $documents = Document::query()
+            ->whereBetween('created_at', [$start, $end])
+            ->count();
+
+        $serviceHours = Attendance::query()
+            ->where('academic_year_start', $setting->year_start)
+            ->where('status', Attendance::STATUS_APPROVED)
+            ->where('hours_earned', '>', 0)
+            ->count();
+
+        $parts = [];
+        if ($scholars > 0) {
+            $parts[] = $scholars.' scholar'.($scholars === 1 ? '' : 's');
+        }
+        if ($events > 0) {
+            $parts[] = $events.' event'.($events === 1 ? '' : 's');
+        }
+        if ($attendances > 0) {
+            $parts[] = $attendances.' attendance record'.($attendances === 1 ? '' : 's');
+        }
+        if ($documents > 0) {
+            $parts[] = $documents.' document'.($documents === 1 ? '' : 's');
+        }
+        if ($serviceHours > 0) {
+            $parts[] = $serviceHours.' service-hour record'.($serviceHours === 1 ? '' : 's');
+        }
+
+        $warning = $parts === []
+            ? ''
+            : 'This academic year is already used by '.implode(', ', $parts).'. Related reports still include those records. Those records will stay in the system.';
+
+        return [
+            'scholars' => $scholars,
+            'events' => $events,
+            'attendances' => $attendances,
+            'documents' => $documents,
+            'service_hours' => $serviceHours,
+            'has_records' => $parts !== [],
+            'warning' => $warning,
+        ];
+    }
+
+    /**
+     * @param  iterable<AcademicSetting>  $years
+     * @return array<int, array<string, mixed>>
+     */
+    public function usageByYear(iterable $years): array
+    {
+        $usage = [];
+
+        foreach ($years as $year) {
+            $usage[$year->id] = $this->usageSummary($year);
+        }
+
+        return $usage;
+    }
+
+    /**
+     * @return array{year_start: int, year_end: int}
+     */
+    public function parseYearLabel(string $label): array
+    {
+        $normalized = trim(preg_replace('/\s+/u', ' ', $label) ?? $label);
+
+        if (! preg_match('/^(?:AY\s*)?(\d{4})\s*[-–—\/]\s*(\d{4})$/u', $normalized, $matches)) {
+            throw ValidationException::withMessages([
+                'academic_year' => 'Enter the academic year as 2026–2027.',
+            ]);
+        }
+
+        $yearStart = (int) $matches[1];
+        $yearEnd = (int) $matches[2];
+
+        if ($yearStart < 2000 || $yearStart > 2100 || $yearEnd < 2000 || $yearEnd > 2101) {
+            throw ValidationException::withMessages([
+                'academic_year' => 'Enter a valid academic year between 2000 and 2100.',
+            ]);
+        }
+
+        if ($yearEnd !== $yearStart + 1) {
+            throw ValidationException::withMessages([
+                'academic_year' => 'The second year must be one year after the first (for example 2026–2027).',
+            ]);
+        }
+
+        return [
+            'year_start' => $yearStart,
+            'year_end' => $yearEnd,
+        ];
+    }
+
+    private function assertYearAvailable(int $yearStart, ?int $ignoreId = null): void
+    {
+        $exists = AcademicSetting::query()
+            ->where('year_start', $yearStart)
+            ->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId))
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'academic_year' => 'That academic year is already registered.',
+            ]);
+        }
+    }
+
+    private function forgetReportYearSessions(): void
+    {
+        session()->forget(['admin_report_year', 'staff_report_year']);
+    }
+
+    private function syncAttendanceDriveYears(): void
+    {
+        try {
+            app(AttendanceDriveStorageService::class)->syncConfiguredYearFolders();
+        } catch (Throwable $e) {
+            Log::warning('Could not sync BSSA Attendance folders after an academic year change.', [
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function updateUserPreference(User $user, array $data): User
@@ -91,12 +413,15 @@ class AcademicSettingsService
 
     public function yearOptions(int $range = 5): array
     {
-        $current = (int) now()->year;
-        $years = [];
+        $this->current();
 
-        for ($y = $current - 2; $y <= $current + $range; $y++) {
-            $years[$y] = "{$y}–".($y + 1);
-        }
+        $years = [];
+        AcademicSetting::query()
+            ->orderBy('year_start')
+            ->get(['year_start', 'year_end'])
+            ->each(function (AcademicSetting $setting) use (&$years) {
+                $years[(int) $setting->year_start] = $setting->periodLabel();
+            });
 
         return $years;
     }
@@ -213,10 +538,10 @@ class AcademicSettingsService
     public function label(AcademicSetting $setting, string $style = 'short'): string
     {
         if ($style === 'long') {
-            return 'AY '.$setting->year_start.' - '.$setting->year_end;
+            return 'AY '.$setting->periodLabel();
         }
 
-        return $setting->year_start.'-'.$setting->year_end;
+        return $setting->periodLabel();
     }
 
     public function semesterBounds(AcademicSetting $setting): array

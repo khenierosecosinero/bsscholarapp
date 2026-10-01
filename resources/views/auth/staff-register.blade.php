@@ -14,7 +14,6 @@
                 @csrf
                 <div class="auth-form-body">
                     <input class="form-input" type="text" name="full_name" placeholder="Name of Scholar Staff" value="{{ old('full_name') }}" required autocomplete="name" />
-                    <input class="form-input" type="text" name="scholar_id" placeholder="Scholar Staff Number" value="{{ old('scholar_id') }}" required />
                     <label class="location-cascade-label" for="scholarship_club_name" style="display:block;font-size:12px;font-weight:600;color:#6b7280;margin:0 0 6px;padding-left:4px">Scholarship Club Name</label>
                     <input class="form-input" type="text" id="scholarship_club_name" name="scholarship_club_name" placeholder="Scholarship Club Name" value="{{ old('scholarship_club_name') }}" required maxlength="255" />
                     @include('partials.staff-location-select', [
@@ -23,7 +22,7 @@
                         'addressMode' => true,
                     ])
                     <input class="form-input" type="email" name="email" placeholder="Email" value="{{ old('email') }}" required autocomplete="email" />
-                    <input class="form-input" type="text" name="cellphone_number" placeholder="Contact Number" value="{{ old('cellphone_number') }}" maxlength="50" autocomplete="tel" />
+                    <input class="form-input" type="text" name="cellphone_number" placeholder="Contact Number" value="{{ old('cellphone_number') }}" required maxlength="50" autocomplete="tel" />
                     <input class="form-input" type="password" name="password" placeholder="Password" required autocomplete="new-password" minlength="8" />
                     <input class="form-input" type="password" name="password_confirmation" placeholder="Confirm Password" required autocomplete="new-password" minlength="8" />
                 </div>

@@ -18,10 +18,7 @@
             </div>
             <button type="button" class="staff-profile-toggle" id="profile-toggle" aria-label="Profile menu">&#9662;</button>
             <div class="profile-menu" id="profile-menu" hidden>
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button type="submit">Logout</button>
-                </form>
+                @include('partials.logout-button', ['class' => 'app-logout-btn'])
             </div>
         </div>
     </div>

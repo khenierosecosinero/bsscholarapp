@@ -166,6 +166,7 @@ class OperationalDataResetService
             'year_end' => $yearStart + 1,
             'semester' => '2nd Semester',
             'updated_by' => $admin?->id,
+            'is_active' => true,
         ]);
 
         app(AcademicSettingsService::class)->clearCache();
@@ -218,7 +219,8 @@ class OperationalDataResetService
             ->get()
             ->first(fn (User $user) => $user->isPermanentAdmin());
 
-        $setting = AcademicSetting::query()->first();
+        $setting = AcademicSetting::query()->active()->orderByDesc('year_start')->first()
+            ?? AcademicSetting::query()->orderByDesc('year_start')->first();
         $yearLabel = $setting
             ? $setting->year_start.'–'.$setting->year_end.' / '.$setting->semester
             : '';

@@ -4,9 +4,11 @@
 
 @php
     $backQuery = array_filter([
-        'location' => (($locationKey ?? 'all') !== 'all') ? $locationKey : null,
-        'program_type' => (($programType ?? 'all') !== 'all') ? $programType : null,
-    ]);
+        'region' => request('region') ?: null,
+        'location' => request('location', $locationKey ?? 'all'),
+        'club' => request('club') ?: null,
+        'search' => request('search') ?: null,
+    ], fn ($value) => $value !== null && $value !== '');
     $submittedCount = $documents->filter(fn ($document) => $document->hasFile())->count();
 @endphp
 
@@ -21,12 +23,12 @@
         </div>
         <div class="admin-scholar-fields" style="margin-top:16px">
             <div class="admin-scholar-field">
-                <span>Scholar Program</span>
-                <strong>{{ $scholar->scholarshipProgram?->programLabel() ?? '—' }}</strong>
+                <span>Scholarship Club</span>
+                <strong>{{ $scholar->scholarshipClub?->name ?: '—' }}</strong>
             </div>
             <div class="admin-scholar-field">
-                <span>Program Type</span>
-                <strong>{{ $scholar->scholarshipProgram?->programTypeLabel() ?? '—' }}</strong>
+                <span>Location</span>
+                <strong>{{ collect([$scholar->city, $scholar->province])->filter()->implode(', ') ?: '—' }}</strong>
             </div>
             <div class="admin-scholar-field">
                 <span>Submitted Files</span>

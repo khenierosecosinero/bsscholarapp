@@ -10,6 +10,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class User extends Authenticatable
@@ -32,6 +33,8 @@ class User extends Authenticatable
     public const STATUS_APPROVED = 'approved';
 
     public const STATUS_REJECTED = 'rejected';
+
+    public const STATUS_INACTIVE = 'inactive';
 
     public const PRESENCE_SECONDS = 90;
 
@@ -157,6 +160,33 @@ class User extends Authenticatable
     public function isStaffRejected(): bool
     {
         return $this->isScholarStaff() && $this->status === self::STATUS_REJECTED;
+    }
+
+    public function isStaffInactive(): bool
+    {
+        return $this->isScholarStaff() && $this->status === self::STATUS_INACTIVE;
+    }
+
+    public function staffStatusLabel(): string
+    {
+        return match ($this->status) {
+            self::STATUS_APPROVED => 'Approved',
+            self::STATUS_PENDING => 'Pending',
+            self::STATUS_REJECTED => 'Rejected',
+            self::STATUS_INACTIVE => 'Inactive',
+            default => ucfirst((string) $this->status),
+        };
+    }
+
+    public function staffStatusBadgeClass(): string
+    {
+        return match ($this->status) {
+            self::STATUS_APPROVED => 'green',
+            self::STATUS_PENDING => 'orange',
+            self::STATUS_REJECTED => 'red',
+            self::STATUS_INACTIVE => 'gray',
+            default => 'gray',
+        };
     }
 
     public function hasScholarPortalAccess(): bool
@@ -319,15 +349,11 @@ class User extends Authenticatable
     }
 
     /**
-     * Staff Settings Contact Number: saved contact, or the registered Scholar Staff Number.
+     * Staff contact shown in Settings and Admin Staff: cellphone only.
      */
     public function contactNumber(): string
     {
-        if (filled($this->cellphone_number)) {
-            return (string) $this->cellphone_number;
-        }
-
-        return (string) ($this->scholar_id ?? '');
+        return filled($this->cellphone_number) ? (string) $this->cellphone_number : '';
     }
 
     public function scholarshipClubCity(): ?string
@@ -472,18 +498,36 @@ class User extends Authenticatable
     }
 
     /**
+     * Internal unique identity for scholar staff. Not shown as Scholar Staff Number.
+     */
+    public static function nextStaffIdentity(): string
+    {
+        do {
+            $identity = 'STAFF-'.strtoupper((string) Str::ulid());
+        } while (static::query()->where('scholar_id', $identity)->exists());
+
+        return $identity;
+    }
+
+    /**
      * Create a new scholar account with immutable login credentials.
      * Associated records are provisioned separately; nothing is auto-deleted afterward.
      */
     public static function register(array $attributes): self
     {
+        $role = $attributes['role'] ?? self::ROLE_SCHOLAR;
+
+        if (empty($attributes['scholar_id']) && $role === self::ROLE_SCHOLAR_STAFF) {
+            $attributes['scholar_id'] = static::nextStaffIdentity();
+        }
+
         foreach (['email', 'scholar_id', 'password', 'full_name'] as $required) {
             if (empty($attributes[$required])) {
                 throw new InvalidArgumentException("Missing required registration field: {$required}");
             }
         }
 
-        $user = new static();
+        $user = new static;
         $user->fill(collect($attributes)->only([
             'full_name',
             'school_university',

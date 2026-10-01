@@ -32,6 +32,10 @@ class UserSequenceService
 
     public function compact(): void
     {
+        if (! $this->isMysql()) {
+            return;
+        }
+
         $ids = DB::table('users')
             ->orderBy('id')
             ->lockForUpdate()
@@ -61,14 +65,22 @@ class UserSequenceService
         } finally {
             DB::statement('SET FOREIGN_KEY_CHECKS=1');
         }
-
     }
 
     public function resetAutoIncrement(): void
     {
+        if (! $this->isMysql()) {
+            return;
+        }
+
         $max = (int) (DB::table('users')->max('id') ?? 0);
 
         DB::statement('ALTER TABLE users AUTO_INCREMENT = '.($max + 1));
+    }
+
+    private function isMysql(): bool
+    {
+        return DB::connection()->getDriverName() === 'mysql';
     }
 
     /**

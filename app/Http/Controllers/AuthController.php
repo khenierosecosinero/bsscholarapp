@@ -6,9 +6,9 @@ use App\Models\ScholarshipClub;
 use App\Models\ScholarshipClubSchool;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
-use App\Support\CourseCatalog;
 use App\Services\AccountService;
 use App\Services\ScholarshipProgramAssignmentService;
+use App\Support\CourseCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -60,6 +60,16 @@ class AuthController extends Controller
 
             throw ValidationException::withMessages([
                 'email' => 'Your scholar staff account is pending administrator approval. You cannot log in until an administrator approves your registration.',
+            ]);
+        }
+
+        if ($user->isStaffInactive()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            throw ValidationException::withMessages([
+                'email' => 'Your scholar staff account has been deactivated and cannot access the Scholar Staff section. Please contact the system administrator for assistance.',
             ]);
         }
 
@@ -194,7 +204,6 @@ class AuthController extends Controller
 
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
-            'scholar_id' => ['required', 'string', 'max:100'],
             'scholarship_program_id' => [
                 'required',
                 'integer',
@@ -204,12 +213,13 @@ class AuthController extends Controller
             ],
             'scholarship_club_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
-            'cellphone_number' => ['nullable', 'string', 'max:50'],
+            'cellphone_number' => ['required', 'string', 'max:50'],
             'password' => ['required', 'confirmed', PasswordRule::min(8)],
         ], [
             'scholarship_program_id.required' => 'Please select the Province and Municipality or City where the Scholarship Club is located.',
             'scholarship_program_id.exists' => 'Please select a valid Municipality or City for the Scholarship Club address.',
             'scholarship_club_name.required' => 'Please enter a Scholarship Club Name.',
+            'cellphone_number.required' => 'Please enter a Contact Number.',
         ]);
 
         $this->assertStaffRegistrationIsUnique($data);
@@ -224,13 +234,12 @@ class AuthController extends Controller
 
             $user = User::register([
                 'full_name' => $data['full_name'],
-                'scholar_id' => $data['scholar_id'],
                 'scholarship_program_id' => $assignment['scholarship_program_id'],
                 'scholarship_club_id' => $club->id,
                 'city' => $assignment['city'],
                 'province' => $assignment['province'],
                 'email' => $data['email'],
-                'cellphone_number' => $data['cellphone_number'] ?? null,
+                'cellphone_number' => $data['cellphone_number'],
                 'password' => $data['password'],
                 'role' => User::ROLE_SCHOLAR_STAFF,
                 'status' => User::STATUS_PENDING,
@@ -318,36 +327,17 @@ class AuthController extends Controller
     private function assertStaffRegistrationIsUnique(array $data): void
     {
         $email = strtolower(trim($data['email']));
-        $scholarId = trim($data['scholar_id']);
 
         $existingByEmail = User::query()->where('email', $email)->first();
         if ($existingByEmail) {
             $message = match (true) {
-                $existingByEmail->isScholarStaff() && $existingByEmail->isStaffPendingApproval() =>
-                    'An account with this email is already registered and pending administrator approval.',
-                $existingByEmail->isScholarStaff() && $existingByEmail->isStaffRejected() =>
-                    'An account with this email was rejected and cannot be used to register again.',
-                $existingByEmail->isScholarStaff() =>
-                    'An account with this email is already registered as scholar staff.',
+                $existingByEmail->isScholarStaff() && $existingByEmail->isStaffPendingApproval() => 'An account with this email is already registered and pending administrator approval.',
+                $existingByEmail->isScholarStaff() && $existingByEmail->isStaffRejected() => 'An account with this email was rejected and cannot be used to register again.',
+                $existingByEmail->isScholarStaff() => 'An account with this email is already registered as scholar staff.',
                 default => 'An account with this email already exists.',
             };
 
             throw ValidationException::withMessages(['email' => $message]);
-        }
-
-        $existingByScholarId = User::query()->where('scholar_id', $scholarId)->first();
-        if ($existingByScholarId) {
-            $message = match (true) {
-                $existingByScholarId->isScholarStaff() && $existingByScholarId->isStaffPendingApproval() =>
-                    'This scholar staff number is already registered and pending administrator approval.',
-                $existingByScholarId->isScholarStaff() && $existingByScholarId->isStaffRejected() =>
-                    'This scholar staff number was rejected and cannot be used to register again.',
-                $existingByScholarId->isScholarStaff() =>
-                    'This scholar staff number is already registered.',
-                default => 'This scholar ID is already registered.',
-            };
-
-            throw ValidationException::withMessages(['scholar_id' => $message]);
         }
     }
 }

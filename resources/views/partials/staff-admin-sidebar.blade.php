@@ -44,10 +44,10 @@
                 <x-user-avatar :user="$sidebarUser" class="staff-user-avatar" />
                 <div class="staff-user-meta">
                     <div class="staff-user-name" title="{{ $sidebarUser->full_name }}">{{ $sidebarUser->full_name ?? 'Scholar Staff' }}</div>
-                    @if($sidebarUser->scholar_id)
-                        <div class="staff-user-role">{{ $sidebarUser->scholar_id }}</div>
+                    @if($sidebarUser->isAdmin())
+                        <div class="staff-user-role">{{ $sidebarUser->scholar_id ?: 'System Administrator' }}</div>
                     @else
-                        <div class="staff-user-role">{{ $programName }}</div>
+                        <div class="staff-user-role">Scholar Staff</div>
                     @endif
                 </div>
             </div>
@@ -74,9 +74,6 @@
     </nav>
 
     <div class="staff-sidebar-footer">
-        <form method="POST" action="{{ route('logout') }}" class="staff-logout-form">
-            @csrf
-            <button type="submit" class="staff-logout-btn">Logout</button>
-        </form>
+        @include('partials.logout-button', ['formClass' => 'staff-logout-form', 'class' => 'app-logout-btn staff-logout-btn'])
     </div>
 </aside>

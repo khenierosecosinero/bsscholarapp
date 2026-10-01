@@ -260,19 +260,73 @@ body:has(.staff-shell) {
 
 .staff-logout-form { margin-top: 8px; }
 
+.app-logout-btn,
 .staff-logout-btn {
     width: 100%;
-    display: block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     text-align: center;
-    border: 1px solid #fecaca;
-    background: transparent;
-    color: #dc2626;
+    border: 1px solid #dc2626;
+    background: #dc2626;
+    color: #fff;
     border-radius: 8px;
-    padding: 8px 12px;
+    padding: 10px 14px;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
     cursor: pointer;
     box-sizing: border-box;
+    box-shadow: 0 1px 2px rgba(185, 28, 28, 0.18);
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.app-logout-btn:hover,
+.app-logout-btn:focus-visible,
+.staff-logout-btn:hover,
+.staff-logout-btn:focus-visible {
+    background: #b91c1c;
+    border-color: #b91c1c;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(185, 28, 28, 0.28);
+}
+
+.app-logout-btn:active,
+.staff-logout-btn:active {
+    background: #991b1b;
+    border-color: #991b1b;
+    transform: translateY(1px);
+}
+
+.app-logout-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    display: block;
+}
+
+.profile-menu .app-logout-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: calc(100% - 16px);
+    margin: 8px;
+    padding: 10px 14px;
+    background: #dc2626;
+    border: 1px solid #dc2626;
+    color: #fff;
+    text-align: center;
+    font-weight: 700;
+}
+
+.profile-menu .app-logout-btn:hover,
+.profile-menu .app-logout-btn:focus-visible {
+    background: #b91c1c;
+    border-color: #b91c1c;
+    color: #fff;
 }
 
 .staff-main-wrap {
@@ -1736,6 +1790,11 @@ body:has(.staff-shell) {
         justify-content: flex-start;
         width: 100%;
     }
+    .staff-action-group .staff-btn-view,
+    .staff-action-group .staff-btn-more {
+        width: auto;
+        flex: 0 0 auto;
+    }
     .staff-doc-review-actions {
         width: 100%;
         align-items: stretch;
@@ -1801,6 +1860,40 @@ body:has(.staff-shell) {
     padding: 6px 10px;
     font-size: 12px;
     font-weight: 600;
+}
+
+.staff-btn-view,
+.staff-btn-more {
+    min-height: 30px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.staff-btn-view {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+
+.staff-btn-view:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: #fff;
+}
+
+.staff-btn-more {
+    background: #374151;
+    border-color: #374151;
+    color: #fff;
+}
+
+.staff-btn-more:hover {
+    background: #1f2937;
+    border-color: #1f2937;
+    color: #fff;
 }
 
 .staff-btn-success {
@@ -2167,7 +2260,7 @@ body:has(.staff-shell) {
 .staff-confirm-modal {
     position: fixed;
     inset: 0;
-    z-index: 1000;
+    z-index: 1100;
     display: none;
     align-items: center;
     justify-content: center;
@@ -2187,6 +2280,7 @@ body:has(.staff-shell) {
 
 .staff-confirm-dialog {
     position: relative;
+    z-index: 1;
     width: min(100%, 440px);
     background: #fff;
     border-radius: 16px;
@@ -2299,6 +2393,28 @@ body:has(.staff-shell) {
     justify-content: center;
     flex-wrap: wrap;
     gap: 12px;
+}
+
+#admin-staff-more-modal {
+    z-index: 1000;
+}
+
+.staff-more-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0 0 18px;
+}
+
+.staff-more-actions .staff-btn {
+    width: 100%;
+    min-height: 42px;
+    font-weight: 700;
+}
+
+.staff-more-dialog .staff-confirm-icon {
+    background: #fff7ed;
+    color: #c2410c;
 }
 
 .staff-confirm-no {

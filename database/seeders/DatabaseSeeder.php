@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             'year_start' => $yearStart,
             'year_end' => $yearStart + 1,
             'semester' => '2nd Semester',
+            'is_active' => true,
         ]);
         app(AcademicSettingsService::class)->clearCache();
     }

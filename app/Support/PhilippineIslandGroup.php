@@ -103,6 +103,11 @@ final class PhilippineIslandGroup
             ?? self::fromPsgcCode($program->psgc_code);
     }
 
+    public static function isValid(?string $key): bool
+    {
+        return $key !== null && $key !== '' && isset(self::LABELS[$key]);
+    }
+
     /**
      * @return list<string>
      */

@@ -2,17 +2,16 @@
 
 @section('page-content')
 
-@include('partials.admin-location-filter')
-@include('partials.admin-scope-banner')
+@php
+    $eventsListQuery = array_filter([
+        'region' => $selectedRegion ?: null,
+        'location' => $locationKey ?? 'all',
+        'club' => $selectedClubId ?: null,
+        'search' => filled($search ?? '') ? $search : null,
+    ], fn ($value) => $value !== null && $value !== '');
+@endphp
 
-<form method="GET" class="staff-filter-bar">
-    @include('partials.admin-scope-fields')
-    <div class="staff-search">
-        <span>🔍</span>
-        <input type="search" name="search" value="{{ $search }}" placeholder="Search events...">
-    </div>
-    <button type="submit" class="staff-btn staff-btn-primary">Search</button>
-</form>
+@include('partials.admin-events-filter')
 
 <div class="staff-card">
     <div class="staff-table-wrap">
@@ -20,8 +19,8 @@
             <thead>
                 <tr>
                     <th>Event</th>
-                    <th>Scholar Program</th>
-                    <th>Program Type</th>
+                    <th>Scholarship Club</th>
+                    <th>Participants</th>
                     <th>Schedule</th>
                     <th>Status</th>
                     <th>Service Hours</th>
@@ -30,15 +29,15 @@
             <tbody>
                 @forelse($events as $event)
                     <tr>
-                        <td data-label="Event"><a href="{{ route('admin.events.show', $event) }}" class="admin-event-name-link" aria-label="View scholars who attended {{ $event->title }}">{{ $event->title }}</a></td>
-                        <td data-label="Scholar Program">{{ $event->scholarshipProgram?->programLabel() ?? '—' }}</td>
-                        <td data-label="Program Type">{{ $event->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>
+                        <td data-label="Event"><a href="{{ route('admin.events.show', array_merge(['event' => $event], $eventsListQuery)) }}" class="admin-event-name-link" aria-label="View scholars who attended {{ $event->title }}">{{ $event->title }}</a></td>
+                        <td data-label="Scholarship Club">{{ $event->directoryClubLabel($selectedClubId ?? null) }}</td>
+                        <td data-label="Participants">{{ $event->verifiedParticipantCount() }}</td>
                         <td data-label="Schedule">{{ $event->starts_at?->format('M j, Y g:i A') ?? '—' }}</td>
                         <td data-label="Status"><span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span></td>
                         <td data-label="Service Hours">{{ $event->service_hours ?? 0 }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">No events found for this scope.</td></tr>
+                    <tr class="staff-table-empty"><td colspan="6">No events found</td></tr>
                 @endforelse
             </tbody>
         </table>

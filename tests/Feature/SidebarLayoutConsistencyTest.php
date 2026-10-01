@@ -31,6 +31,12 @@ class SidebarLayoutConsistencyTest extends TestCase
         $this->assertStringNotContainsString('width: 260px', $staffCss);
 
         $this->assertStringContainsString("matchMedia('(max-width: 1000px)')", $appJs);
+
+        $this->assertStringContainsString('.app-logout-btn', $scholarCss);
+        $this->assertStringContainsString('background:#dc2626', $scholarCss);
+        $this->assertStringContainsString('.app-logout-btn:hover', $scholarCss);
+        $this->assertStringContainsString('background: #dc2626', $staffCss);
+        $this->assertStringContainsString('.staff-logout-btn:hover', $staffCss);
     }
 
     public function test_scholar_sidebar_keeps_logo_profile_nav_and_logout_order(): void
@@ -45,6 +51,8 @@ class SidebarLayoutConsistencyTest extends TestCase
         $this->assertStringContainsString('Dashboard', $html);
         $this->assertStringContainsString('Events', $html);
         $this->assertStringContainsString('Logout', $html);
+        $this->assertStringContainsString('app-logout-icon', $html);
+        $this->assertStringContainsString('logout-btn', $html);
 
         $this->assertLessThan(strpos($html, 'sidebar-user-chip'), strpos($html, 'class="logo"'));
         $this->assertLessThan(strpos($html, 'aria-label="Main navigation"'), strpos($html, 'sidebar-user-chip'));
@@ -67,11 +75,14 @@ class SidebarLayoutConsistencyTest extends TestCase
         $this->assertStringContainsString('Scholars', $html);
         $this->assertStringContainsString('Approval Requests', $html);
         $this->assertStringContainsString('Service Hours Reports', $html);
-        $this->assertStringContainsString('class="staff-logout-btn"', $html);
+        $this->assertStringContainsString('staff-logout-btn', $html);
+        $this->assertStringContainsString('app-logout-icon', $html);
 
         $this->assertLessThan(strpos($html, 'staff-user-chip'), strpos($html, 'staff-brand-logo'));
         $this->assertLessThan(strpos($html, 'aria-label="Staff navigation"'), strpos($html, 'staff-user-chip'));
         $this->assertLessThan(strpos($html, 'staff-logout-btn'), strpos($html, 'aria-label="Staff navigation"'));
+        $this->assertStringContainsString('Scholar Staff', $html);
+        $this->assertStringNotContainsString('STAFF-SIDEBAR-001', $html);
     }
 
     public function test_admin_sidebar_matches_scholar_structure_and_keeps_nav_items(): void
@@ -87,7 +98,8 @@ class SidebarLayoutConsistencyTest extends TestCase
         $this->assertStringContainsString('Scholar Staff', $html);
         $this->assertStringContainsString('Admin Settings', $html);
         $this->assertStringContainsString('System Administrator', $html);
-        $this->assertStringContainsString('class="staff-logout-btn"', $html);
+        $this->assertStringContainsString('staff-logout-btn', $html);
+        $this->assertStringContainsString('app-logout-icon', $html);
         $this->assertStringNotContainsString('>Locations</span>', $html);
 
         $this->assertLessThan(strpos($html, 'staff-user-chip'), strpos($html, 'staff-brand-logo'));

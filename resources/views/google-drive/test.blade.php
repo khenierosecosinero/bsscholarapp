@@ -25,9 +25,17 @@
 
             <p class="muted">
                 @if($connected)
-                    Google Drive is connected for this browser session.
+                    Google Drive is connected. In My Drive you should see
+                    <strong>BSSA Scholar Documents</strong> and a separate
+                    <strong>BSSA Attendance</strong> folder
+                    @if(! empty($attendanceReady))
+                        (the Attendance folder was created or confirmed just now)
+                    @endif
+                    .
                 @else
-                    Connect Google first, then upload a small PDF or image.
+                    Connect Google first. After you connect, My Drive will have
+                    <strong>BSSA Scholar Documents</strong> and a separate
+                    <strong>BSSA Attendance</strong> folder. Then you can upload a small PDF or image.
                     If Google shows <strong>Access blocked</strong>, add that Gmail as a test user under Google Cloud → Auth Platform → Audience. Laravel cannot override that.
                 @endif
             </p>

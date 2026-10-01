@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendance;
 use App\Models\Event;
-use App\Models\ScholarshipClub;
 use App\Models\EventRegistration;
+use App\Models\ScholarshipClub;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
 use App\Services\AccountService;
@@ -420,7 +420,7 @@ class StaffController extends Controller
             $staff->city = $assignment['city'];
             $staff->province = $assignment['province'];
             $contactNumber = trim((string) ($validated['cellphone_number'] ?? ''));
-            $staff->cellphone_number = $contactNumber !== '' ? $contactNumber : $staff->scholar_id;
+            $staff->cellphone_number = $contactNumber !== '' ? $contactNumber : null;
             $staff->save();
         });
 

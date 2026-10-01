@@ -35,10 +35,7 @@
             @else
                 <span class="is-disabled">Profile & Settings</span>
             @endif
-            <form method="POST" action="{{ route('logout') }}">
-                @csrf
-                <button type="submit">Logout</button>
-            </form>
+            @include('partials.logout-button', ['class' => 'app-logout-btn'])
         </div>
     </div>
     @if($isDashboard)

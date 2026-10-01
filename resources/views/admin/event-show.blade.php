@@ -4,9 +4,11 @@
 
 @php
     $backQuery = array_filter([
-        'location' => (($locationKey ?? 'all') !== 'all') ? $locationKey : null,
-        'program_type' => (($programType ?? 'all') !== 'all') ? $programType : null,
-    ]);
+        'region' => request('region') ?: null,
+        'location' => request('location', $locationKey ?? 'all'),
+        'club' => request('club') ?: null,
+        'search' => request('search') ?: null,
+    ], fn ($value) => $value !== null && $value !== '');
 @endphp
 
 <div class="admin-event-attendance">
@@ -17,12 +19,12 @@
         </div>
         <div class="admin-scholar-fields">
             <div class="admin-scholar-field">
-                <span>Scholar Program</span>
-                <strong>{{ $event->scholarshipProgram?->programLabel() ?? '—' }}</strong>
+                <span>Scholarship Club</span>
+                <strong>{{ $event->directoryClubLabel(request()->integer('club') ?: null) }}</strong>
             </div>
             <div class="admin-scholar-field">
-                <span>Program Type</span>
-                <strong>{{ $event->scholarshipProgram?->programTypeLabel() ?? '—' }}</strong>
+                <span>Participants</span>
+                <strong>{{ $event->verifiedParticipantCount() }}</strong>
             </div>
             <div class="admin-scholar-field">
                 <span>Schedule</span>

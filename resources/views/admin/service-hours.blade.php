@@ -2,12 +2,19 @@
 
 @section('page-content')
 
-@include('partials.admin-location-filter')
-@include('partials.admin-scope-banner')
+@include('partials.admin-hours-filter')
 
 @php
     $overview = $report['overview'];
     $period = $report['period'];
+    $locationOf = function ($scholar) {
+        $parts = array_filter([
+            $scholar->city ?: $scholar->municipalityName(),
+            $scholar->province ?: $scholar->provinceName(),
+        ]);
+
+        return $parts !== [] ? implode(', ', $parts) : '—';
+    };
 @endphp
 
 <section class="staff-stat-grid">
@@ -24,8 +31,8 @@
             <thead>
                 <tr>
                     <th>Scholar</th>
-                    <th>Scholar Program</th>
-                    <th>Program Type</th>
+                    <th>Scholarship Club</th>
+                    <th>Location</th>
                     <th>Approved</th>
                     <th>Pending</th>
                     <th>Remaining</th>
@@ -36,15 +43,15 @@
                 @forelse($report['rows'] as $row)
                     <tr>
                         <td data-label="Scholar">{{ $row['scholar']->full_name }}</td>
-                        <td data-label="Scholar Program">{{ $row['scholar']->scholarshipProgram?->programLabel() ?? '—' }}</td>
-                        <td data-label="Program Type">{{ $row['scholar']->scholarshipProgram?->programTypeLabel() ?? '—' }}</td>
+                        <td data-label="Scholarship Club">{{ $row['scholar']->scholarshipClub?->name ?: '—' }}</td>
+                        <td data-label="Location">{{ $locationOf($row['scholar']) }}</td>
                         <td data-label="Approved">{{ number_format($row['approved'], 2) }}</td>
                         <td data-label="Pending">{{ number_format($row['pending'], 2) }}</td>
                         <td data-label="Remaining">{{ number_format($row['remaining'], 2) }}</td>
                         <td data-label="Status"><span class="staff-badge {{ $row['status'] === 'Completed' ? 'green' : ($row['status'] === 'In Progress' ? 'orange' : 'gray') }}">{{ $row['status'] }}</span></td>
                     </tr>
                 @empty
-                    <tr><td colspan="7">No service hour records found.</td></tr>
+                    <tr class="staff-table-empty"><td colspan="7">No records found</td></tr>
                 @endforelse
             </tbody>
         </table>

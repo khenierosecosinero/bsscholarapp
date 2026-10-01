@@ -10,10 +10,23 @@
     $selectedCity = $address['city'] ?? '';
     $isCityScholar = $programType === 'city_municipality';
     $showCategory = $showCategory ?? true;
+    $showRegion = $showRegion ?? false;
+    $selectedRegion = $selectedRegion ?? request('region', '');
     $cityEnabled = $showCategory ? $isCityScholar : true;
 @endphp
 
 <div class="admin-location-cascade" data-admin-location-cascade>
+    @if($showRegion)
+        <div class="admin-location-cascade-field">
+            <label class="admin-location-cascade-label" for="{{ $idPrefix ?? 'admin' }}-region">Region</label>
+            <select name="region" id="{{ $idPrefix ?? 'admin' }}-region" data-admin-region aria-label="Region">
+                <option value="">All Regions</option>
+                @foreach(\App\Support\PhilippineIslandGroup::LABELS as $islandKey => $islandLabel)
+                    <option value="{{ $islandKey }}" @selected($selectedRegion === $islandKey)>{{ $islandLabel }}</option>
+                @endforeach
+            </select>
+        </div>
+    @endif
     @if($showCategory)
         <div class="admin-location-cascade-field">
             <label class="admin-location-cascade-label" for="{{ $idPrefix ?? 'admin' }}-program-type">Scholarship category</label>
@@ -23,24 +36,26 @@
             </select>
         </div>
     @endif
-    <div class="admin-location-cascade-field">
-        <label class="admin-location-cascade-label" for="{{ $idPrefix ?? 'admin' }}-province">Province</label>
-        <select id="{{ $idPrefix ?? 'admin' }}-province" data-admin-province aria-label="Province">
-            <option value="">Select province</option>
-            @foreach($tree as $province)
-                <option
-                    value="{{ $province['name'] }}"
-                    data-id="{{ $province['id'] ?? '' }}"
-                    @selected($selectedProvince === ($province['name'] ?? ''))
-                >{{ $province['name'] }}</option>
-            @endforeach
-        </select>
-    </div>
-    <div class="admin-location-cascade-field">
-        <label class="admin-location-cascade-label" for="{{ $idPrefix ?? 'admin' }}-city">Municipality / City</label>
-        <select id="{{ $idPrefix ?? 'admin' }}-city" data-admin-city aria-label="Municipality or City" @disabled(! $cityEnabled)>
-            <option value="">{{ $cityEnabled ? 'Select municipality or city' : 'Not used for Province Scholar' }}</option>
-        </select>
+    <div class="admin-location-cascade-pair">
+        <div class="admin-location-cascade-field">
+            <label class="admin-location-cascade-label" for="{{ $idPrefix ?? 'admin' }}-province">Province</label>
+            <select id="{{ $idPrefix ?? 'admin' }}-province" data-admin-province aria-label="Province">
+                <option value="">Select province</option>
+                @foreach($tree as $province)
+                    <option
+                        value="{{ $province['name'] }}"
+                        data-id="{{ $province['id'] ?? '' }}"
+                        @selected($selectedProvince === ($province['name'] ?? ''))
+                    >{{ $province['name'] }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="admin-location-cascade-field">
+            <label class="admin-location-cascade-label" for="{{ $idPrefix ?? 'admin' }}-city">Municipality / City</label>
+            <select id="{{ $idPrefix ?? 'admin' }}-city" data-admin-city aria-label="Municipality or City" @disabled(! $cityEnabled)>
+                <option value="">{{ $cityEnabled ? 'Select municipality or city' : 'Not used for Province Scholar' }}</option>
+            </select>
+        </div>
     </div>
     <input type="hidden" name="location" data-admin-location-value value="{{ $locationKey }}">
     <script type="application/json" data-admin-location-tree>{!! json_encode($tree, JSON_UNESCAPED_UNICODE) !!}</script>

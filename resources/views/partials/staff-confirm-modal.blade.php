@@ -92,6 +92,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         modal.classList.add('is-open');
         modal.setAttribute('aria-hidden', 'false');
+        var loading = document.getElementById('nav-loading');
+        if (loading) {
+            loading.hidden = true;
+            loading.setAttribute('aria-busy', 'false');
+            document.body.classList.remove('is-navigating');
+        }
         yesBtn.focus();
     }
 

@@ -52,8 +52,11 @@
                 @php
                     $iconClass = 'staff-icon-'.$item['icon'];
                     $badgeCount = (int) ($badges[$item['key']] ?? 0);
+                    $itemQuery = in_array($item['key'], ['scholars', 'staff'], true)
+                        ? array_filter(['location' => $navLocation !== 'all' ? $navLocation : null])
+                        : $navQuery;
                 @endphp
-                <a href="{{ route($item['route'], $navQuery) }}" class="staff-nav-item {{ $active === $item['key'] ? 'active' : '' }}" @if($item['key'] === 'staff') data-admin-nav="staff" @endif>
+                <a href="{{ route($item['route'], $itemQuery) }}" class="staff-nav-item {{ $active === $item['key'] ? 'active' : '' }}" @if($item['key'] === 'staff') data-admin-nav="staff" @endif>
                     <span class="staff-nav-icon {{ $iconClass }}"></span>
                     <span class="staff-nav-label">{{ $item['label'] }}</span>
                     @if($badgeCount > 0)
@@ -65,9 +68,6 @@
     </nav>
 
     <div class="staff-sidebar-footer">
-        <form method="POST" action="{{ route('logout') }}" class="staff-logout-form">
-            @csrf
-            <button type="submit" class="staff-logout-btn">Logout</button>
-        </form>
+        @include('partials.logout-button', ['formClass' => 'staff-logout-form', 'class' => 'app-logout-btn staff-logout-btn'])
     </div>
 </aside>

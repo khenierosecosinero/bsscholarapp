@@ -9,14 +9,18 @@ use Illuminate\Support\Facades\Storage;
 class Attendance extends Model
 {
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_REJECTED = 'rejected';
+
     public const STATUS_FAILED_CHECK_IN = 'failed_to_check_in';
 
     protected $fillable = [
         'user_id', 'event_id', 'academic_year_start', 'academic_year_end', 'semester',
         'check_in', 'check_out', 'hours_earned', 'status', 'remarks',
         'photo_path', 'photo_original_name', 'photo_uploaded_at',
+        'google_drive_folder_id', 'google_drive_file_id', 'google_drive_web_link',
     ];
 
     protected function casts(): array

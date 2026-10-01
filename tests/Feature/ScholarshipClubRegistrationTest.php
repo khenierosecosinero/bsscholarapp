@@ -70,6 +70,16 @@ class ScholarshipClubRegistrationTest extends TestCase
             ->assertDontSee('name="scholarship_program_id"', false);
     }
 
+    public function test_staff_register_page_does_not_show_scholar_staff_number(): void
+    {
+        $this->get(route('register.staff'))
+            ->assertOk()
+            ->assertDontSee('Scholar Staff Number')
+            ->assertDontSee('name="scholar_id"', false)
+            ->assertSee('placeholder="Contact Number"', false)
+            ->assertSee('name="cellphone_number"', false);
+    }
+
     public function test_staff_registration_saves_typed_club_name_and_address(): void
     {
         $this->makeProgram('province', 'Surigao del Norte', 'Surigao del Norte', 'sdn-staff-reg');
@@ -77,7 +87,6 @@ class ScholarshipClubRegistrationTest extends TestCase
 
         $this->post(route('register.staff.post'), [
             'full_name' => 'Club Staff',
-            'scholar_id' => 'STAFF-CLUB-REG',
             'scholarship_program_id' => $program->id,
             'scholarship_club_name' => 'Dapa Scholars Club',
             'email' => 'club-staff-reg@example.com',
@@ -90,6 +99,9 @@ class ScholarshipClubRegistrationTest extends TestCase
 
         $this->assertNotNull($staff);
         $this->assertSame(User::ROLE_SCHOLAR_STAFF, $staff->role);
+        $this->assertNotSame('', $staff->scholar_id);
+        $this->assertStringStartsWith('STAFF-', $staff->scholar_id);
+        $this->assertSame('09171234567', $staff->contactNumber());
         $this->assertSame($program->id, $staff->scholarship_program_id);
         $this->assertSame('Dapa', $staff->city);
         $this->assertSame('Surigao del Norte', $staff->province);
@@ -113,10 +125,10 @@ class ScholarshipClubRegistrationTest extends TestCase
 
         $this->post(route('register.staff.post'), [
             'full_name' => 'Club Staff',
-            'scholar_id' => 'STAFF-CLUB-PROV',
             'scholarship_program_id' => $province->id,
             'scholarship_club_name' => 'Province Club',
             'email' => 'province-club@example.com',
+            'cellphone_number' => '09170000000',
             'password' => 'password123',
             'password_confirmation' => 'password123',
         ])->assertSessionHasErrors('scholarship_program_id');
@@ -266,7 +278,7 @@ class ScholarshipClubRegistrationTest extends TestCase
         $club->created_by = $staff->id;
         $club->save();
 
-        $this->assertSame('STAFF-CLUB-001', $staff->contactNumber());
+        $this->assertSame('', $staff->contactNumber());
 
         $scholar = User::register([
             'full_name' => 'Club Scholar',
@@ -287,7 +299,8 @@ class ScholarshipClubRegistrationTest extends TestCase
             ->assertSee('value="Dapa Scholars Club"', false)
             ->assertSee('name="scholarship_program_id"', false)
             ->assertSee('name="cellphone_number"', false)
-            ->assertSee('value="STAFF-CLUB-001"', false)
+            ->assertDontSee('Scholar Staff Number')
+            ->assertDontSee('value="STAFF-CLUB-001"', false)
             ->assertSee('Scholarship Club linked to this staff account');
 
         $this->actingAs($staff)

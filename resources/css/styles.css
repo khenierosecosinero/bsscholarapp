@@ -2206,12 +2206,82 @@ a.event-item{text-decoration:none;color:inherit;display:flex}
 .profile-card{position:relative}
 .profile-toggle{background:none;border:none;cursor:pointer;font-size:14px;color:var(--muted);padding:4px}
 .profile-menu{position:absolute;top:100%;right:0;background:#fff;border:1px solid #eef3f6;border-radius:10px;box-shadow:var(--shadow);min-width:180px;z-index:100;margin-top:8px}
-.profile-menu a,.profile-menu button{display:block;width:100%;padding:12px 16px;text-align:left;background:none;border:none;font:inherit;cursor:pointer;text-decoration:none;color:#0f1721}
-.profile-menu a:hover,.profile-menu button:hover{background:#f9fafb}
+.profile-menu a,.profile-menu button:not(.app-logout-btn){display:block;width:100%;padding:12px 16px;text-align:left;background:none;border:none;font:inherit;cursor:pointer;text-decoration:none;color:#0f1721}
+.profile-menu a:hover,.profile-menu button:not(.app-logout-btn):hover{background:#f9fafb}
 .profile-menu form{margin:0}
 .tab-panel[hidden]{display:none!important}
 .logout-form{margin-top:8px}
-.logout-btn{color:#dc2626!important;border-color:#fecaca!important}
+.app-logout-btn,
+.logout-btn,
+.staff-logout-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    width:100%;
+    box-sizing:border-box;
+    margin:0;
+    padding:10px 14px;
+    border:1px solid #dc2626;
+    border-radius:8px;
+    background:#dc2626;
+    color:#fff!important;
+    font:inherit;
+    font-size:14px;
+    font-weight:700;
+    letter-spacing:.01em;
+    line-height:1.2;
+    text-align:center;
+    text-decoration:none;
+    cursor:pointer;
+    box-shadow:0 1px 2px rgba(185,28,28,.18);
+    transition:background-color .15s ease,border-color .15s ease,box-shadow .15s ease,transform .15s ease;
+}
+.app-logout-btn:hover,
+.app-logout-btn:focus-visible,
+.logout-btn:hover,
+.logout-btn:focus-visible,
+.staff-logout-btn:hover,
+.staff-logout-btn:focus-visible{
+    background:#b91c1c;
+    border-color:#b91c1c;
+    color:#fff!important;
+    box-shadow:0 2px 8px rgba(185,28,28,.28);
+}
+.app-logout-btn:active,
+.logout-btn:active,
+.staff-logout-btn:active{
+    background:#991b1b;
+    border-color:#991b1b;
+    transform:translateY(1px);
+}
+.app-logout-icon{
+    width:16px;
+    height:16px;
+    flex-shrink:0;
+    display:block;
+}
+.profile-menu .app-logout-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    width:calc(100% - 16px);
+    margin:8px;
+    padding:10px 14px;
+    background:#dc2626;
+    border:1px solid #dc2626;
+    color:#fff!important;
+    text-align:center;
+    font-weight:700;
+}
+.profile-menu .app-logout-btn:hover,
+.profile-menu .app-logout-btn:focus-visible{
+    background:#b91c1c;
+    border-color:#b91c1c;
+    color:#fff!important;
+}
+.logout-btn{color:#fff!important;border-color:#dc2626!important}
 .sidebar.collapsed{transform:translateX(-100%);position:fixed;z-index:200;height:100vh}
 .app-shell.sidebar-hidden .sidebar{transform:translateX(-100%)}
 @media (max-width:1000px){

@@ -122,8 +122,10 @@
       });
       document.addEventListener('submit', function (event) {
         if (!navigator.onLine) return;
+        if (event.defaultPrevented) return;
         var form = event.target;
         if (!form || form.getAttribute('data-no-loading') === 'true') return;
+        if (form.getAttribute('data-confirm') && form.dataset.confirmed !== 'true') return;
         if (form.target && form.target !== '_self') return;
         showNavLoading();
       });

@@ -208,13 +208,7 @@
 
 
 
-        <form method="POST" action="{{ route('logout') }}" class="logout-form">
-
-            @csrf
-
-            <button type="submit" class="btn outline full logout-btn">Logout</button>
-
-        </form>
+        @include('partials.logout-button', ['formClass' => 'logout-form', 'class' => 'app-logout-btn logout-btn'])
 
     </div>
 

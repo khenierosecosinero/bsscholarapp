@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\GoogleDriveFolder;
 use App\Models\User;
+use App\Services\AttendanceDriveStorageService;
 use App\Services\GoogleApiClientFactory;
 use App\Services\GoogleDriveService;
 use Google\Service\Drive;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Throwable;
 
@@ -57,6 +60,14 @@ class GoogleDriveController extends Controller
 
         app(GoogleDriveService::class)->storeToken($token, auth()->id());
 
+        try {
+            app(AttendanceDriveStorageService::class)->syncConfiguredYearFolders();
+        } catch (Throwable $e) {
+            Log::warning('Could not create BSSA Attendance year folders after connecting Google Drive.', [
+                'message' => $e->getMessage(),
+            ]);
+        }
+
         return redirect($this->afterGoogleRedirect())
             ->with('success', 'Google Drive connected successfully.');
     }
@@ -72,8 +83,25 @@ class GoogleDriveController extends Controller
     {
         $this->assertDriveManager();
 
+        $connected = $googleDrive->isConnected();
+        $attendanceReady = false;
+
+        if ($connected) {
+            try {
+                app(AttendanceDriveStorageService::class)->syncConfiguredYearFolders();
+                $attendanceReady = GoogleDriveFolder::query()
+                    ->where('folder_key', GoogleDriveService::ATTENDANCE_ROOT_FOLDER_KEY)
+                    ->exists();
+            } catch (Throwable $e) {
+                Log::warning('Could not create BSSA Attendance folders from the Drive test page.', [
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
         return view('google-drive.test', [
-            'connected' => $googleDrive->isConnected(),
+            'connected' => $connected,
+            'attendanceReady' => $attendanceReady,
         ]);
     }
 

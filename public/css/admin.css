@@ -92,6 +92,78 @@ body:has(.admin-shell) {
     min-width: 180px;
 }
 
+.admin-location-cascade-pair {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px 12px;
+    align-items: flex-end;
+    flex: 2 1 360px;
+    min-width: min(360px, 100%);
+}
+
+.admin-location-cascade-pair .admin-location-cascade-field {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.admin-scholars-filter,
+.admin-staff-filter,
+.admin-events-filter,
+.admin-hours-filter,
+.admin-documents-filter {
+    align-items: stretch;
+}
+
+.admin-scholars-filter-form,
+.admin-staff-filter-form,
+.admin-events-filter-form,
+.admin-hours-filter-form,
+.admin-documents-filter-form {
+    width: 100%;
+}
+
+.admin-scholars-filter-form .admin-location-cascade,
+.admin-staff-filter-form .admin-location-cascade,
+.admin-events-filter-form .admin-location-cascade,
+.admin-hours-filter-form .admin-location-cascade,
+.admin-documents-filter-form .admin-location-cascade {
+    width: auto;
+    flex: 3 1 540px;
+}
+
+.admin-scholars-filter-form .admin-location-cascade-field select,
+.admin-staff-filter-form .admin-location-cascade-field select,
+.admin-events-filter-form .admin-location-cascade-field select,
+.admin-hours-filter-form .admin-location-cascade-field select,
+.admin-documents-filter-form .admin-location-cascade-field select {
+    min-width: 180px;
+    width: 100%;
+    max-width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.admin-scholars-search-field,
+.admin-staff-search-field,
+.admin-events-search-field,
+.admin-hours-search-field,
+.admin-documents-search-field {
+    flex: 2 1 240px;
+    min-width: 220px;
+}
+
+.admin-scholars-search-field .staff-search,
+.admin-staff-search-field .staff-search,
+.admin-events-search-field .staff-search,
+.admin-hours-search-field .staff-search,
+.admin-documents-search-field .staff-search {
+    width: 100%;
+}
+
 .admin-location-cascade select {
     min-width: 180px;
     flex: 1 1 180px;
@@ -213,6 +285,26 @@ body:has(.admin-shell) {
     flex-wrap: wrap;
     gap: 10px;
     margin-top: 16px;
+}
+
+.admin-academic-year-card .staff-muted {
+    margin: 0 0 16px;
+}
+
+.admin-academic-year-form .staff-form-group small {
+    display: block;
+    margin-top: 6px;
+}
+
+.admin-academic-year-card .staff-action-group {
+    flex-wrap: wrap;
+}
+
+.admin-academic-year-card .staff-field-error {
+    margin: 6px 0 0;
+    color: #dc2626;
+    font-size: 12px;
+    font-weight: 600;
 }
 
 .admin-scope-banner {
@@ -350,11 +442,6 @@ body:has(.admin-shell) {
 .admin-scholar-back {
     display: inline-block;
     margin-top: 16px;
-}
-
-.admin-staff-notice {
-    background: #fff2f1;
-    border-color: #fecaca;
 }
 
 .admin-staff-pending-card {

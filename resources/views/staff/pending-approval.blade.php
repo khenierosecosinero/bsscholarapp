@@ -61,6 +61,10 @@
             flex-wrap: wrap;
             margin-top: 24px;
         }
+
+        .staff-pending-actions form {
+            width: min(240px, 100%);
+        }
     </style>
 @endpush
 
@@ -91,10 +95,7 @@
         <p class="muted">Please check back after an administrator has reviewed your registration. You may log out and return at any time.</p>
 
         <div class="staff-pending-actions">
-            <form method="POST" action="{{ route('logout') }}">
-                @csrf
-                <button type="submit" class="btn filled">Logout</button>
-            </form>
+            @include('partials.logout-button', ['class' => 'app-logout-btn'])
         </div>
     </div>
 </div>

@@ -135,6 +135,148 @@ class AdminDashboardService
     }
 
     /**
+     * Admin Scholars list: all scholars, optionally limited by geographic
+     * location (City and Province programs together) and Scholarship Club.
+     */
+    public function scholarDirectoryQuery(?string $locationKey, ?int $clubId)
+    {
+        $query = User::query()
+            ->where('role', User::ROLE_SCHOLAR)
+            ->with(['scholarshipProgram', 'scholarshipClub']);
+
+        $this->constrainDirectoryLocation($query, $locationKey);
+
+        if ($clubId) {
+            $query->where('scholarship_club_id', $clubId);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Unified Scholar Staff directory (no City Scholar / Province Scholar split).
+     */
+    public function staffDirectoryQuery(?string $locationKey, ?int $clubId, ?string $region = null)
+    {
+        $query = User::query()
+            ->where('role', User::ROLE_SCHOLAR_STAFF)
+            ->with(['scholarshipProgram', 'scholarshipClub']);
+
+        $this->constrainDirectoryLocation($query, $locationKey);
+
+        if (PhilippineIslandGroup::isValid($region)) {
+            $query->whereIn('scholarship_program_id', $this->programIdsForIsland((string) $region));
+        }
+
+        if ($clubId) {
+            $query->where('scholarship_club_id', $clubId);
+        }
+
+        return $query;
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function programIdsForIsland(string $island): array
+    {
+        if (! PhilippineIslandGroup::isValid($island)) {
+            return [0];
+        }
+
+        $ids = ScholarshipProgram::active()
+            ->get(['id', 'region_name', 'psgc_code'])
+            ->filter(fn (ScholarshipProgram $program) => PhilippineIslandGroup::fromProgram($program) === $island)
+            ->pluck('id')
+            ->all();
+
+        return array_values(array_map('intval', $ids)) ?: [0];
+    }
+
+    private function constrainDirectoryLocation($query, ?string $locationKey)
+    {
+        if ($locationKey === null || $locationKey === '' || $locationKey === 'all') {
+            return $query;
+        }
+
+        $programIds = $this->resolveGeographicProgramIds($locationKey);
+        $address = $this->selectedAddress($locationKey);
+
+        $query->where(function ($scoped) use ($programIds, $address) {
+            $scoped->whereIn('scholarship_program_id', $programIds);
+
+            if (filled($address['city'])) {
+                $scoped->orWhere(function ($cityQuery) use ($address) {
+                    $cityQuery->where('city', $address['city']);
+                    if (filled($address['province'])) {
+                        $cityQuery->where('province', $address['province']);
+                    }
+                });
+            } elseif (filled($address['province'])) {
+                $scoped->orWhere('province', $address['province']);
+            }
+        });
+
+        return $query;
+    }
+
+    /**
+     * Unified Admin Events directory (no City Scholar / Province Scholar split).
+     * Events are stored on a scholarship program; a club filter uses that club's program.
+     */
+    public function eventsDirectoryQuery(?string $locationKey, ?int $clubId, ?string $region = null)
+    {
+        $query = Event::query()
+            ->with(['scholarshipProgram.clubs' => fn ($clubs) => $clubs->active()->orderBy('name')])
+            ->withVerifiedParticipantCount();
+
+        if ($locationKey !== null && $locationKey !== '' && $locationKey !== 'all') {
+            $query->whereIn('scholarship_program_id', $this->resolveGeographicProgramIds($locationKey));
+        }
+
+        if (PhilippineIslandGroup::isValid($region)) {
+            $query->whereIn('scholarship_program_id', $this->programIdsForIsland((string) $region));
+        }
+
+        if ($clubId) {
+            $clubProgramId = (int) (ScholarshipClub::query()->whereKey($clubId)->value('scholarship_program_id') ?? 0);
+            $query->where('scholarship_program_id', $clubProgramId ?: 0);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Program IDs for unified Admin directories (location and optional island group).
+     *
+     * @return list<int>
+     */
+    public function directoryProgramIds(?string $locationKey, ?string $region = null): array
+    {
+        $ids = array_map('intval', $this->resolveGeographicProgramIds($locationKey));
+
+        if (PhilippineIslandGroup::isValid($region)) {
+            $ids = array_values(array_intersect($ids, array_map('intval', $this->programIdsForIsland((string) $region))));
+        }
+
+        return $ids ?: [0];
+    }
+
+    /**
+     * All registered Scholarship Clubs for Admin directory filters.
+     */
+    public function scholarshipClubFilterOptions()
+    {
+        return ScholarshipClub::query()
+            ->active()
+            ->with('program')
+            ->orderBy('name')
+            ->orderBy('city')
+            ->orderBy('province')
+            ->get();
+    }
+
+    /**
      * @return array{province: ?string, city: ?string}
      */
     public function selectedAddress(?string $locationKey): array
@@ -652,8 +794,40 @@ class AdminDashboardService
     public function documentsQuery(array $programIds, ?array $clubIds = null)
     {
         return Document::query()
-            ->with(['user', 'documentType'])
+            ->with(['user.scholarshipClub', 'documentType'])
             ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds, $clubIds));
+    }
+
+    /**
+     * Unified Admin Documents directory (no City Scholar / Province Scholar split).
+     */
+    public function documentsDirectoryQuery(?string $locationKey, ?int $clubId, ?string $region = null)
+    {
+        return Document::query()
+            ->with(['user.scholarshipClub', 'documentType'])
+            ->whereHas('user', function ($query) use ($locationKey, $clubId, $region) {
+                $query->where('role', User::ROLE_SCHOLAR);
+                $this->constrainDirectoryLocation($query, $locationKey);
+
+                if (PhilippineIslandGroup::isValid($region)) {
+                    $query->whereIn('scholarship_program_id', $this->programIdsForIsland((string) $region));
+                }
+
+                if ($clubId) {
+                    $query->where('scholarship_club_id', $clubId);
+                }
+            });
+    }
+
+    public function documentOverviewFromQuery($query): array
+    {
+        $total = (clone $query)->count();
+        $approved = (clone $query)->where('status', 'approved')->count();
+        $pending = (clone $query)->whereIn('status', ['pending', 'submitted'])->count();
+        $rejected = (clone $query)->where('status', 'rejected')->count();
+        $notSubmitted = (clone $query)->where('status', 'not_submitted')->count();
+
+        return compact('total', 'approved', 'pending', 'rejected', 'notSubmitted');
     }
 
     public function documentTypesCount(array $programIds): int

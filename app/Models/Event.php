@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
-use Carbon\CarbonInterface;
 
 class Event extends Model
 {
@@ -39,6 +39,53 @@ class Event extends Model
     public function attendances(): HasMany
     {
         return $this->hasMany(Attendance::class);
+    }
+
+    /**
+     * Scholars whose attendance for this event is approved/verified.
+     */
+    public function scopeWithVerifiedParticipantCount(Builder $query): Builder
+    {
+        return $query->withCount([
+            'attendances as verified_participant_count' => function ($attendance) {
+                $attendance->where('status', Attendance::STATUS_APPROVED)
+                    ->whereNotNull('check_in')
+                    ->whereHas('user', fn ($user) => $user->where('role', User::ROLE_SCHOLAR));
+            },
+        ]);
+    }
+
+    public function verifiedParticipantCount(): int
+    {
+        if (array_key_exists('verified_participant_count', $this->attributes)) {
+            return (int) $this->attributes['verified_participant_count'];
+        }
+
+        return (int) $this->attendances()
+            ->where('status', Attendance::STATUS_APPROVED)
+            ->whereNotNull('check_in')
+            ->whereHas('user', fn ($user) => $user->where('role', User::ROLE_SCHOLAR))
+            ->count();
+    }
+
+    public function directoryClubLabel(?int $selectedClubId = null): string
+    {
+        $clubs = $this->scholarshipProgram?->relationLoaded('clubs')
+            ? $this->scholarshipProgram->clubs
+            : $this->scholarshipProgram?->clubs()->active()->orderBy('name')->get();
+
+        $clubs = collect($clubs);
+
+        if ($selectedClubId) {
+            $selected = $clubs->firstWhere('id', $selectedClubId);
+            if ($selected) {
+                return $selected->name;
+            }
+        }
+
+        $names = $clubs->pluck('name')->filter()->unique()->values();
+
+        return $names->isEmpty() ? '—' : $names->implode(', ');
     }
 
     public function attendanceSessionLogs(): HasMany

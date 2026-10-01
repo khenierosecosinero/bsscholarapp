@@ -17,7 +17,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class ScholarService
 {
@@ -29,6 +31,7 @@ class ScholarService
     public function __construct(
         private AcademicSettingsService $academic,
         private ProgramScopeService $programScope,
+        private AttendanceDriveStorageService $attendanceDrive,
     ) {}
 
     public function scopeEventsForUser(Builder $query, User $user): Builder
@@ -904,6 +907,17 @@ class ScholarService
             'remarks' => null,
         ]);
 
+        $attendance = $attendance->fresh(['user', 'event']);
+
+        try {
+            $this->attendanceDrive->storeApprovedPhoto($attendance);
+        } catch (Throwable $e) {
+            Log::warning('Verified attendance was approved but the BSSA Attendance Drive upload failed.', [
+                'attendance_id' => $attendance->id,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
         $user = $attendance->user;
         $event = $attendance->event;
 
@@ -970,6 +984,17 @@ class ScholarService
 
         if ($attendance->status === Attendance::STATUS_APPROVED) {
             throw new \InvalidArgumentException('Approved attendance cannot be rejected.');
+        }
+
+        if (filled($attendance->google_drive_file_id)) {
+            try {
+                $this->attendanceDrive->removeStoredPhoto($attendance);
+            } catch (Throwable $e) {
+                Log::warning('Could not remove a BSSA Attendance Drive file after rejection.', [
+                    'attendance_id' => $attendance->id,
+                    'message' => $e->getMessage(),
+                ]);
+            }
         }
 
         $attendance->update([

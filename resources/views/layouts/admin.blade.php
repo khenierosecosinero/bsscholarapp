@@ -13,6 +13,7 @@
         @include('partials.admin-topbar')
         <main class="staff-main">
             @include('partials.flash-messages')
+            @include('partials.staff-confirm-modal')
             @yield('page-content')
         </main>
     </div>
@@ -42,11 +43,48 @@
             }
 
             var selectedCity = selectedCityEl ? selectedCityEl.value : '';
+            var regionSelect = form.querySelector('[data-admin-region]');
+            var clubSelect = form.querySelector('[data-admin-club]');
+
+            var visibleProvinces = function () {
+                var island = regionSelect ? regionSelect.value : '';
+                if (!island) {
+                    return tree;
+                }
+
+                return tree.filter(function (province) {
+                    return province.island === island;
+                });
+            };
 
             var provinceNode = function () {
-                return tree.find(function (province) {
+                return visibleProvinces().find(function (province) {
                     return province.name === provinceSelect.value;
                 }) || null;
+            };
+
+            var fillProvinces = function (keepProvince) {
+                if (!regionSelect) {
+                    return;
+                }
+
+                var current = keepProvince ? provinceSelect.value : '';
+                provinceSelect.innerHTML = '';
+                var empty = document.createElement('option');
+                empty.value = '';
+                empty.textContent = 'Select province';
+                provinceSelect.appendChild(empty);
+
+                visibleProvinces().forEach(function (province) {
+                    var option = document.createElement('option');
+                    option.value = province.name;
+                    option.setAttribute('data-id', province.id || '');
+                    option.textContent = province.name;
+                    if (keepProvince && province.name === current) {
+                        option.selected = true;
+                    }
+                    provinceSelect.appendChild(option);
+                });
             };
 
             var fillCities = function (keepCity) {
@@ -93,8 +131,49 @@
                 locationInput.value = city && city.id ? String(city.id) : (node.id ? String(node.id) : 'all');
             };
 
-            fillCities(true);
-            syncLocation();
+            var applyClubLocation = function () {
+                if (!clubSelect || !clubSelect.hasAttribute('data-admin-club-sync-location')) {
+                    return false;
+                }
+
+                var option = clubSelect.options[clubSelect.selectedIndex];
+                if (!option || !option.value) {
+                    return false;
+                }
+
+                var island = option.getAttribute('data-island') || '';
+                var province = option.getAttribute('data-province') || '';
+                var city = option.getAttribute('data-city') || '';
+                var programId = option.getAttribute('data-program-id') || '';
+
+                if (regionSelect && island) {
+                    regionSelect.value = island;
+                    fillProvinces(true);
+                }
+
+                if (province) {
+                    provinceSelect.value = province;
+                    selectedCity = city;
+                    fillCities(true);
+                    if (city) {
+                        citySelect.value = city;
+                    }
+                }
+
+                if (programId) {
+                    locationInput.value = programId;
+                } else {
+                    syncLocation();
+                }
+
+                return true;
+            };
+
+            fillProvinces(true);
+            if (!applyClubLocation()) {
+                fillCities(true);
+                syncLocation();
+            }
 
             if (typeSelect) {
                 typeSelect.addEventListener('change', function () {
@@ -104,17 +183,41 @@
                     form.submit();
                 });
             }
+            if (regionSelect) {
+                regionSelect.addEventListener('change', function () {
+                    selectedCity = '';
+                    if (clubSelect) {
+                        clubSelect.value = '';
+                    }
+                    fillProvinces(false);
+                    fillCities(false);
+                    syncLocation();
+                    form.submit();
+                });
+            }
             provinceSelect.addEventListener('change', function () {
                 selectedCity = '';
+                if (clubSelect && clubSelect.hasAttribute('data-admin-club-sync-location')) {
+                    clubSelect.value = '';
+                }
                 fillCities(false);
                 syncLocation();
                 form.submit();
             });
             citySelect.addEventListener('change', function () {
                 selectedCity = citySelect.value;
+                if (clubSelect && clubSelect.hasAttribute('data-admin-club-sync-location')) {
+                    clubSelect.value = '';
+                }
                 syncLocation();
                 form.submit();
             });
+            if (clubSelect && clubSelect.hasAttribute('data-admin-club-sync-location')) {
+                clubSelect.addEventListener('change', function () {
+                    applyClubLocation();
+                    form.submit();
+                });
+            }
         };
 
         document.querySelectorAll('[data-admin-location-form]').forEach(bindAdminLocationForm);

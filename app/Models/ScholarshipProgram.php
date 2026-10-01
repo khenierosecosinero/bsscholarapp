@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Support\PhilippineIslandGroup;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection as BaseCollection;
 use Illuminate\Support\Str;
 
@@ -260,7 +260,7 @@ class ScholarshipProgram extends Model
     {
         $programs = static::active()
             ->orderBy('location_name')
-            ->get(['id', 'location_name', 'location_type', 'province_name', 'region_name', 'name', 'display_name']);
+            ->get(['id', 'location_name', 'location_type', 'province_name', 'region_name', 'psgc_code', 'name', 'display_name']);
 
         $clubsByProgram = $includeClubs
             ? ScholarshipClub::query()
@@ -304,6 +304,7 @@ class ScholarshipProgram extends Model
                 'club_name' => $province->clubName(),
                 'clubs' => $clubPayload($province->id),
                 'region' => $province->region_name,
+                'island' => PhilippineIslandGroup::fromProgram($province),
                 'cities' => static::sortAlphabetically($cities)->map(fn (self $city) => [
                     'id' => $city->id,
                     'name' => $city->location_name,
@@ -326,6 +327,7 @@ class ScholarshipProgram extends Model
                 'club_name' => $provinceName,
                 'clubs' => [],
                 'region' => $cities->first()?->region_name,
+                'island' => $cities->first() ? PhilippineIslandGroup::fromProgram($cities->first()) : null,
                 'cities' => static::sortAlphabetically($cities)->map(fn (self $city) => [
                     'id' => $city->id,
                     'name' => $city->location_name,

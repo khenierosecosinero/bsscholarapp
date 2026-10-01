@@ -31,6 +31,16 @@ class EnsureScholarStaff
                 ->with('error', 'Your scholar staff account has been rejected and can no longer access the system. Please contact the system administrator for assistance.');
         }
 
+        if ($user->isStaffInactive()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('login')
+                ->with('error', 'Your scholar staff account has been deactivated and cannot access the Scholar Staff section. Please contact the system administrator for assistance.');
+        }
+
         if ($user->isStaffPendingApproval()) {
             Auth::logout();
             $request->session()->invalidate();

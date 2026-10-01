@@ -19,11 +19,14 @@ class GoogleDriveService
 
     public const ROOT_FOLDER_KEY = 'root';
 
+    public const ATTENDANCE_ROOT_FOLDER_NAME = 'BSSA Attendance';
+
+    public const ATTENDANCE_ROOT_FOLDER_KEY = 'attendance_root';
+
     public function __construct(
         private GoogleApiClientFactory $googleClients,
         private AcademicSettingsService $academic,
-    ) {
-    }
+    ) {}
 
     public function isConnected(): bool
     {
@@ -60,7 +63,11 @@ class GoogleDriveService
 
     public function getOrCreateRootFolder(): string
     {
-        return $this->rememberedFolder(self::ROOT_FOLDER_KEY, self::ROOT_FOLDER_NAME, null);
+        $folderId = $this->rememberedFolder(self::ROOT_FOLDER_KEY, self::ROOT_FOLDER_NAME, null);
+
+        $this->ensureAttendanceFoldersOnce();
+
+        return $folderId;
     }
 
     public function getOrCreateAcademicYearFolder(string $academicYear): string
@@ -123,6 +130,138 @@ class GoogleDriveService
             (string) $scholar->full_name,
             $scholar
         );
+    }
+
+    public function getOrCreateAttendanceRootFolder(): string
+    {
+        return $this->rememberedFolder(
+            self::ATTENDANCE_ROOT_FOLDER_KEY,
+            self::ATTENDANCE_ROOT_FOLDER_NAME,
+            null
+        );
+    }
+
+    public function getOrCreateAttendanceYearFolder(string $academicYear): string
+    {
+        $year = $this->sanitizeDriveName($academicYear);
+
+        if ($year === '') {
+            throw new RuntimeException('Academic year is required for the BSSA Attendance folder.');
+        }
+
+        return $this->rememberedFolder(
+            'attendance_year:'.$year,
+            $year,
+            $this->getOrCreateAttendanceRootFolder()
+        );
+    }
+
+    public function getOrCreateAttendanceScholarFolder(string $academicYear, string $scholarCode, string $fullName): string
+    {
+        $code = trim($scholarCode);
+        $name = trim($fullName);
+
+        if ($code === '') {
+            throw new RuntimeException('Scholar Code is required for the BSSA Attendance folder.');
+        }
+
+        $expected = $this->sanitizeDriveName($this->studentFolderName($code, $name));
+        $yearFolderId = $this->getOrCreateAttendanceYearFolder($academicYear);
+        $key = 'attendance_scholar:'.$this->sanitizeDriveName($academicYear).':'.$code;
+
+        return $this->rememberedNamedFolder($key, $expected, $yearFolderId);
+    }
+
+    public function getOrCreateAttendanceEventFolder(
+        string $academicYear,
+        string $scholarCode,
+        string $fullName,
+        int $eventId,
+        string $eventTitle,
+    ): string {
+        $title = $this->sanitizeDriveName($eventTitle) ?: 'Event';
+        $scholarFolderId = $this->getOrCreateAttendanceScholarFolder($academicYear, $scholarCode, $fullName);
+        $yearKey = $this->sanitizeDriveName($academicYear);
+        $key = 'attendance_event:'.$yearKey.':'.trim($scholarCode).':'.$eventId;
+
+        return $this->rememberedNamedFolder(
+            $key,
+            $title,
+            $scholarFolderId,
+            'attendance_event:'.$yearKey.':'.trim($scholarCode).':'
+        );
+    }
+
+    public function sanitizeDriveName(string $name): string
+    {
+        $clean = preg_replace('/[\\\\\/:*?"<>|]+/', ' ', $name) ?? $name;
+        $clean = trim(preg_replace('/\s+/', ' ', $clean) ?? $clean);
+
+        return mb_substr($clean, 0, 180);
+    }
+
+    public function findChildFile(string $name, string $parentId): ?DriveFile
+    {
+        $query = sprintf(
+            "mimeType != 'application/vnd.google-apps.folder' and name = '%s' and trashed = false and '%s' in parents",
+            $this->escapeQuery($name),
+            $this->escapeQuery($parentId)
+        );
+
+        try {
+            $result = $this->drive()->files->listFiles([
+                'q' => $query,
+                'pageSize' => 10,
+                'fields' => 'files(id,name,webViewLink)',
+                'spaces' => 'drive',
+            ]);
+        } catch (Throwable $e) {
+            Log::warning('Google Drive file search failed.', ['message' => $e->getMessage()]);
+
+            return null;
+        }
+
+        $files = $result->getFiles() ?? [];
+
+        return $files[0] ?? null;
+    }
+
+    public function uploadRaw(string $contents, string $parentFolderId, string $name, string $mime): DriveFile
+    {
+        $drive = $this->drive();
+
+        $driveFile = new DriveFile([
+            'name' => $name,
+            'parents' => [$parentFolderId],
+        ]);
+
+        try {
+            return $drive->files->create($driveFile, [
+                'data' => $contents,
+                'mimeType' => $mime ?: 'application/octet-stream',
+                'uploadType' => 'multipart',
+                'fields' => 'id,name,mimeType,size,webViewLink',
+            ]);
+        } catch (Throwable $e) {
+            Log::error('Google Drive upload failed.', ['message' => $e->getMessage()]);
+            throw new RuntimeException('Google Drive upload failed.');
+        }
+    }
+
+    public function deleteFileIfPresent(?string $fileId): void
+    {
+        if (! filled($fileId)) {
+            return;
+        }
+
+        try {
+            $this->deleteFile($fileId);
+        } catch (Throwable $e) {
+            Log::warning('Google Drive attendance file delete failed.', [
+                'file_id' => $fileId,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function syncStudentFolderName(User $scholar): void
@@ -220,6 +359,21 @@ class GoogleDriveService
         ];
     }
 
+    private function ensureAttendanceFoldersOnce(): void
+    {
+        if (GoogleDriveFolder::query()->where('folder_key', self::ATTENDANCE_ROOT_FOLDER_KEY)->exists()) {
+            return;
+        }
+
+        try {
+            app(AttendanceDriveStorageService::class)->syncConfiguredYearFolders();
+        } catch (Throwable $e) {
+            Log::warning('Could not create BSSA Attendance folders beside Scholar Documents.', [
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
     private function rememberedFolder(string $key, string $name, ?string $parentId): string
     {
         $stored = GoogleDriveFolder::query()->where('folder_key', $key)->first();
@@ -229,6 +383,42 @@ class GoogleDriveService
         }
 
         $found = $this->findFolderByName($name, $parentId);
+        $folderId = $found?->getId() ?: $this->createFolder($name, $parentId);
+
+        GoogleDriveFolder::query()->updateOrCreate(
+            ['folder_key' => $key],
+            ['folder_id' => $folderId, 'name' => $name]
+        );
+
+        return $folderId;
+    }
+
+    private function rememberedNamedFolder(string $key, string $name, string $parentId, ?string $siblingKeyPrefix = null): string
+    {
+        $stored = GoogleDriveFolder::query()->where('folder_key', $key)->first();
+
+        if ($stored && $this->folderById($stored->folder_id)) {
+            if ($stored->name !== $name) {
+                $this->renameFolder($stored->folder_id, $name);
+                $stored->update(['name' => $name]);
+            }
+
+            return $stored->folder_id;
+        }
+
+        $found = $this->findFolderByName($name, $parentId);
+        if ($found && $siblingKeyPrefix) {
+            $claimedBySibling = GoogleDriveFolder::query()
+                ->where('folder_key', 'like', $siblingKeyPrefix.'%')
+                ->where('folder_key', '!=', $key)
+                ->where('folder_id', $found->getId())
+                ->exists();
+
+            if ($claimedBySibling) {
+                $found = null;
+            }
+        }
+
         $folderId = $found?->getId() ?: $this->createFolder($name, $parentId);
 
         GoogleDriveFolder::query()->updateOrCreate(
@@ -425,6 +615,6 @@ class GoogleDriveService
 
     private function escapeQuery(string $value): string
     {
-        return str_replace(["\\", "'"], ["\\\\", "\\'"], $value);
+        return str_replace(['\\', "'"], ['\\\\', "\\'"], $value);
     }
 }
