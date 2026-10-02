@@ -9,7 +9,7 @@
     </div>
 
     <p class="staff-muted" style="margin-bottom:20px">
-        This name will appear in the School/University dropdown when scholars register under {{ $staff->scholarshipClubName() }}.
+        This name will appear in the School/University dropdown when scholars register or update their profile under {{ $staff->scholarshipClubName() }}.
     </p>
 
     <form method="POST" action="{{ route('staff.settings.schools.store') }}">

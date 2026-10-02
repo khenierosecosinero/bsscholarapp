@@ -87,6 +87,21 @@ body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica
 .nav{display:flex;flex-direction:column;gap:10px;margin-top:16px}
 .nav-item{padding:12px 14px;border-radius:10px;color:#0f1721;text-decoration:none;font-weight:600}
 .nav-item.active{background:var(--green);color:#fff;box-shadow:var(--shadow)}
+.sidebar-nav-widgets{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+    width:100%;
+    min-width:0;
+    margin-top:6px;
+    flex-shrink:0;
+}
+.sidebar-nav-widgets .card{
+    width:100%;
+    max-width:100%;
+    margin:0;
+    box-sizing:border-box;
+}
 
 .sidebar-widgets{margin-top:auto;display:flex;flex-direction:column;gap:16px}
 .documents-overview-sidebar-card{padding:16px 18px}
@@ -786,7 +801,8 @@ body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica
 .cal-view{background:transparent;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted)}
 .cal-view.active{background:#fff;color:#0f1721;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 
-.calendar-page-grid{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+.calendar-page-grid{display:grid;grid-template-columns:1fr;gap:20px;align-items:start}
+.calendar-page-grid.has-event-detail{grid-template-columns:1fr 320px}
 .calendar-sidebar{
     display:flex;
     flex-direction:column;
@@ -890,9 +906,8 @@ body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica
     width:100%;
     box-sizing:border-box;
 }
-.calendar-sidebar .calendar-upcoming-card{
-    flex-shrink:0;
-    margin-top:auto;
+.calendar-main .calendar-upcoming-card{
+    margin-top:16px;
     padding:16px 18px;
     display:flex;
     flex-direction:column;
@@ -1800,7 +1815,7 @@ body.avatar-preview-open{overflow:hidden}
 @media (max-width:1200px){
     .doc-status-grid{grid-template-columns:repeat(3,1fr)}
     .dashboard-doc-grid{grid-template-columns:repeat(2,1fr)}
-    .events-page-grid,.calendar-page-grid,.announcements-page-grid{grid-template-columns:minmax(0,1fr)}
+    .events-page-grid,.calendar-page-grid,.calendar-page-grid.has-event-detail,.announcements-page-grid{grid-template-columns:minmax(0,1fr)}
     .profile-layout{grid-template-columns:1fr;gap:28px}
     .profile-sidebar{position:static;gap:20px}
     .schedule-summary{grid-template-columns:repeat(2,1fr)}
@@ -1980,22 +1995,37 @@ body.avatar-preview-open{overflow:hidden}
 }
 .auth-page .form-input::placeholder{color:#9ca3af}
 .auth-page .password-field{position:relative;margin-bottom:12px}
-.auth-page .password-field .form-input{margin-bottom:0}
+.auth-page .password-field .form-input{margin-bottom:0;padding-right:48px}
 .auth-page #togglePassword,
-.auth-page .toggle-password{
+.auth-page .toggle-password,
+.auth-page .password-toggle{
     position:absolute;
-    right:14px;
+    right:10px;
     top:50%;
     transform:translateY(-50%);
     border:none;
     background:transparent;
     cursor:pointer;
     font-size:16px;
-    opacity:.6;
+    opacity:.65;
     padding:4px;
+    width:32px;
+    height:32px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    color:#6b7280;
+    line-height:0;
 }
 .auth-page #togglePassword:hover,
-.auth-page .toggle-password:hover{opacity:1}
+.auth-page .toggle-password:hover,
+.auth-page .password-toggle:hover{opacity:1;color:#374151}
+.auth-page .password-toggle-icon{
+    width:20px;
+    height:20px;
+    display:block;
+}
+.auth-page .password-toggle-icon[hidden]{display:none}
 .auth-page .verify-code-input{
     letter-spacing:.35em;
     text-align:center;
@@ -2309,6 +2339,7 @@ a.event-item{text-decoration:none;color:inherit;display:flex}
     .nav-overlay{display:none;position:fixed;inset:0;z-index:150;border:0;padding:0;margin:0;background:rgba(15,23,33,.4);cursor:pointer}
     .app-shell.sidebar-open .nav-overlay{display:block}
     .sidebar-widgets{margin-top:20px;flex-shrink:0}
+    .sidebar-nav-widgets{margin-top:8px;flex-shrink:0}
     .logout-form{margin-top:12px;padding-bottom:8px}
 }
 .fc-event{text-decoration:none}

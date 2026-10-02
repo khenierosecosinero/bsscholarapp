@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initAvatarPreview();
     initScholarPresenceHeartbeat();
     initStaffScholarPresence();
+    initProfileEditMode();
 });
 
 function initSidebar() {
@@ -460,5 +461,109 @@ function initStaffScholarPresence() {
     setInterval(poll, 10000);
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) poll();
+    });
+}
+
+function initProfileEditMode() {
+    document.querySelectorAll('[data-profile-edit-form]').forEach((form) => {
+        if (form.dataset.profileEditReady === '1') {
+            return;
+        }
+        form.dataset.profileEditReady = '1';
+
+        const root = form.closest('.card, .staff-card, .profile-section-card') || form;
+        const editBtn = form.querySelector('[data-profile-edit]')
+            || root.querySelector(`[data-profile-edit][data-profile-edit-for="${form.id}"]`)
+            || (form.id ? document.querySelector(`[data-profile-edit][data-profile-edit-for="${form.id}"]`) : null);
+        const cancelBtn = form.querySelector('[data-profile-cancel]');
+        const saveBtn = form.querySelector('[data-profile-save]');
+        const editableFields = () => [...form.querySelectorAll('[data-profile-editable]')];
+
+        const fieldValue = (el) => (el.type === 'checkbox' || el.type === 'radio' ? (el.checked ? '1' : '0') : String(el.value ?? ''));
+        const savedValue = (el) => String(el.getAttribute('data-saved-value') ?? '');
+        const isDirty = () => editableFields().some((el) => fieldValue(el) !== savedValue(el));
+
+        const setFieldLocked = (el, locked) => {
+            if (el.tagName === 'SELECT' || el.type === 'checkbox' || el.type === 'radio') {
+                el.disabled = locked;
+            } else {
+                el.readOnly = locked;
+            }
+            el.classList.toggle('is-profile-locked', locked);
+            el.setAttribute('aria-readonly', locked ? 'true' : 'false');
+        };
+
+        const restoreSaved = () => {
+            form.querySelectorAll('[data-saved-value]').forEach((el) => {
+                if (el.type === 'checkbox' || el.type === 'radio') {
+                    el.checked = savedValue(el) === '1';
+                } else if (!el.matches('[data-location-city]')) {
+                    el.value = savedValue(el);
+                }
+            });
+
+            const province = form.querySelector('[data-location-province]');
+            if (province) {
+                province.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            const city = form.querySelector('[data-location-city]');
+            if (city) {
+                city.value = savedValue(city);
+                city.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        };
+
+        const syncSaveButton = () => {
+            if (!saveBtn) {
+                return;
+            }
+            const dirty = form.classList.contains('is-editing') && isDirty();
+            saveBtn.disabled = !dirty;
+            saveBtn.setAttribute('aria-disabled', dirty ? 'false' : 'true');
+        };
+
+        const setEditing = (editing, restore) => {
+            if (restore) {
+                restoreSaved();
+            }
+
+            form.classList.toggle('is-editing', editing);
+            editableFields().forEach((el) => setFieldLocked(el, !editing));
+
+            if (editBtn) {
+                editBtn.hidden = editing;
+            }
+            if (cancelBtn) {
+                cancelBtn.hidden = !editing;
+            }
+            if (saveBtn) {
+                saveBtn.hidden = !editing;
+            }
+
+            syncSaveButton();
+        };
+
+        editableFields().forEach((el) => {
+            el.addEventListener('input', syncSaveButton);
+            el.addEventListener('change', syncSaveButton);
+        });
+
+        editBtn?.addEventListener('click', () => setEditing(true, false));
+        cancelBtn?.addEventListener('click', () => setEditing(false, true));
+
+        form.addEventListener('submit', (event) => {
+            if (!form.classList.contains('is-editing') || !isDirty()) {
+                event.preventDefault();
+                return;
+            }
+
+            editableFields().forEach((el) => {
+                el.disabled = false;
+                el.readOnly = false;
+            });
+        });
+
+        setEditing(form.dataset.startEditing === '1', false);
     });
 }

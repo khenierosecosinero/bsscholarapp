@@ -72,7 +72,7 @@
                 provinceSelect.innerHTML = '';
                 var empty = document.createElement('option');
                 empty.value = '';
-                empty.textContent = 'Select province';
+                empty.textContent = 'Select Province';
                 provinceSelect.appendChild(empty);
 
                 visibleProvinces().forEach(function (province) {

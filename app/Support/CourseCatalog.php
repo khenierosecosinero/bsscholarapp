@@ -63,6 +63,23 @@ class CourseCatalog
         ];
     }
 
+    /**
+     * @return list<string|\Closure>
+     */
+    public static function courseRules(bool $required = false): array
+    {
+        return [
+            $required ? 'required' : 'nullable',
+            'string',
+            'max:255',
+            function (string $attribute, mixed $value, \Closure $fail) {
+                if (static::looksLikeAbbreviation(is_string($value) ? $value : null)) {
+                    $fail('Enter the complete official course name, not initials such as BSICT, BSCE, or BSIS. Example: Bachelor of Science in Information Technology.');
+                }
+            },
+        ];
+    }
+
     public static function normalize(?string $course): ?string
     {
         $course = trim(preg_replace('/\s+/', ' ', (string) $course) ?? '');

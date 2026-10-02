@@ -8,6 +8,7 @@ use App\Models\ScholarshipProgram;
 use App\Models\UserActivity;
 use App\Models\Announcement;
 use App\Models\DocumentType;
+use App\Support\CourseCatalog;
 use App\Services\AcademicSettingsService;
 use App\Services\AnnouncementService;
 use App\Services\AttendanceSessionService;
@@ -325,11 +326,15 @@ class UserController extends Controller
             $activeProfileTab = 'profile-info';
         }
 
+        $user->loadMissing('scholarshipClub.schools');
+
         return view('user.profile', array_merge($layout, [
             'municipalityOptions' => ScholarshipProgram::municipalityOptions(
                 $user->provinceName(),
                 $user->municipalityName()
             ),
+            'clubSchools' => $user->scholarshipClub?->schools ?? collect(),
+            'yearLevels' => CourseCatalog::yearLevels(),
             'activeProfileTab' => $activeProfileTab,
         ]));
     }

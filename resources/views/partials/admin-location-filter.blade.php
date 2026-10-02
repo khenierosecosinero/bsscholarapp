@@ -5,10 +5,6 @@
 @endphp
 
 <div class="admin-location-banner">
-    <div>
-        <strong>Viewing:</strong> {{ $locationLabel ?? 'City Scholar — All Locations' }}
-        <div class="staff-muted" style="margin-top:4px">City Scholar and Province Scholar stay separate. Scholarship Clubs follow the selected Province and Municipality/City.</div>
-    </div>
     <form method="GET" action="{{ url()->current() }}" class="admin-location-switcher" data-admin-location-form>
         @foreach($preserve as $key => $value)
             @if(is_array($value))

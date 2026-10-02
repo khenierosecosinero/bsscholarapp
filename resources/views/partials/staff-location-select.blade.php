@@ -90,6 +90,7 @@
             id="{{ $fieldId }}"
             name="scholarship_program_id"
             value="{{ $selectedId }}"
+            data-saved-value="{{ $selectedId }}"
             required
         >
     @endif
@@ -100,6 +101,8 @@
             id="{{ $fieldId }}_province"
             class="form-input form-select"
             data-location-province
+            data-profile-editable
+            data-saved-value="{{ $selectedProvinceId }}"
             required
         >
             <option value="">Select province</option>
@@ -125,6 +128,8 @@
             id="{{ $fieldId }}_city"
             class="form-input form-select"
             data-location-city
+            data-profile-editable
+            data-saved-value="{{ $selectedId }}"
             required
             {{ $selectedProvinceName ? '' : 'disabled' }}
         >
@@ -185,12 +190,15 @@ document.addEventListener('DOMContentLoaded', function () {
             empty.textContent = placeholder;
             citySelect.appendChild(empty);
 
+            var editingForm = field.closest('[data-profile-edit-form]');
+            var canEdit = !editingForm || editingForm.classList.contains('is-editing');
+
             if (!province) {
                 citySelect.disabled = true;
                 return;
             }
 
-            citySelect.disabled = false;
+            citySelect.disabled = !canEdit;
 
             if (!requireCity && province.id) {
                 var allOption = document.createElement('option');

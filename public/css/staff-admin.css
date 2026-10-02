@@ -904,8 +904,104 @@ body:has(.staff-shell) {
     word-break: break-word;
 }
 
+.staff-approval-table th,
 .staff-approval-table td {
-    vertical-align: top;
+    vertical-align: middle;
+    overflow-wrap: break-word;
+    word-break: normal;
+}
+
+.staff-approval-table .staff-stack-value {
+    overflow-wrap: break-word;
+    word-break: normal;
+}
+
+.staff-approval-table .staff-account-details {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.staff-approval-status {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.staff-approval-table .staff-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 26px;
+    padding: 4px 12px;
+    line-height: 1;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: keep-all;
+}
+
+.staff-action-group.staff-approval-actions {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    max-width: 100%;
+}
+
+.staff-approval-actions form {
+    display: inline-flex;
+    margin: 0;
+}
+
+.staff-approval-actions .staff-btn {
+    min-height: 32px;
+    padding: 6px 12px;
+    box-sizing: border-box;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.staff-approval-actions .staff-btn-success:hover {
+    background: #15803d;
+    border-color: #15803d;
+    color: #fff;
+}
+
+.staff-approval-actions .staff-btn-danger {
+    background: #fff;
+    border-color: #ef4444;
+    color: #b91c1c;
+}
+
+.staff-approval-actions .staff-btn-danger:hover {
+    background: #fef2f2;
+    border-color: #dc2626;
+    color: #991b1b;
+}
+
+@media (min-width: 801px) {
+    .staff-approval-table {
+        table-layout: fixed;
+        min-width: 1240px;
+    }
+    .staff-approval-table th:nth-child(1),
+    .staff-approval-table td:nth-child(1) { width: 17%; }
+    .staff-approval-table th:nth-child(2),
+    .staff-approval-table td:nth-child(2) { width: 17%; }
+    .staff-approval-table th:nth-child(3),
+    .staff-approval-table td:nth-child(3) { width: 12%; }
+    .staff-approval-table th:nth-child(4),
+    .staff-approval-table td:nth-child(4) { width: 12%; }
+    .staff-approval-table th:nth-child(5),
+    .staff-approval-table td:nth-child(5) { width: 13%; white-space: nowrap; }
+    .staff-approval-table th:nth-child(6),
+    .staff-approval-table td:nth-child(6) { width: 9%; white-space: nowrap; }
+    .staff-approval-table th:nth-child(7),
+    .staff-approval-table td:nth-child(7) {
+        width: 20%;
+        min-width: 268px;
+        white-space: nowrap;
+    }
 }
 
 .staff-scholar-avatar .user-avatar-fallback {
@@ -1299,6 +1395,27 @@ body:has(.staff-shell) {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
+}
+
+.profile-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+[data-profile-editable].is-profile-locked,
+[data-profile-editable][readonly],
+[data-profile-editable]:disabled {
+    background: #f3f4f6;
+    color: #4b5563;
+    cursor: default;
+}
+
+[data-profile-save]:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .staff-form-group label {
@@ -1794,6 +1911,22 @@ body:has(.staff-shell) {
     .staff-action-group .staff-btn-more {
         width: auto;
         flex: 0 0 auto;
+    }
+    .staff-approval-table .staff-approval-status,
+    .staff-approval-table td[data-label="Actions"] .staff-stack-value {
+        align-items: flex-start;
+    }
+    .staff-action-group.staff-approval-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        white-space: normal;
+        gap: 8px;
+    }
+    .staff-approval-actions .staff-btn,
+    .staff-approval-actions form {
+        flex: 1 1 96px;
+        min-width: 96px;
+        width: auto;
     }
     .staff-doc-review-actions {
         width: 100%;

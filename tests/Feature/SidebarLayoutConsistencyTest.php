@@ -59,6 +59,89 @@ class SidebarLayoutConsistencyTest extends TestCase
         $this->assertLessThan(strpos($html, 'logout-btn'), strpos($html, 'aria-label="Main navigation"'));
     }
 
+    public function test_profile_page_stacks_progress_and_calendar_under_profile_nav(): void
+    {
+        $html = $this->actingAs($this->makeApprovedScholar())
+            ->get(route('user.profile'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('sidebar-nav-widgets', $html);
+        $this->assertStringContainsString('profile-my-progress-card', $html);
+        $this->assertStringContainsString('dashboard-sidebar-calendar', $html);
+        $this->assertStringContainsString('MY PROGRESS', $html);
+
+        $this->assertMatchesRegularExpression(
+            '/nav-label">Profile &amp; Settings<\/span>[\s\S]*?sidebar-nav-widgets[\s\S]*?profile-my-progress-card[\s\S]*?dashboard-sidebar-calendar[\s\S]*?class="sidebar-widgets"/',
+            $html
+        );
+
+        $widgets = strpos($html, 'sidebar-nav-widgets');
+        $progress = strpos($html, 'profile-my-progress-card');
+        $calendar = strpos($html, 'dashboard-sidebar-calendar');
+        $logout = strpos($html, 'logout-btn');
+
+        $this->assertLessThan($progress, $widgets);
+        $this->assertLessThan($calendar, $progress);
+        $this->assertLessThan($logout, $calendar);
+        $this->assertLessThan(strpos($html, 'class="sidebar-widgets"'), $calendar);
+    }
+
+    public function test_documents_page_stacks_overview_and_semester_under_profile_nav(): void
+    {
+        $html = $this->actingAs($this->makeApprovedScholar())
+            ->get(route('user.documents'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('sidebar-nav-widgets', $html);
+        $this->assertStringContainsString('documents-overview-sidebar-card', $html);
+        $this->assertStringContainsString('DOCUMENTS OVERVIEW', $html);
+        $this->assertStringContainsString('current-semester-card', $html);
+
+        $this->assertMatchesRegularExpression(
+            '/nav-label">Profile &amp; Settings<\/span>[\s\S]*?sidebar-nav-widgets[\s\S]*?documents-overview-sidebar-card[\s\S]*?current-semester-card[\s\S]*?class="sidebar-widgets"/',
+            $html
+        );
+
+        $widgets = strpos($html, 'sidebar-nav-widgets');
+        $overview = strpos($html, 'documents-overview-sidebar-card');
+        $semester = strpos($html, 'current-semester-card');
+        $logout = strpos($html, 'logout-btn');
+
+        $this->assertLessThan($overview, $widgets);
+        $this->assertLessThan($semester, $overview);
+        $this->assertLessThan($logout, $semester);
+        $this->assertLessThan(strpos($html, 'class="sidebar-widgets"'), $semester);
+    }
+
+    public function test_calendar_page_stacks_upcoming_events_under_schedule_summary(): void
+    {
+        $html = $this->actingAs($this->makeApprovedScholar())
+            ->get(route('user.calendar'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('schedule-summary-section', $html);
+        $this->assertStringContainsString('MY SCHEDULE SUMMARY', $html);
+        $this->assertStringContainsString('calendar-upcoming-card', $html);
+        $this->assertStringContainsString('UPCOMING EVENTS', $html);
+        $this->assertStringContainsString('No upcoming events.', $html);
+        $this->assertStringContainsString('View All Events', $html);
+
+        $this->assertMatchesRegularExpression(
+            '/schedule-summary-section[\s\S]*?MY SCHEDULE SUMMARY[\s\S]*?calendar-upcoming-card[\s\S]*?UPCOMING EVENTS[\s\S]*?View All Events/',
+            $html
+        );
+
+        $summary = strpos($html, 'schedule-summary-section');
+        $upcoming = strpos($html, 'calendar-upcoming-card');
+        $this->assertNotFalse($summary);
+        $this->assertNotFalse($upcoming);
+        $this->assertLessThan($upcoming, $summary);
+        $this->assertStringNotContainsString('calendar-sidebar', $html);
+    }
+
     public function test_staff_sidebar_matches_scholar_structure_and_keeps_nav_items(): void
     {
         $html = $this->actingAs($this->makeApprovedStaff())

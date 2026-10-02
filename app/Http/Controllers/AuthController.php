@@ -141,16 +141,7 @@ class AuthController extends Controller
                     fn ($query) => $query->where('scholarship_club_id', $request->integer('scholarship_club_id'))
                 ),
             ],
-            'course_year_level' => [
-                'nullable',
-                'string',
-                'max:255',
-                function (string $attribute, mixed $value, \Closure $fail) {
-                    if (CourseCatalog::looksLikeAbbreviation(is_string($value) ? $value : null)) {
-                        $fail('Enter the complete official course name, not initials such as BSICT, BSCE, or BSIS. Example: Bachelor of Science in Information Technology.');
-                    }
-                },
-            ],
+            'course_year_level' => CourseCatalog::courseRules(),
             'year_level' => ['nullable', 'string', 'max:50', Rule::in(CourseCatalog::yearLevels())],
             'cellphone_number' => ['nullable', 'string', 'max:50'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],

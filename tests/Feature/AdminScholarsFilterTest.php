@@ -141,6 +141,23 @@ class AdminScholarsFilterTest extends TestCase
             ->assertSee('No scholars found.');
     }
 
+    public function test_scholars_filter_uses_responsive_grid_and_keeps_placeholders(): void
+    {
+        $html = $this->actingAs($this->makeAdmin())
+            ->get(route('admin.scholars'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('admin-filter-form', $html);
+        $this->assertStringContainsString('Select Province', $html);
+        $this->assertStringContainsString('Select municipality or city', $html);
+        $this->assertStringContainsString('All Scholarship Clubs', $html);
+        $this->assertStringContainsString('>Apply</button>', $html);
+        $this->assertStringContainsString('data-admin-location-tree', $html);
+        $this->assertStringContainsString('data-admin-province', $html);
+        $this->assertStringContainsString('data-admin-city', $html);
+    }
+
     private function makeAdmin(): User
     {
         $admin = User::register([

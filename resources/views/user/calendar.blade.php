@@ -17,7 +17,7 @@
     </div>
 </div>
 
-<section class="calendar-page-grid">
+<section class="calendar-page-grid{{ $selected ? ' has-event-detail' : '' }}">
     <div class="calendar-main">
         <div class="card">
             <div class="full-calendar">
@@ -69,12 +69,13 @@
         </div>
 
         @include('partials.schedule-summary', $scheduleStats ?? [])
+        @include('partials.calendar-upcoming-events')
     </div>
 
+    @if($selected)
     <aside class="calendar-sidebar">
         <div class="calendar-sidebar-content">
-            @if($selected)
-                <div class="card event-detail-card">
+            <div class="card event-detail-card">
                     @if($selected['image_url'])<img src="{{ $selected['image_url'] }}" alt="">@endif
                     @include('partials.event-status-badge', ['statusClass' => $selected['status_class'], 'statusLabel' => $selected['status_label']])
                     <span class="badge {{ !empty($selected['attendance_open']) ? 'attendance-open' : 'attendance-closed' }}">{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
@@ -139,13 +140,11 @@
                         </div>
                     @endif
 
-                    <a href="{{ route('user.events', ['event' => $selected['id']]) }}" class="btn full">View Event Details</a>
-                </div>
-            @endif
+                <a href="{{ route('user.events', ['event' => $selected['id']]) }}" class="btn full">View Event Details</a>
+            </div>
         </div>
-
-        @include('partials.calendar-upcoming-events')
     </aside>
+    @endif
 </section>
 
 @endsection

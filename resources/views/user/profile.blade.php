@@ -22,7 +22,22 @@
     <div class="profile-main">
         <div class="tab-panel profile-info-panel {{ $activeProfileTab === 'profile-info' ? 'active' : '' }}" id="profile-info" @if($activeProfileTab !== 'profile-info') hidden @endif>
             <div class="card profile-section-card">
-                <div class="card-header">PROFILE INFORMATION</div>
+                @php
+                    $profileInfoErrors = $errors->hasAny([
+                        'full_name',
+                        'city',
+                        'cellphone_number',
+                        'scholarship_club_school_id',
+                        'course_year_level',
+                        'year_level',
+                        'date_of_birth',
+                    ]);
+                @endphp
+
+                <div class="card-header profile-section-heading">
+                    <span>PROFILE INFORMATION</span>
+                    <button type="button" class="btn blue" data-profile-edit data-profile-edit-for="scholar-profile-form">Edit</button>
+                </div>
 
                 <div class="profile-header">
                     <div class="profile-avatar-wrap">
@@ -55,66 +70,102 @@
                     </div>
                 </div>
 
-                <form method="POST" action="{{ route('user.profile.update') }}" class="profile-section-form">
+                <form id="scholar-profile-form" method="POST" action="{{ route('user.profile.update') }}" class="profile-section-form" data-profile-edit-form data-start-editing="{{ $profileInfoErrors ? '1' : '0' }}">
                     @csrf @method('PUT')
                     <div class="form-grid profile-form-grid">
-                        <div class="form-group"><label for="full_name">Full Name</label><input id="full_name" type="text" name="full_name" value="{{ old('full_name', $user->full_name) }}" required autocomplete="name"></div>
+                        <div class="form-group"><label for="full_name">Full Name</label><input id="full_name" type="text" name="full_name" value="{{ old('full_name', $user->full_name) }}" required autocomplete="name" data-profile-editable data-saved-value="{{ $user->full_name }}"></div>
                         <div class="form-group"><label for="scholar_id">Scholar ID</label><input id="scholar_id" type="text" value="{{ $user->scholar_id }}" readonly disabled aria-readonly="true"></div>
-                        <div class="form-group form-group-wide"><label for="email">Login Email</label><input id="email" type="email" value="{{ $user->email }}" readonly disabled aria-readonly="true"><small class="muted">Your login email cannot be changed after registration.</small></div>
+                        <div class="form-group form-group-wide"><label for="email">Login Email</label><input id="email" type="email" value="{{ $user->email }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group">
-                            <label for="city">Municipality / City</label>
-                            <select id="city" name="city" class="form-select">
+                            <label for="city">City Address</label>
+                            <select id="city" name="city" class="form-select" data-profile-editable data-saved-value="{{ $user->municipalityName() }}">
                                 <option value="">Select municipality or city</option>
                                 @foreach($municipalityOptions as $municipality)
                                     <option value="{{ $municipality }}" @selected(old('city', $user->municipalityName()) === $municipality)>{{ $municipality }}</option>
                                 @endforeach
                             </select>
-                            <small class="muted">Choose the city or municipality where you live. Your Scholarship Club will not change.</small>
                             @error('city')
                                 <small class="muted" style="color:#dc2626">{{ $message }}</small>
                             @enderror
                         </div>
-                        <div class="form-group form-group-wide"><label for="registered_program">Scholarship Club</label><input id="registered_program" type="text" value="{{ $user->scholarshipClubName() }}" readonly disabled aria-readonly="true"><small class="muted">Your account is linked to this Scholarship Club and cannot be moved to another club.</small></div>
+                        <div class="form-group form-group-wide"><label for="registered_program">Scholarship Club</label><input id="registered_program" type="text" value="{{ $user->scholarshipClubName() }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group"><label for="registered_club_city">Scholarship Club Municipality / City</label><input id="registered_club_city" type="text" value="{{ $user->scholarshipClubCity() ?? '—' }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group"><label for="registered_province">Scholarship Club Province</label><input id="registered_province" type="text" value="{{ $user->scholarshipClubProvince() ?? '—' }}" readonly disabled aria-readonly="true"></div>
-                        <div class="form-group"><label for="cellphone_number">Cellphone</label><input id="cellphone_number" type="text" name="cellphone_number" value="{{ old('cellphone_number', $user->cellphone_number) }}" autocomplete="tel"></div>
-                        <div class="form-group"><label for="school_university">School</label><input id="school_university" type="text" name="school_university" value="{{ old('school_university', $user->school_university) }}"></div>
+                        <div class="form-group"><label for="cellphone_number">Cellphone</label><input id="cellphone_number" type="text" name="cellphone_number" value="{{ old('cellphone_number', $user->cellphone_number) }}" autocomplete="tel" data-profile-editable data-saved-value="{{ $user->cellphone_number }}"></div>
+                        <div class="form-group">
+                            <label for="scholarship_club_school_id">School</label>
+                            <select id="scholarship_club_school_id" name="scholarship_club_school_id" class="form-select" data-profile-editable data-saved-value="{{ $user->scholarship_club_school_id }}">
+                                <option value="">Select school</option>
+                                @foreach($clubSchools ?? [] as $school)
+                                    <option value="{{ $school->id }}" @selected((string) old('scholarship_club_school_id', $user->scholarship_club_school_id) === (string) $school->id)>{{ $school->name }}</option>
+                                @endforeach
+                            </select>
+                            @if(($clubSchools ?? collect())->isEmpty())
+                                <small class="muted">No schools have been added for your Scholarship Club yet.</small>
+                            @else
+                                <small class="muted">Choose from the schools added by Scholar Staff for your Scholarship Club.</small>
+                            @endif
+                            @error('scholarship_club_school_id')
+                                <small class="muted" style="color:#dc2626">{{ $message }}</small>
+                            @enderror
+                        </div>
                         <div class="form-group">
                             <label for="course_year_level">Course</label>
-                            <input id="course_year_level" type="text" value="{{ $user->course_year_level ?: '—' }}" readonly disabled aria-readonly="true">
-                            <small class="muted">Retrieved from your registration. The full official course name is shown.</small>
+                            <input id="course_year_level" type="text" name="course_year_level" value="{{ old('course_year_level', $user->course_year_level) }}" maxlength="255" autocomplete="off" placeholder="Bachelor of Science in ..." data-profile-editable data-saved-value="{{ $user->course_year_level }}">
+                            @error('course_year_level')
+                                <small class="muted" style="color:#dc2626">{{ $message }}</small>
+                            @enderror
                         </div>
                         <div class="form-group">
                             <label for="year_level">Year Level</label>
-                            <input id="year_level" type="text" value="{{ $user->year_level ?: '—' }}" readonly disabled aria-readonly="true">
-                            <small class="muted">Retrieved from your registration. You do not need to enter this again.</small>
+                            <select id="year_level" name="year_level" class="form-select" data-profile-editable data-saved-value="{{ $user->year_level }}">
+                                <option value="">Select year level</option>
+                                @foreach($yearLevels ?? [] as $yearLevel)
+                                    <option value="{{ $yearLevel }}" @selected(old('year_level', $user->year_level) === $yearLevel)>{{ $yearLevel }}</option>
+                                @endforeach
+                            </select>
+                            @error('year_level')
+                                <small class="muted" style="color:#dc2626">{{ $message }}</small>
+                            @enderror
                         </div>
                         <div class="form-group form-group-date form-group-wide">
                             <label for="date_of_birth">Date of Birth</label>
                             <div class="date-input-wrap">
-                                <input id="date_of_birth" type="date" name="date_of_birth" value="{{ old('date_of_birth', $user->date_of_birth?->format('Y-m-d')) }}" autocomplete="bday">
+                                <input id="date_of_birth" type="date" name="date_of_birth" value="{{ old('date_of_birth', $user->date_of_birth?->format('Y-m-d')) }}" autocomplete="bday" data-profile-editable data-saved-value="{{ $user->date_of_birth?->format('Y-m-d') }}">
                             </div>
                         </div>
                     </div>
-                    <div class="form-actions-right"><button type="submit" class="btn blue">Save Changes</button></div>
+                    <div class="form-actions-right profile-edit-actions">
+                        <button type="button" class="btn" data-profile-cancel hidden>Cancel</button>
+                        <button type="submit" class="btn blue" data-profile-save hidden disabled>Save Changes</button>
+                    </div>
                 </form>
             </div>
 
             <div class="card profile-section-card">
-                <div class="card-header">GUARDIAN INFORMATION</div>
-
-                <div class="profile-section-intro">
-                    <p>Please provide your guardian's contact details for emergency purposes.</p>
-                </div>
-
-                <form method="POST" action="{{ route('user.profile.guardian') }}" class="profile-section-form">
+                @php
+                    $guardianErrors = $errors->hasAny(['guardian_name', 'guardian_relationship', 'guardian_cellphone']);
+                @endphp
+                <form method="POST" action="{{ route('user.profile.guardian') }}" class="profile-section-form" data-profile-edit-form data-start-editing="{{ $guardianErrors ? '1' : '0' }}">
                     @csrf @method('PUT')
-                    <div class="form-grid profile-form-grid guardian-form-grid">
-                        <div class="form-group"><label for="guardian_name">Guardian Name</label><input id="guardian_name" type="text" name="guardian_name" value="{{ old('guardian_name', $user->guardian_name) }}"></div>
-                        <div class="form-group"><label for="guardian_relationship">Relationship</label><input id="guardian_relationship" type="text" name="guardian_relationship" value="{{ old('guardian_relationship', $user->guardian_relationship) }}"></div>
-                        <div class="form-group"><label for="guardian_cellphone">Guardian Cellphone</label><input id="guardian_cellphone" type="text" name="guardian_cellphone" value="{{ old('guardian_cellphone', $user->guardian_cellphone) }}" autocomplete="tel"></div>
+                    <div class="card-header profile-section-heading">
+                        <span>GUARDIAN INFORMATION</span>
+                        <button type="button" class="btn blue" data-profile-edit>Edit</button>
                     </div>
-                    <div class="form-actions-right"><button type="submit" class="btn blue">Save Guardian Info</button></div>
+
+                    <div class="profile-section-intro">
+                        <p>Please provide your guardian's contact details for emergency purposes.</p>
+                    </div>
+
+                    <div class="form-grid profile-form-grid guardian-form-grid">
+                        <div class="form-group"><label for="guardian_name">Guardian Name</label><input id="guardian_name" type="text" name="guardian_name" value="{{ old('guardian_name', $user->guardian_name) }}" data-profile-editable data-saved-value="{{ $user->guardian_name }}"></div>
+                        <div class="form-group"><label for="guardian_relationship">Relationship</label><input id="guardian_relationship" type="text" name="guardian_relationship" value="{{ old('guardian_relationship', $user->guardian_relationship) }}" data-profile-editable data-saved-value="{{ $user->guardian_relationship }}"></div>
+                        <div class="form-group"><label for="guardian_cellphone">Guardian Cellphone</label><input id="guardian_cellphone" type="text" name="guardian_cellphone" value="{{ old('guardian_cellphone', $user->guardian_cellphone) }}" autocomplete="tel" data-profile-editable data-saved-value="{{ $user->guardian_cellphone }}"></div>
+                    </div>
+                    <div class="form-actions-right profile-edit-actions">
+                        <button type="button" class="btn" data-profile-cancel hidden>Cancel</button>
+                        <button type="submit" class="btn blue" data-profile-save hidden disabled>Save Guardian Info</button>
+                    </div>
                 </form>
             </div>
         </div>

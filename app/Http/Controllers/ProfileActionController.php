@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ScholarshipClubSchool;
 use App\Models\ScholarshipProgram;
+use App\Support\CourseCatalog;
 use App\Services\AccountService;
 use App\Services\AcademicSettingsService;
 use App\Services\GoogleDriveService;
@@ -37,15 +39,58 @@ class ProfileActionController extends Controller
             $user->municipalityName()
         );
 
+        $clubId = $user->scholarship_club_id;
+        $hasClubSchools = $clubId && ScholarshipClubSchool::query()
+            ->where('scholarship_club_id', $clubId)
+            ->exists();
+
         $data = $request->validate([
             'full_name' => 'required|string|max:255',
             'cellphone_number' => 'nullable|string|max:50',
-            'school_university' => 'nullable|string|max:255',
             'date_of_birth' => 'nullable|date|before:today',
             'city' => ['nullable', 'string', 'max:255', Rule::in($allowedCities)],
+            'course_year_level' => CourseCatalog::courseRules(),
+            'year_level' => ['nullable', 'string', 'max:50', Rule::in(CourseCatalog::yearLevels())],
+            'scholarship_club_school_id' => $hasClubSchools
+                ? [
+                    'required',
+                    'integer',
+                    Rule::exists('scholarship_club_schools', 'id')->where(
+                        fn ($query) => $query->where('scholarship_club_id', $clubId)
+                    ),
+                ]
+                : ['nullable'],
+        ], [
+            'scholarship_club_school_id.required' => 'Please select your school.',
+            'scholarship_club_school_id.exists' => 'Please select a school from the list added by Scholar Staff.',
+            'year_level.in' => 'Please select a year level.',
         ]);
 
-        $user->update($data);
+        $updates = collect($data)->only([
+            'full_name',
+            'cellphone_number',
+            'date_of_birth',
+            'city',
+        ])->all();
+
+        if (array_key_exists('course_year_level', $data)) {
+            $updates['course_year_level'] = CourseCatalog::normalize($data['course_year_level']);
+        }
+
+        if (array_key_exists('year_level', $data)) {
+            $updates['year_level'] = $data['year_level'] ?: null;
+        }
+
+        if (! empty($data['scholarship_club_school_id']) && $clubId) {
+            $school = ScholarshipClubSchool::query()
+                ->where('scholarship_club_id', $clubId)
+                ->findOrFail((int) $data['scholarship_club_school_id']);
+
+            $updates['scholarship_club_school_id'] = $school->id;
+            $updates['school_university'] = $school->name;
+        }
+
+        $user->update($updates);
 
         if ($user->isScholar()) {
             try {

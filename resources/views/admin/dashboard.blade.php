@@ -113,12 +113,16 @@
 }
 .admin-dashboard-scope-form select {
     width: 100%;
-    max-width: 520px;
+    max-width: 100%;
     padding: 12px 14px;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     font-size: 14px;
     background: #fff;
+    box-sizing: border-box;
+}
+@media (max-width: 700px) {
+    .admin-dashboard-scope-form { grid-template-columns: 1fr; max-width: 100%; }
 }
 @media (max-width: 900px) { .staff-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>

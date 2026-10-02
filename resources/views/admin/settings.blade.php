@@ -4,30 +4,37 @@
 
 <div class="admin-settings-tabs">
     <div class="staff-card">
-        <div class="staff-card-header"><h2>Account Information</h2></div>
-        <form method="POST" action="{{ route('admin.settings.update') }}">
+        @php
+            $adminProfileErrors = $errors->hasAny(['full_name', 'email']);
+        @endphp
+        <form method="POST" action="{{ route('admin.settings.update') }}" data-profile-edit-form data-start-editing="{{ $adminProfileErrors ? '1' : '0' }}">
             @csrf
             @method('PUT')
+            <div class="staff-card-header">
+                <h2>Account Information</h2>
+                <button type="button" class="staff-btn staff-btn-primary" data-profile-edit>Edit</button>
+            </div>
             <div class="staff-form-grid">
                 <div class="staff-form-group">
                     <label for="full_name">Full Name</label>
-                    <input type="text" id="full_name" name="full_name" value="{{ old('full_name', $admin->full_name) }}" required>
+                    <input type="text" id="full_name" name="full_name" value="{{ old('full_name', $admin->full_name) }}" required data-profile-editable data-saved-value="{{ $admin->full_name }}">
                 </div>
                 <div class="staff-form-group">
                     <label for="email">Email Address</label>
-                    <input type="email" id="email" name="email" value="{{ old('email', $admin->email) }}" required>
+                    <input type="email" id="email" name="email" value="{{ old('email', $admin->email) }}" required data-profile-editable data-saved-value="{{ $admin->email }}">
                 </div>
                 <div class="staff-form-group">
                     <label>Role</label>
-                    <input type="text" value="Administrator" readonly>
+                    <input type="text" value="Administrator" readonly disabled aria-readonly="true">
                 </div>
                 <div class="staff-form-group">
                     <label>Scholar ID</label>
-                    <input type="text" value="{{ $admin->scholar_id }}" readonly>
+                    <input type="text" value="{{ $admin->scholar_id }}" readonly disabled aria-readonly="true">
                 </div>
             </div>
-            <div class="admin-form-actions">
-                <button type="submit" class="staff-btn staff-btn-primary">Save Account Info</button>
+            <div class="admin-form-actions profile-edit-actions">
+                <button type="button" class="staff-btn" data-profile-cancel hidden>Cancel</button>
+                <button type="submit" class="staff-btn staff-btn-primary" data-profile-save hidden disabled>Save Changes</button>
             </div>
         </form>
     </div>

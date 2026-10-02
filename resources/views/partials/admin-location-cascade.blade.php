@@ -40,7 +40,7 @@
         <div class="admin-location-cascade-field">
             <label class="admin-location-cascade-label" for="{{ $idPrefix ?? 'admin' }}-province">Province</label>
             <select id="{{ $idPrefix ?? 'admin' }}-province" data-admin-province aria-label="Province">
-                <option value="">Select province</option>
+                <option value="">Select Province</option>
                 @foreach($tree as $province)
                     <option
                         value="{{ $province['name'] }}"

@@ -237,21 +237,28 @@ class ScholarshipClubRegistrationTest extends TestCase
             ->assertOk()
             ->assertSee('Bachelor of Science in Information Technology')
             ->assertSee('2nd Year')
+            ->assertSee('Dapa National High School')
             ->assertDontSee('BSICT')
-            ->assertDontSee('name="course_year_level"', false)
-            ->assertDontSee('name="year_level"', false);
+            ->assertSee('name="course_year_level"', false)
+            ->assertSee('name="year_level"', false)
+            ->assertSee('name="scholarship_club_school_id"', false)
+            ->assertDontSee('<select class="form-select" id="course_year_level"', false);
 
         $this->actingAs($scholar)
+            ->from(route('user.profile'))
             ->put(route('user.profile.update'), [
                 'full_name' => 'Profile Course Scholar',
                 'course_year_level' => 'BSICT',
                 'year_level' => '5th Year',
+                'scholarship_club_school_id' => $school->id,
             ])
-            ->assertRedirect();
+            ->assertRedirect(route('user.profile'))
+            ->assertSessionHasErrors(['course_year_level', 'year_level']);
 
         $scholar->refresh();
         $this->assertSame('Bachelor of Science in Information Technology', $scholar->course_year_level);
         $this->assertSame('2nd Year', $scholar->year_level);
+        $this->assertSame($school->id, $scholar->scholarship_club_school_id);
     }
 
     public function test_staff_settings_updates_club_name_address_and_contact(): void

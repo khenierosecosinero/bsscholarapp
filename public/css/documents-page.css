@@ -116,9 +116,10 @@
     gap: 16px;
 }
 
-.page-documents .documents-overview-sidebar-card,
-.page-documents .current-semester-card {
+.sidebar-nav-widgets .documents-overview-sidebar-card,
+.sidebar-nav-widgets .current-semester-card {
     width: 100%;
+    max-width: 100%;
     margin: 0;
 }
 

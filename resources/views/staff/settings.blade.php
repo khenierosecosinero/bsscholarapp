@@ -4,15 +4,19 @@
 
 <div class="staff-settings-grid">
     <div class="staff-card">
-        <div class="staff-card-header">
-            <h2>⚙ General Settings</h2>
-        </div>
-        <form method="POST" action="{{ route('staff.settings.club') }}" class="staff-form-grid">
+        @php
+            $staffProfileErrors = $errors->hasAny(['scholarship_club_name', 'scholarship_program_id', 'cellphone_number']);
+        @endphp
+        <form method="POST" action="{{ route('staff.settings.club') }}" class="staff-form-grid" data-profile-edit-form data-start-editing="{{ $staffProfileErrors ? '1' : '0' }}">
             @csrf
             @method('PUT')
+            <div class="staff-card-header" style="grid-column:1/-1;margin-bottom:0">
+                <h2>⚙ General Settings</h2>
+                <button type="button" class="staff-btn staff-btn-primary" data-profile-edit>Edit</button>
+            </div>
             <div class="staff-form-group">
                 <label for="app_name">Scholarship Club Name</label>
-                <input type="text" id="app_name" name="scholarship_club_name" value="{{ old('scholarship_club_name', $staff->scholarshipClubName()) }}" required maxlength="255">
+                <input type="text" id="app_name" name="scholarship_club_name" value="{{ old('scholarship_club_name', $staff->scholarshipClubName()) }}" required maxlength="255" data-profile-editable data-saved-value="{{ $staff->scholarshipClubName() }}">
                 <p class="staff-muted" style="margin:6px 0 0">Scholarship Club linked to this staff account. Scholars you manage belong to this club only.</p>
                 @error('scholarship_club_name')
                     <p class="staff-field-error">{{ $message }}</p>
@@ -32,11 +36,11 @@
             </div>
             <div class="staff-form-group">
                 <label for="email">Email Address</label>
-                <input type="email" id="email" value="{{ $staff->email }}" readonly>
+                <input type="email" id="email" value="{{ $staff->email }}" readonly disabled aria-readonly="true">
             </div>
             <div class="staff-form-group">
                 <label for="contact">Contact Number</label>
-                <input type="text" id="contact" name="cellphone_number" value="{{ old('cellphone_number', $staff->contactNumber()) }}" maxlength="50" autocomplete="tel">
+                <input type="text" id="contact" name="cellphone_number" value="{{ old('cellphone_number', $staff->contactNumber()) }}" maxlength="50" autocomplete="tel" data-profile-editable data-saved-value="{{ $staff->contactNumber() }}">
                 @error('cellphone_number')
                     <p class="staff-field-error">{{ $message }}</p>
                 @enderror
@@ -47,8 +51,9 @@
                     <option selected>English</option>
                 </select>
             </div>
-            <div class="staff-form-group" style="grid-column:1/-1;text-align:right;margin:0">
-                <button type="submit" class="staff-btn staff-btn-primary">Save Changes</button>
+            <div class="staff-form-group profile-edit-actions" style="grid-column:1/-1;margin:0">
+                <button type="button" class="staff-btn" data-profile-cancel hidden>Cancel</button>
+                <button type="submit" class="staff-btn staff-btn-primary" data-profile-save hidden disabled>Save Changes</button>
             </div>
         </form>
     </div>
@@ -60,7 +65,7 @@
                 <a href="{{ route('staff.settings.schools.create') }}" class="staff-card-link">+ Add School/University</a>
             @endif
         </div>
-        <p class="staff-muted" style="margin:0 0 16px">Scholars who register under {{ $staff->scholarshipClubName() }} can only choose from these School/University names.</p>
+        <p class="staff-muted" style="margin:0 0 16px">Scholars who register or update their profile under {{ $staff->scholarshipClubName() }} can only choose from these School/University names.</p>
         @if(! $staff->scholarship_club_id)
             <p class="staff-muted" style="margin:0">Save your Scholarship Club in General Settings before adding School/University names.</p>
         @elseif(($schools ?? collect())->isEmpty())

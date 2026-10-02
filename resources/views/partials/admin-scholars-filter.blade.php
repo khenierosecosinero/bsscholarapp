@@ -5,7 +5,7 @@
 @endphp
 
 <div class="admin-location-banner admin-scholars-filter">
-    <form method="GET" action="{{ route('admin.scholars') }}" class="admin-location-switcher admin-scholars-filter-form" data-admin-location-form>
+        <form method="GET" action="{{ route('admin.scholars') }}" class="admin-location-switcher admin-filter-form admin-scholars-filter-form" data-admin-location-form>
         @foreach($preserve as $key => $value)
             @if(is_array($value))
                 @foreach($value as $item)

@@ -65,14 +65,14 @@
                             <div class="staff-stack-value">{{ $request->created_at->format('M j, Y g:i A') }}</div>
                         </td>
                         <td data-label="Status">
-                            <div class="staff-stack-value">
+                            <div class="staff-stack-value staff-approval-status">
                                 <span class="staff-badge orange" data-approval-status>Pending</span>
                             </div>
                         </td>
                         <td data-label="Actions">
                             <div class="staff-stack-value">
-                                <div class="staff-action-group">
-                                    <a href="{{ route('staff.scholars.show', $request) }}" class="staff-action-btn" title="View">👁</a>
+                                <div class="staff-action-group staff-approval-actions" data-approval-actions>
+                                    <a href="{{ route('staff.scholars.show', $request) }}" class="staff-btn staff-btn-sm staff-btn-view" title="View scholar registration">View</a>
                                     <form
                                         method="POST"
                                         action="{{ route('staff.scholars.approve', $request) }}"
@@ -80,7 +80,7 @@
                                         data-no-loading="true"
                                     >
                                         @csrf
-                                        <button type="submit" class="staff-action-btn" title="Approve">✓</button>
+                                        <button type="submit" class="staff-btn staff-btn-sm staff-btn-success" title="Approve scholar account">Approve</button>
                                     </form>
                                     <form
                                         method="POST"
@@ -96,7 +96,7 @@
                                         data-no-loading="true"
                                     >
                                         @csrf
-                                        <button type="submit" class="staff-action-btn" title="Reject and delete">✕</button>
+                                        <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger" title="Reject and delete scholar account">Reject</button>
                                     </form>
                                 </div>
                             </div>

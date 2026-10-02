@@ -89,6 +89,35 @@
     margin: 0 0 16px;
 }
 
+.page-profile .profile-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.page-profile .profile-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.page-profile [data-profile-editable].is-profile-locked,
+.page-profile [data-profile-editable][readonly],
+.page-profile [data-profile-editable]:disabled {
+    background: #f3f4f6;
+    color: #4b5563;
+    cursor: default;
+}
+
+.page-profile [data-profile-save]:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 .page-profile .profile-section-intro {
     margin-bottom: 20px;
 }
@@ -266,9 +295,10 @@
     gap: 16px;
 }
 
-.page-profile .profile-my-progress-card,
-.page-profile .dashboard-sidebar-calendar {
+.sidebar-nav-widgets .profile-my-progress-card,
+.sidebar-nav-widgets .dashboard-sidebar-calendar {
     width: 100%;
+    max-width: 100%;
     margin: 0;
 }
 

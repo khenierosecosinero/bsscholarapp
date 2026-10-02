@@ -112,6 +112,30 @@
 
             @endif
 
+            @if($key === 'profile' && $active === 'profile')
+
+                <div class="sidebar-nav-widgets">
+
+                    @include('partials.profile-my-progress-sidebar')
+
+                    @include('partials.sidebar-mini-calendar-card', ['calRoute' => 'user.calendar'])
+
+                </div>
+
+            @endif
+
+            @if($key === 'profile' && $active === 'documents' && $docOverview)
+
+                <div class="sidebar-nav-widgets">
+
+                    @include('partials.documents-overview-sidebar')
+
+                    @include('partials.current-semester-card', ['useEnrollmentStatus' => true])
+
+                </div>
+
+            @endif
+
         @endforeach
 
     </nav>
@@ -128,81 +152,27 @@
 
     <div class="sidebar-widgets">
 
-        @if($active === 'documents' && $docOverview)
+        @if($active !== 'dashboard' && $active !== 'profile' && $active !== 'notifications' && $active !== 'documents' && !$accountPending)
 
-            @php $o = $docOverview; @endphp
+            @include('partials.service-hours-overview-sidebar')
 
-            <div class="card documents-overview-sidebar-card">
+        @endif
 
-                <div class="card-header">DOCUMENTS OVERVIEW</div>
+        @if($active === 'events')
 
-                <div class="progress-wrap compact">
+            @include('partials.upcoming-event-sidebar', ['upcomingEvent' => $upcomingEvent ?? null])
 
-                    <div class="progress-circle">
+        @endif
 
-                        <svg viewBox="0 0 36 36">
+        @if($active === 'dashboard' && !$accountPending)
 
-                            <path class="bg" d="M18 2.0845a15.9155 15.9155 0 1 0 0 31.831 15.9155 15.9155 0 1 0 0-31.831"/>
+            @include('partials.quick-links-card')
 
-                            <path class="meter" stroke-dasharray="{{ $o['completion_pct'] }},100" d="M18 2.0845a15.9155 15.9155 0 1 0 0 31.831 15.9155 15.9155 0 1 0 0-31.831"/>
+        @endif
 
-                        </svg>
+        @if($active === 'service-hours')
 
-                        <div class="progress-text">{{ $o['approved'] }} / {{ $o['total'] }}<br><small>Approved</small></div>
-
-                    </div>
-
-                    <div class="hours-list">
-
-                        <div><span class="dot completed"></span> Approved <strong>{{ $o['approved'] }}</strong></div>
-
-                        <div><span class="dot pending-dot"></span> Pending <strong>{{ $o['pending'] }}</strong></div>
-
-                        <div><span class="dot rejected-dot"></span> Rejected <strong>{{ $o['rejected'] }}</strong></div>
-
-                        <div><span class="dot not-submitted-dot"></span> Not Submitted <strong>{{ $o['not_submitted'] }}</strong></div>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-
-            @include('partials.current-semester-card', ['useEnrollmentStatus' => true])
-
-        @elseif($active === 'profile')
-
-            @include('partials.profile-my-progress-sidebar')
-
-            @include('partials.sidebar-mini-calendar-card', ['calRoute' => 'user.calendar'])
-
-        @else
-
-            @if($active !== 'dashboard' && $active !== 'profile' && $active !== 'notifications' && !$accountPending)
-
-                @include('partials.service-hours-overview-sidebar')
-
-            @endif
-
-            @if($active === 'events')
-
-                @include('partials.upcoming-event-sidebar', ['upcomingEvent' => $upcomingEvent ?? null])
-
-            @endif
-
-            @if($active === 'dashboard' && !$accountPending)
-
-                @include('partials.quick-links-card')
-
-            @endif
-
-            @if($active === 'service-hours')
-
-                @include('partials.current-semester-card')
-
-            @endif
+            @include('partials.current-semester-card')
 
         @endif
 

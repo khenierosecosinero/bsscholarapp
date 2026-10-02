@@ -831,7 +831,6 @@ class AdminController extends Controller
                 'activeAcademicYear' => $this->academic->current(),
                 'editingAcademicYear' => $editingAcademicYear,
                 'academicYearUsage' => $this->academic->usageByYear($academicYears),
-                'hideAdminLocationPill' => true,
             ]
         ));
     }

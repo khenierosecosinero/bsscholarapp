@@ -88,7 +88,10 @@ class AdminLocationClubFilterTest extends TestCase
             ->assertDontSee('Tandag Scholars Club')
             ->assertDontSee('No registered Scholarship Club found')
             ->assertDontSee('<h3>Events</h3>', false)
-            ->assertDontSee('>Locations</span>', false);
+            ->assertDontSee('>Locations</span>', false)
+            ->assertDontSee('admin-location-pill', false)
+            ->assertDontSee('City Scholar — All Locations')
+            ->assertDontSee('📍');
     }
 
     public function test_admin_dashboard_stats_follow_selected_province_and_city_only(): void
@@ -160,5 +163,30 @@ class AdminLocationClubFilterTest extends TestCase
             ->assertDontSee('Scholarship category')
             ->assertDontSee('Viewing: City Scholar')
             ->assertDontSee('Current Admin Scope');
+    }
+
+    public function test_admin_pages_do_not_show_the_location_scope_pill(): void
+    {
+        $admin = $this->makeAdmin();
+
+        foreach ([
+            'admin.dashboard',
+            'admin.scholars',
+            'admin.staff',
+            'admin.events',
+            'admin.service-hours',
+            'admin.documents',
+            'admin.reports',
+            'admin.settings',
+        ] as $route) {
+            $html = $this->actingAs($admin)
+                ->get(route($route))
+                ->assertOk()
+                ->getContent();
+
+            $this->assertStringNotContainsString('admin-location-pill', $html);
+            $this->assertStringNotContainsString('City Scholar — All Locations', $html);
+            $this->assertStringNotContainsString('Overall / All Locations', $html);
+        }
     }
 }
