@@ -940,25 +940,33 @@ body:has(.staff-shell) {
 }
 
 .staff-action-group.staff-approval-actions {
-    display: inline-flex;
+    display: flex;
+    flex-direction: column;
     flex-wrap: nowrap;
-    align-items: center;
+    align-items: stretch;
     justify-content: flex-start;
     gap: 8px;
-    max-width: 100%;
+    width: 100%;
+    max-width: 140px;
 }
 
 .staff-approval-actions form {
-    display: inline-flex;
+    display: block;
+    width: 100%;
     margin: 0;
 }
 
 .staff-approval-actions .staff-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
     min-height: 32px;
     padding: 6px 12px;
     box-sizing: border-box;
     white-space: nowrap;
-    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
 .staff-approval-actions .staff-btn-success:hover {
@@ -1232,6 +1240,50 @@ body:has(.staff-shell) {
 
 .staff-report-scope {
     margin: 0 0 16px;
+}
+
+.staff-report-schools-title {
+    margin: 0 0 16px;
+    font-size: 20px;
+}
+
+.staff-report-school-share {
+    margin-bottom: 16px;
+}
+
+.staff-report-percent-note {
+    margin: 12px 0 0;
+}
+
+.staff-report-school-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.staff-report-school-head h3 {
+    margin: 0 0 8px;
+    font-size: 18px;
+}
+
+.staff-report-school-total {
+    margin: 0 0 8px;
+    font-weight: 700;
+}
+
+.staff-report-school-stats {
+    margin: 0 0 16px;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 6px 16px;
+}
+
+.staff-report-school-chart {
+    margin-bottom: 16px;
 }
 
 .staff-scholar-meta small {
@@ -1918,15 +1970,17 @@ body:has(.staff-shell) {
     }
     .staff-action-group.staff-approval-actions {
         width: 100%;
-        flex-wrap: wrap;
+        max-width: 180px;
+        flex-direction: column;
+        flex-wrap: nowrap;
         white-space: normal;
         gap: 8px;
     }
     .staff-approval-actions .staff-btn,
     .staff-approval-actions form {
-        flex: 1 1 96px;
-        min-width: 96px;
-        width: auto;
+        flex: 0 0 auto;
+        min-width: 0;
+        width: 100%;
     }
     .staff-doc-review-actions {
         width: 100%;

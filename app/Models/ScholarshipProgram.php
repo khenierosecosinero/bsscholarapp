@@ -264,7 +264,7 @@ class ScholarshipProgram extends Model
 
         $clubsByProgram = $includeClubs
             ? ScholarshipClub::query()
-                ->active()
+                ->available()
                 ->orderBy('name')
                 ->get(['id', 'name', 'scholarship_program_id'])
                 ->groupBy('scholarship_program_id')

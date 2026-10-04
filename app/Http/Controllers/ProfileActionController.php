@@ -45,9 +45,23 @@ class ProfileActionController extends Controller
             ->exists();
 
         $data = $request->validate([
-            'full_name' => 'required|string|max:255',
-            'cellphone_number' => 'nullable|string|max:50',
-            'date_of_birth' => 'nullable|date|before:today',
+            'cellphone_number' => [
+                'nullable',
+                'string',
+                'max:50',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $trimmed = trim((string) $value);
+                    if ($trimmed === '') {
+                        return;
+                    }
+
+                    $digits = preg_replace('/\D+/', '', $trimmed) ?? '';
+                    if (strlen($digits) < 10 || strlen($digits) > 15) {
+                        $fail('Enter a valid cellphone number with 10 to 15 digits.');
+                    }
+                },
+            ],
+            'date_of_birth' => ['nullable', 'date', 'after:1900-01-01', 'before:today'],
             'city' => ['nullable', 'string', 'max:255', Rule::in($allowedCities)],
             'course_year_level' => CourseCatalog::courseRules(),
             'year_level' => ['nullable', 'string', 'max:50', Rule::in(CourseCatalog::yearLevels())],
@@ -61,17 +75,22 @@ class ProfileActionController extends Controller
                 ]
                 : ['nullable'],
         ], [
-            'scholarship_club_school_id.required' => 'Please select your school.',
-            'scholarship_club_school_id.exists' => 'Please select a school from the list added by Scholar Staff.',
+            'city.in' => 'Please choose a City Address from the list.',
+            'date_of_birth.before' => 'Date of Birth must be a past date.',
+            'date_of_birth.after' => 'Please enter a valid Date of Birth.',
+            'date_of_birth.date' => 'Please enter a valid Date of Birth.',
+            'scholarship_club_school_id.required' => 'Please select your School/University.',
+            'scholarship_club_school_id.exists' => 'Please select a School/University from the list added by Scholar Staff.',
             'year_level.in' => 'Please select a year level.',
         ]);
 
         $updates = collect($data)->only([
-            'full_name',
-            'cellphone_number',
             'date_of_birth',
             'city',
         ])->all();
+
+        $contactNumber = trim((string) ($data['cellphone_number'] ?? ''));
+        $updates['cellphone_number'] = $contactNumber !== '' ? $contactNumber : null;
 
         if (array_key_exists('course_year_level', $data)) {
             $updates['course_year_level'] = CourseCatalog::normalize($data['course_year_level']);
@@ -105,7 +124,9 @@ class ProfileActionController extends Controller
 
         $this->scholar->logActivity($user, 'profile', 'Profile information updated');
 
-        return back()->with('success', 'Profile updated successfully.');
+        return redirect()
+            ->route('user.profile', ['updated' => 1])
+            ->with('success', 'Profile updated successfully.');
     }
 
     public function updateAvatar(Request $request)

@@ -26,9 +26,15 @@ class ProfileEditModeTest extends TestCase
         $this->assertStringContainsString('>Edit</button>', $html);
         $this->assertStringContainsString('Save Changes', $html);
         $this->assertStringContainsString('Save Guardian Info', $html);
+        $this->assertStringContainsString('name="city"', $html);
+        $this->assertStringContainsString('name="cellphone_number"', $html);
         $this->assertStringContainsString('name="course_year_level"', $html);
         $this->assertStringContainsString('name="year_level"', $html);
         $this->assertStringContainsString('name="scholarship_club_school_id"', $html);
+        $this->assertStringContainsString('name="date_of_birth"', $html);
+        $this->assertStringNotContainsString('name="full_name"', $html);
+        $this->assertStringContainsString('School/University', $html);
+        $this->assertStringContainsString('Cellphone Number', $html);
         $this->assertGreaterThan(
             strpos($html, 'scholar-profile-form'),
             strpos($html, 'Save Guardian Info')

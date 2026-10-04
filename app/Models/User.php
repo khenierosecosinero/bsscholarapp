@@ -343,9 +343,17 @@ class User extends Authenticatable
 
     public function scholarshipClubName(): string
     {
-        return $this->scholarshipClub?->name
-            ?? $this->scholarshipProgram?->clubName()
-            ?? 'Unassigned';
+        $clubName = $this->scholarshipClub?->name;
+        if ($clubName && ScholarshipClub::isRetiredName($clubName)) {
+            $clubName = null;
+        }
+
+        $programName = $this->scholarshipProgram?->clubName();
+        if ($programName && ScholarshipClub::isRetiredName($programName)) {
+            $programName = null;
+        }
+
+        return $clubName ?? $programName ?? 'Unassigned';
     }
 
     /**
@@ -495,6 +503,16 @@ class User extends Authenticatable
     public function scholarshipClubSchool(): BelongsTo
     {
         return $this->belongsTo(ScholarshipClubSchool::class, 'scholarship_club_school_id');
+    }
+
+    /**
+     * Current registered School/University for reports and profile display.
+     */
+    public function registeredSchoolName(): string
+    {
+        $name = trim((string) ($this->scholarshipClubSchool?->name ?: $this->school_university ?: ''));
+
+        return $name !== '' ? $name : 'Unassigned';
     }
 
     /**

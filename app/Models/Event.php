@@ -72,9 +72,11 @@ class Event extends Model
     {
         $clubs = $this->scholarshipProgram?->relationLoaded('clubs')
             ? $this->scholarshipProgram->clubs
-            : $this->scholarshipProgram?->clubs()->active()->orderBy('name')->get();
+            : $this->scholarshipProgram?->clubs()->available()->orderBy('name')->get();
 
-        $clubs = collect($clubs);
+        $clubs = collect($clubs)->reject(
+            fn ($club) => $club instanceof ScholarshipClub && ScholarshipClub::isRetiredName($club->name)
+        );
 
         if ($selectedClubId) {
             $selected = $clubs->firstWhere('id', $selectedClubId);

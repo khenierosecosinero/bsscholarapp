@@ -35,37 +35,6 @@
     </div>
 </section>
 
-<div class="staff-card" style="margin-top:20px">
-    <div class="staff-card-header"><h2>Scholar Completion</h2></div>
-    <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table">
-            <thead>
-                <tr>
-                    <th>Scholar</th>
-                    <th>Approved Hours</th>
-                    <th>Pending Hours</th>
-                    <th>Remaining</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($report['rows'] as $row)
-                    <tr>
-                        <td data-label="Scholar">
-                            <a href="{{ route('staff.scholars.show', $row['scholar']) }}">{{ $row['scholar']->full_name }}</a>
-                            <div class="staff-muted">{{ $row['scholar']->scholar_id }}</div>
-                        </td>
-                        <td data-label="Approved Hours">{{ number_format($row['approved'], 2) }}</td>
-                        <td data-label="Pending Hours">{{ number_format($row['pending'], 2) }}</td>
-                        <td data-label="Remaining">{{ number_format($row['remaining'], 2) }}</td>
-                        <td data-label="Status"><span class="staff-badge {{ $row['status'] === 'Completed' ? 'green' : ($row['status'] === 'In Progress' ? 'blue' : 'gray') }}">{{ $row['status'] }}</span></td>
-                    </tr>
-                @empty
-                    <tr><td colspan="5">No scholars found for this location.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-</div>
+@include('partials.staff-report-school-section', ['report' => $report, 'kind' => 'completion'])
 
 @endsection

@@ -19,8 +19,16 @@
                 @endforeach
             </select>
         </div>
+        <div class="staff-report-period-field">
+            <label for="report-school">School/University</label>
+            <select id="report-school" name="school" class="staff-select" onchange="this.form.submit()">
+                @foreach($reportSchoolOptions as $option)
+                    <option value="{{ $option['key'] }}" @selected($selectedSchoolKey === $option['key'])>{{ $option['label'] }}</option>
+                @endforeach
+            </select>
+        </div>
     </form>
     <p class="staff-report-period-banner">
-        Showing <strong>{{ $staff->scholarshipClubLabel() }}</strong> · <strong>{{ $reportFilter['academic_year'] }}</strong> · <strong>{{ $reportFilter['semester_label'] }}</strong>
+        Showing <strong>{{ $staff->scholarshipClubLabel() }}</strong> · <strong>{{ $reportFilter['academic_year'] }}</strong> · <strong>{{ $reportFilter['semester_label'] }}</strong> · <strong>{{ $selectedSchoolLabel }}</strong>
     </p>
 </div>

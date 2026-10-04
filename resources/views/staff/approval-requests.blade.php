@@ -72,7 +72,7 @@
                         <td data-label="Actions">
                             <div class="staff-stack-value">
                                 <div class="staff-action-group staff-approval-actions" data-approval-actions>
-                                    <a href="{{ route('staff.scholars.show', $request) }}" class="staff-btn staff-btn-sm staff-btn-view" title="View scholar registration">View</a>
+                                    <a href="{{ route('staff.scholars.show', $request) }}" class="staff-btn staff-btn-sm staff-btn-view" title="View scholar registration">VIEW</a>
                                     <form
                                         method="POST"
                                         action="{{ route('staff.scholars.approve', $request) }}"
@@ -80,7 +80,7 @@
                                         data-no-loading="true"
                                     >
                                         @csrf
-                                        <button type="submit" class="staff-btn staff-btn-sm staff-btn-success" title="Approve scholar account">Approve</button>
+                                        <button type="submit" class="staff-btn staff-btn-sm staff-btn-success" title="Approve scholar account">APPROVE</button>
                                     </form>
                                     <form
                                         method="POST"
@@ -96,7 +96,7 @@
                                         data-no-loading="true"
                                     >
                                         @csrf
-                                        <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger" title="Reject and delete scholar account">Reject</button>
+                                        <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger" title="Reject and delete scholar account">REJECT</button>
                                     </form>
                                 </div>
                             </div>

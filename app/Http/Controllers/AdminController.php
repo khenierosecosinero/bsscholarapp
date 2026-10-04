@@ -276,9 +276,7 @@ class AdminController extends Controller
         $search = trim((string) $request->get('search', ''));
         $clubId = $request->integer('club') ?: null;
 
-        if ($clubId && ! ScholarshipClub::query()->whereKey($clubId)->exists()) {
-            $clubId = null;
-        }
+        $clubId = ScholarshipClub::selectableId($clubId);
 
         $scholars = $this->admin->scholarDirectoryQuery($scope['locationKey'], $clubId)
             ->when($search !== '', function ($q) use ($search) {
@@ -330,9 +328,7 @@ class AdminController extends Controller
             $region = '';
         }
 
-        if ($clubId && ! ScholarshipClub::query()->whereKey($clubId)->exists()) {
-            $clubId = null;
-        }
+        $clubId = ScholarshipClub::selectableId($clubId);
 
         $directory = fn () => $this->admin->staffDirectoryQuery(
             $scope['locationKey'],
@@ -531,9 +527,7 @@ class AdminController extends Controller
             $region = '';
         }
 
-        if ($clubId && ! ScholarshipClub::query()->whereKey($clubId)->exists()) {
-            $clubId = null;
-        }
+        $clubId = ScholarshipClub::selectableId($clubId);
 
         $events = $this->admin->eventsDirectoryQuery(
             $scope['locationKey'],
@@ -564,7 +558,7 @@ class AdminController extends Controller
         $this->assertEventInAdminScope($request, $event);
 
         $event->load([
-            'scholarshipProgram.clubs' => fn ($clubs) => $clubs->active()->orderBy('name'),
+            'scholarshipProgram.clubs' => fn ($clubs) => $clubs->available()->orderBy('name'),
         ]);
         $event->syncStatusFromSchedule();
 
@@ -649,9 +643,7 @@ class AdminController extends Controller
             $region = '';
         }
 
-        if ($clubId && ! ScholarshipClub::query()->whereKey($clubId)->exists()) {
-            $clubId = null;
-        }
+        $clubId = ScholarshipClub::selectableId($clubId);
 
         $programIds = $this->admin->directoryProgramIds(
             $scope['locationKey'],
@@ -718,9 +710,7 @@ class AdminController extends Controller
             $region = '';
         }
 
-        if ($clubId && ! ScholarshipClub::query()->whereKey($clubId)->exists()) {
-            $clubId = null;
-        }
+        $clubId = ScholarshipClub::selectableId($clubId);
 
         $documentsQuery = $this->admin->documentsDirectoryQuery(
             $scope['locationKey'],

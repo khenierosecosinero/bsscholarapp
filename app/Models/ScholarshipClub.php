@@ -52,6 +52,88 @@ class ScholarshipClub extends Model
     }
 
     /**
+     * Names retired from the system. They must not appear as selectable Scholarship Clubs.
+     *
+     * @return list<string>
+     */
+    public static function retiredNames(): array
+    {
+        return [
+            'batang surigaonon scholars club',
+            "batang surigaonon scholar's club",
+            'batang surigaonon scholar club',
+        ];
+    }
+
+    public static function isRetiredName(?string $name): bool
+    {
+        if ($name === null || trim($name) === '') {
+            return false;
+        }
+
+        return in_array(mb_strtolower(static::normalizeName($name)), static::retiredNames(), true);
+    }
+
+    public static function assertNameIsAvailable(string $name): void
+    {
+        if (static::isRetiredName($name)) {
+            throw ValidationException::withMessages([
+                'scholarship_club_name' => 'That Scholarship Club is no longer available.',
+            ]);
+        }
+    }
+
+    public function scopeNotRetired(Builder $query): Builder
+    {
+        foreach (static::retiredNames() as $name) {
+            $query->whereRaw('LOWER(TRIM(name)) != ?', [$name]);
+        }
+
+        return $query;
+    }
+
+    public function scopeAvailable(Builder $query): Builder
+    {
+        return $query->active()->notRetired();
+    }
+
+    public static function selectableId(?int $id): ?int
+    {
+        if (! $id) {
+            return null;
+        }
+
+        return static::query()->available()->whereKey($id)->exists() ? $id : null;
+    }
+
+    /**
+     * Delete retired Scholarship Club rows and unlink members. Other clubs are left unchanged.
+     */
+    public static function removeRetiredClubs(): int
+    {
+        $removed = 0;
+
+        foreach (static::query()->orderBy('id')->get() as $club) {
+            if (! static::isRetiredName($club->name)) {
+                continue;
+            }
+
+            User::query()
+                ->where('scholarship_club_id', $club->id)
+                ->update([
+                    'scholarship_club_id' => null,
+                    'scholarship_club_school_id' => null,
+                ]);
+
+            $club->schools()->delete();
+            $club->delete();
+            $removed++;
+        }
+
+        return $removed;
+    }
+
+    /**
      * Clubs registered at a province and optional municipality/city.
      * Does not create, update, or delete club records.
      */
@@ -83,7 +165,7 @@ class ScholarshipClub extends Model
     public static function registrationOptions(): array
     {
         return static::query()
-            ->active()
+            ->available()
             ->with(['schools' => fn ($query) => $query->orderBy('name')])
             ->orderBy('name')
             ->orderBy('city')
@@ -119,6 +201,8 @@ class ScholarshipClub extends Model
                 'scholarship_club_name' => 'Please enter a Scholarship Club Name.',
             ]);
         }
+
+        static::assertNameIsAvailable($name);
 
         $program = ScholarshipProgram::query()->active()->find($programId);
 
@@ -165,6 +249,8 @@ class ScholarshipClub extends Model
                 'scholarship_club_name' => 'Please enter a Scholarship Club Name.',
             ]);
         }
+
+        static::assertNameIsAvailable($name);
 
         $program = ScholarshipProgram::query()->active()->find($programId);
 

@@ -30,9 +30,11 @@ class ApprovalRequestsLayoutTest extends TestCase
         $this->assertStringContainsString('>Pending<', $html);
         $this->assertStringContainsString('staff-approval-status', $html);
         $this->assertStringContainsString('staff-approval-actions', $html);
-        $this->assertStringContainsString('>View</a>', $html);
-        $this->assertStringContainsString('>Approve</button>', $html);
-        $this->assertStringContainsString('>Reject</button>', $html);
+        $this->assertStringContainsString('>VIEW</a>', $html);
+        $this->assertStringContainsString('>APPROVE</button>', $html);
+        $this->assertStringContainsString('>REJECT</button>', $html);
+        $this->assertLessThan(strpos($html, '>APPROVE</button>'), strpos($html, '>VIEW</a>'));
+        $this->assertLessThan(strpos($html, '>REJECT</button>'), strpos($html, '>APPROVE</button>'));
         $this->assertStringContainsString('data-ajax-approval="approve"', $html);
         $this->assertStringContainsString('data-ajax-approval="reject"', $html);
         $this->assertStringContainsString(route('staff.scholars.show', User::query()->where('email', 'pending-approval@example.com')->first()), $html);

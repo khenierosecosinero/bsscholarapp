@@ -35,26 +35,90 @@ class ProfileAcademicFieldsTest extends TestCase
 
         $this->actingAs($scholar)
             ->put(route('user.profile.update'), [
-                'full_name' => $scholar->full_name,
+                'full_name' => 'Should Stay Academic Scholar',
+                'city' => 'Dapa',
+                'cellphone_number' => '09171234567',
                 'course_year_level' => 'Bachelor of Science in Computer Engineering',
                 'year_level' => '3rd Year',
                 'scholarship_club_school_id' => $secondSchool->id,
+                'date_of_birth' => '2004-05-12',
             ])
-            ->assertRedirect()
-            ->assertSessionHas('success');
+            ->assertRedirect(route('user.profile', ['updated' => 1]))
+            ->assertSessionHas('success', 'Profile updated successfully.');
 
         $scholar->refresh();
+        $this->assertSame('Academic Scholar', $scholar->full_name);
+        $this->assertSame('Dapa', $scholar->city);
+        $this->assertSame('09171234567', $scholar->cellphone_number);
         $this->assertSame('Bachelor of Science in Computer Engineering', $scholar->course_year_level);
         $this->assertSame('3rd Year', $scholar->year_level);
         $this->assertSame($secondSchool->id, $scholar->scholarship_club_school_id);
         $this->assertSame('Siargao National Science High School', $scholar->school_university);
+        $this->assertSame('2004-05-12', $scholar->date_of_birth?->format('Y-m-d'));
 
         $this->actingAs($scholar)
-            ->get(route('user.profile'))
+            ->get(route('user.profile', ['updated' => 1]))
             ->assertOk()
+            ->assertSee('Profile updated successfully.')
             ->assertSee('Bachelor of Science in Computer Engineering')
             ->assertSee('value="3rd Year"', false)
-            ->assertSee('value="'.$secondSchool->id.'"', false);
+            ->assertSee('value="'.$secondSchool->id.'"', false)
+            ->assertDontSee('name="full_name"', false);
+
+        $staff = User::register([
+            'full_name' => 'Report Check Staff',
+            'scholar_id' => 'STAFF-PROFILE-REPORT',
+            'email' => 'profile-report-staff@example.com',
+            'password' => 'password123',
+            'role' => User::ROLE_SCHOLAR_STAFF,
+            'status' => User::STATUS_APPROVED,
+            'scholarship_program_id' => $scholar->scholarship_program_id,
+            'scholarship_club_id' => $club->id,
+            'city' => 'Dapa',
+            'province' => 'Surigao del Norte',
+        ]);
+
+        $this->actingAs($staff)
+            ->get(route('staff.reports.completion'))
+            ->assertOk()
+            ->assertSee('Siargao National Science High School');
+
+        $this->actingAs($staff)
+            ->get(route('staff.reports.service-hours'))
+            ->assertOk()
+            ->assertSee('Siargao National Science High School');
+
+        $this->actingAs($staff)
+            ->get(route('staff.scholars.show', $scholar))
+            ->assertOk()
+            ->assertSee('Siargao National Science High School')
+            ->assertSee('Bachelor of Science in Computer Engineering')
+            ->assertSee('3rd Year');
+    }
+
+    public function test_profile_success_flash_survives_presence_polling(): void
+    {
+        [$scholar] = $this->makeApprovedScholarWithSchool();
+
+        $this->actingAs($scholar)
+            ->put(route('user.profile.update'), [
+                'city' => 'Dapa',
+                'cellphone_number' => '09170001111',
+                'course_year_level' => $scholar->course_year_level,
+                'year_level' => $scholar->year_level,
+                'scholarship_club_school_id' => $scholar->scholarship_club_school_id,
+                'date_of_birth' => '2002-01-01',
+            ])
+            ->assertRedirect(route('user.profile', ['updated' => 1]))
+            ->assertSessionHas('success', 'Profile updated successfully.');
+
+        $this->actingAs($scholar)->postJson(route('user.presence'))->assertOk();
+        $this->actingAs($scholar)->getJson(route('user.attendance.status'))->assertOk();
+
+        $this->actingAs($scholar)
+            ->get(route('user.profile', ['updated' => 1]))
+            ->assertOk()
+            ->assertSee('Profile updated successfully.');
     }
 
     public function test_profile_rejects_course_initials_invalid_year_and_other_club_schools(): void
@@ -83,12 +147,14 @@ class ProfileAcademicFieldsTest extends TestCase
             ->from(route('user.profile'))
             ->put(route('user.profile.update'), [
                 'full_name' => $scholar->full_name,
+                'cellphone_number' => '12345',
+                'date_of_birth' => now()->addDay()->toDateString(),
                 'course_year_level' => 'BSICT',
                 'year_level' => '5th Year',
                 'scholarship_club_school_id' => $otherSchool->id,
             ])
             ->assertRedirect(route('user.profile'))
-            ->assertSessionHasErrors(['course_year_level', 'year_level', 'scholarship_club_school_id']);
+            ->assertSessionHasErrors(['cellphone_number', 'date_of_birth', 'course_year_level', 'year_level', 'scholarship_club_school_id']);
 
         $scholar->refresh();
         $this->assertSame('Bachelor of Science in Information Technology', $scholar->course_year_level);

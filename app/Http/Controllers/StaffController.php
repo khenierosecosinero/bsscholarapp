@@ -67,6 +67,7 @@ class StaffController extends Controller
         $search = trim((string) $request->get('search', ''));
 
         $scholars = $this->staffData->scholarsQuery($programIds, $staff)
+            ->where('status', User::STATUS_APPROVED)
             ->with(['scholarshipProgram', 'scholarshipClub'])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
@@ -80,6 +81,7 @@ class StaffController extends Controller
             ->withQueryString();
 
         $stats = $this->staffData->scholarPageStats($programIds, $staff);
+        $stats['total_scholars'] = $stats['active_scholars'];
 
         return view('staff.scholars', array_merge(
             $this->layoutData('scholars', 'Scholars', 'Scholars registered in '.$staff->scholarshipClubLabel().'.'),
@@ -96,6 +98,7 @@ class StaffController extends Controller
         $presence = [];
 
         $this->staffData->scholarsQuery($programIds, $staff)
+            ->where('status', User::STATUS_APPROVED)
             ->get(['id', 'role', 'last_seen_at'])
             ->each(function (User $scholar) use (&$presence) {
                 $presence[(string) $scholar->id] = [
@@ -483,12 +486,12 @@ class StaffController extends Controller
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
         $this->scholar->syncCompletedEventHoursForPrograms($programIds);
-        $context = $this->staffData->reportContext($request, $programIds);
+        $context = $this->staffData->reportContext($request, $programIds, $staff);
 
         return view('staff.reports.service-hours', array_merge(
             $this->layoutData('service-hours-reports', 'Service Hours Reports', 'Track and analyze scholar service hours and completion status.', 'Service Hours Reports'),
             $context,
-            ['report' => $this->staffData->serviceHoursReport($programIds, $context['reportFilter'], $staff)]
+            ['report' => $this->staffData->serviceHoursReport($programIds, $context['reportFilter'], $staff, null, $context['schoolFilter'])]
         ));
     }
 
@@ -496,12 +499,12 @@ class StaffController extends Controller
     {
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
-        $context = $this->staffData->reportContext($request, $programIds);
+        $context = $this->staffData->reportContext($request, $programIds, $staff);
 
         return view('staff.reports.attendance', array_merge(
             $this->layoutData('attendance-reports', 'Attendance Reports', 'Track and analyze attendance records and participation status.', 'Attendance Reports'),
             $context,
-            ['report' => $this->staffData->attendanceReport($programIds, $context['reportFilter'])]
+            ['report' => $this->staffData->attendanceReport($programIds, $context['reportFilter'], $staff, $context['schoolFilter'])]
         ));
     }
 
@@ -509,12 +512,12 @@ class StaffController extends Controller
     {
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
-        $context = $this->staffData->reportContext($request, $programIds);
+        $context = $this->staffData->reportContext($request, $programIds, $staff);
 
         return view('staff.reports.participation', array_merge(
             $this->layoutData('participation-reports', 'Participation Reports', 'Track and analyze scholar event participation and engagement.', 'Participation Reports'),
             $context,
-            ['report' => $this->staffData->participationReport($programIds, $context['reportFilter'])]
+            ['report' => $this->staffData->participationReport($programIds, $context['reportFilter'], $staff, $context['schoolFilter'])]
         ));
     }
 
@@ -523,12 +526,12 @@ class StaffController extends Controller
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
         $this->scholar->syncCompletedEventHoursForPrograms($programIds);
-        $context = $this->staffData->reportContext($request, $programIds);
+        $context = $this->staffData->reportContext($request, $programIds, $staff);
 
         return view('staff.reports.completion', array_merge(
             $this->layoutData('completion-reports', 'Completion Reports', 'Track and analyze scholar completion and achievement status.', 'Completion Reports'),
             $context,
-            ['report' => $this->staffData->completionReport($programIds, $context['reportFilter'], $staff)]
+            ['report' => $this->staffData->completionReport($programIds, $context['reportFilter'], $staff, $context['schoolFilter'])]
         ));
     }
 

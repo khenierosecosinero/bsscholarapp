@@ -311,6 +311,10 @@ class UserController extends Controller
 
     public function profile(Request $request)
     {
+        if ($request->boolean('updated')) {
+            session()->now('success', 'Profile updated successfully.');
+        }
+
         $layout = $this->layoutData(
             'profile',
             'Profile & Settings',

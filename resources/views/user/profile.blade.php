@@ -24,7 +24,6 @@
             <div class="card profile-section-card">
                 @php
                     $profileInfoErrors = $errors->hasAny([
-                        'full_name',
                         'city',
                         'cellphone_number',
                         'scholarship_club_school_id',
@@ -73,7 +72,7 @@
                 <form id="scholar-profile-form" method="POST" action="{{ route('user.profile.update') }}" class="profile-section-form" data-profile-edit-form data-start-editing="{{ $profileInfoErrors ? '1' : '0' }}">
                     @csrf @method('PUT')
                     <div class="form-grid profile-form-grid">
-                        <div class="form-group"><label for="full_name">Full Name</label><input id="full_name" type="text" name="full_name" value="{{ old('full_name', $user->full_name) }}" required autocomplete="name" data-profile-editable data-saved-value="{{ $user->full_name }}"></div>
+                        <div class="form-group"><label for="full_name">Full Name</label><input id="full_name" type="text" value="{{ $user->full_name }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group"><label for="scholar_id">Scholar ID</label><input id="scholar_id" type="text" value="{{ $user->scholar_id }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group form-group-wide"><label for="email">Login Email</label><input id="email" type="email" value="{{ $user->email }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group">
@@ -91,9 +90,15 @@
                         <div class="form-group form-group-wide"><label for="registered_program">Scholarship Club</label><input id="registered_program" type="text" value="{{ $user->scholarshipClubName() }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group"><label for="registered_club_city">Scholarship Club Municipality / City</label><input id="registered_club_city" type="text" value="{{ $user->scholarshipClubCity() ?? '—' }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group"><label for="registered_province">Scholarship Club Province</label><input id="registered_province" type="text" value="{{ $user->scholarshipClubProvince() ?? '—' }}" readonly disabled aria-readonly="true"></div>
-                        <div class="form-group"><label for="cellphone_number">Cellphone</label><input id="cellphone_number" type="text" name="cellphone_number" value="{{ old('cellphone_number', $user->cellphone_number) }}" autocomplete="tel" data-profile-editable data-saved-value="{{ $user->cellphone_number }}"></div>
                         <div class="form-group">
-                            <label for="scholarship_club_school_id">School</label>
+                            <label for="cellphone_number">Cellphone Number</label>
+                            <input id="cellphone_number" type="text" name="cellphone_number" value="{{ old('cellphone_number', $user->cellphone_number) }}" autocomplete="tel" inputmode="tel" placeholder="09XXXXXXXXX" data-profile-editable data-saved-value="{{ $user->cellphone_number }}">
+                            @error('cellphone_number')
+                                <small class="muted" style="color:#dc2626">{{ $message }}</small>
+                            @enderror
+                        </div>
+                        <div class="form-group">
+                            <label for="scholarship_club_school_id">School/University</label>
                             <select id="scholarship_club_school_id" name="scholarship_club_school_id" class="form-select" data-profile-editable data-saved-value="{{ $user->scholarship_club_school_id }}">
                                 <option value="">Select school</option>
                                 @foreach($clubSchools ?? [] as $school)
@@ -133,6 +138,9 @@
                             <div class="date-input-wrap">
                                 <input id="date_of_birth" type="date" name="date_of_birth" value="{{ old('date_of_birth', $user->date_of_birth?->format('Y-m-d')) }}" autocomplete="bday" data-profile-editable data-saved-value="{{ $user->date_of_birth?->format('Y-m-d') }}">
                             </div>
+                            @error('date_of_birth')
+                                <small class="muted" style="color:#dc2626">{{ $message }}</small>
+                            @enderror
                         </div>
                     </div>
                     <div class="form-actions-right profile-edit-actions">
@@ -371,6 +379,14 @@
     const fromUrl = new URLSearchParams(window.location.search).get('tab') || window.location.hash.replace('#', '');
     if (fromUrl && allowed.includes(fromUrl)) {
         activateTab(fromUrl, fromUrl !== 'profile-info');
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('updated') === '1') {
+        params.delete('updated');
+        const next = new URL(window.location.href);
+        next.search = params.toString();
+        history.replaceState(null, '', next);
     }
 })();
 </script>

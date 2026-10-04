@@ -13,6 +13,7 @@ use App\Http\Controllers\StaffController;
 use App\Http\Controllers\StaffDocumentController;
 use App\Http\Controllers\StaffSchoolController;
 use App\Http\Controllers\UserController;
+use App\Http\Middleware\KeepFlashedAlerts;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -130,7 +131,7 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
     Route::middleware('scholar.staff.approved')->group(function () {
         Route::get('/dashboard', [StaffController::class, 'dashboard'])->name('dashboard');
         Route::get('/scholars', [StaffController::class, 'scholars'])->name('scholars');
-        Route::get('/scholar-presence', [StaffController::class, 'scholarPresence'])->name('scholars.presence');
+        Route::get('/scholar-presence', [StaffController::class, 'scholarPresence'])->middleware(KeepFlashedAlerts::class)->name('scholars.presence');
         Route::get('/scholars/{scholar}', [StaffController::class, 'showScholar'])->name('scholars.show');
         Route::get('/events', [StaffController::class, 'events'])->name('events');
         Route::get('/events/create', [StaffController::class, 'createEvent'])->name('events.create');
@@ -173,8 +174,8 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
 
 Route::middleware(['auth', 'scholar'])->prefix('user')->name('user.')->group(function () {
     Route::get('/dashboard', [UserController::class, 'dashboard'])->name('dashboard');
-    Route::post('/presence', [UserController::class, 'presenceHeartbeat'])->name('presence');
-    Route::post('/presence/leave', [UserController::class, 'presenceLeave'])->name('presence.leave');
+    Route::post('/presence', [UserController::class, 'presenceHeartbeat'])->middleware(KeepFlashedAlerts::class)->name('presence');
+    Route::post('/presence/leave', [UserController::class, 'presenceLeave'])->middleware(KeepFlashedAlerts::class)->name('presence.leave');
     Route::post('/dismiss-pending-modal', [UserController::class, 'dismissPendingModal'])->name('dismiss-pending-modal');
     Route::get('/announcements', [UserController::class, 'announcements'])->name('announcements');
     Route::get('/announcements/{announcement}', [UserController::class, 'announcementShow'])->name('announcements.show');
@@ -183,7 +184,7 @@ Route::middleware(['auth', 'scholar'])->prefix('user')->name('user.')->group(fun
 
     Route::middleware('scholar.approved')->group(function () {
         Route::get('/events', [UserController::class, 'events'])->name('events');
-        Route::get('/attendance-status', [UserController::class, 'attendanceStatus'])->name('attendance.status');
+        Route::get('/attendance-status', [UserController::class, 'attendanceStatus'])->middleware(KeepFlashedAlerts::class)->name('attendance.status');
         Route::get('/calendar', [UserController::class, 'calendar'])->name('calendar');
         Route::get('/service-hours', [UserController::class, 'serviceHours'])->name('service-hours');
         Route::get('/documents', [UserController::class, 'documents'])->name('documents');

@@ -132,7 +132,12 @@ class AuthController extends Controller
             'scholarship_club_id' => [
                 'required',
                 'integer',
-                Rule::exists('scholarship_clubs', 'id')->where(fn ($query) => $query->where('is_active', true)),
+                Rule::exists('scholarship_clubs', 'id')->where(function ($query) {
+                    $query->where('is_active', true);
+                    foreach (ScholarshipClub::retiredNames() as $name) {
+                        $query->whereRaw('LOWER(TRIM(name)) != ?', [$name]);
+                    }
+                }),
             ],
             'scholarship_club_school_id' => [
                 'required',

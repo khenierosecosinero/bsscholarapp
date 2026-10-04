@@ -39,7 +39,7 @@ class ScholarshipProgramAssignmentService
     public function resolveClubAssignment(int $clubId): array
     {
         $club = ScholarshipClub::query()
-            ->active()
+            ->available()
             ->with('program')
             ->find($clubId);
 

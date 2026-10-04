@@ -38,36 +38,6 @@
     </div>
 </section>
 
-<div class="staff-card" style="margin-top:20px">
-    <div class="staff-card-header"><h2>Participation by Event</h2></div>
-    <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table">
-            <thead>
-                <tr>
-                    <th>Event</th>
-                    <th>Date</th>
-                    <th>Registered</th>
-                    <th>Checked In</th>
-                    <th>Approved</th>
-                    <th>Hours</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($report['events'] as $event)
-                    <tr>
-                        <td data-label="Event"><a href="{{ route('staff.events.show', $event) }}">{{ $event->title }}</a></td>
-                        <td data-label="Date">{{ $event->starts_at?->format('M j, Y') ?? '—' }}</td>
-                        <td data-label="Registered">{{ $event->registrations_count }}</td>
-                        <td data-label="Checked In">{{ $event->checked_in_count }}</td>
-                        <td data-label="Approved">{{ $event->approved_count }}</td>
-                        <td data-label="Hours">{{ number_format((float) $event->service_hours, 2) }}</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="6">No events found.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-</div>
+@include('partials.staff-report-school-section', ['report' => $report, 'kind' => 'participation'])
 
 @endsection

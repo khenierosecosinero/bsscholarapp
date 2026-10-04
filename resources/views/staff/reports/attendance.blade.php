@@ -42,51 +42,6 @@
     </div>
 </section>
 
-<div class="staff-card" style="margin-top:20px">
-    <div class="staff-card-header">
-        <h2>Latest Attendance Records</h2>
-        <a href="{{ route('staff.attendance') }}" class="staff-card-link">Open Attendance</a>
-    </div>
-    <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table">
-            <thead>
-                <tr>
-                    <th>Scholar</th>
-                    <th>Event</th>
-                    <th>Check In / Out</th>
-                    <th>Hours</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($report['records'] as $attendance)
-                    <tr>
-                        <td data-label="Scholar">{{ $attendance->user?->full_name ?? '—' }}</td>
-                        <td data-label="Event">{{ $attendance->event?->title ?? '—' }}</td>
-                        <td data-label="Check In / Out">
-                            {{ $attendance->check_in?->format('g:i A') ?? '—' }}
-                            <div class="staff-muted">{{ $attendance->check_out?->format('g:i A') ?? '—' }}</div>
-                        </td>
-                        <td data-label="Hours">{{ $attendance->hoursLabel() }}</td>
-                        <td data-label="Status">
-                            @php
-                                $statusClass = match($attendance->status) {
-                                    'approved' => 'green',
-                                    'rejected', 'failed_to_check_in' => 'red',
-                                    default => 'orange',
-                                };
-                            @endphp
-                            <span class="staff-badge {{ $statusClass }}">{{ $attendance->statusLabel() }}</span>
-                        </td>
-                        <td data-label="Actions">@include('partials.staff-attendance-actions', ['attendance' => $attendance])</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="6">No attendance records found.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-</div>
+@include('partials.staff-report-school-section', ['report' => $report, 'kind' => 'attendance'])
 
 @endsection

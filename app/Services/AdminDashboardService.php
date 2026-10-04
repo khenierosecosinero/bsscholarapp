@@ -127,7 +127,7 @@ class AdminDashboardService
         $address = $this->selectedAddress($locationKey);
 
         return ScholarshipClub::query()
-            ->active()
+            ->available()
             ->forLocation($address['province'], $address['city'])
             ->orderBy('name')
             ->orderBy('city')
@@ -227,7 +227,7 @@ class AdminDashboardService
     public function eventsDirectoryQuery(?string $locationKey, ?int $clubId, ?string $region = null)
     {
         $query = Event::query()
-            ->with(['scholarshipProgram.clubs' => fn ($clubs) => $clubs->active()->orderBy('name')])
+            ->with(['scholarshipProgram.clubs' => fn ($clubs) => $clubs->available()->orderBy('name')])
             ->withVerifiedParticipantCount();
 
         if ($locationKey !== null && $locationKey !== '' && $locationKey !== 'all') {
@@ -268,7 +268,7 @@ class AdminDashboardService
     public function scholarshipClubFilterOptions()
     {
         return ScholarshipClub::query()
-            ->active()
+            ->available()
             ->with('program')
             ->orderBy('name')
             ->orderBy('city')
@@ -304,7 +304,7 @@ class AdminDashboardService
         $address = $this->selectedAddress($locationKey);
 
         $query = ScholarshipClub::query()
-            ->active()
+            ->available()
             ->forLocation($address['province'], $programType === 'city_municipality' ? $address['city'] : null)
             ->orderBy('name')
             ->orderBy('city');
@@ -431,7 +431,7 @@ class AdminDashboardService
             'total_clubs' => $totalClubs ?? (
                 $clubIds !== null
                     ? count($clubIds)
-                    : ScholarshipClub::query()->active()->count()
+                    : ScholarshipClub::query()->available()->count()
             ),
             'total_participation' => $participation['participated'] ?? 0,
             'completed_scholars' => $completion['completed'] ?? 0,
@@ -565,7 +565,7 @@ class AdminDashboardService
         $totalScholars = $approvedScholars + $pendingScholars + $rejectedScholars;
 
         $totalClubs = ScholarshipClub::query()
-            ->active()
+            ->available()
             ->whereIn('scholarship_program_id', $ids)
             ->where('created_at', '<=', $ayEnd)
             ->count();
