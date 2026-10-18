@@ -2,18 +2,17 @@
 
 @section('page-content')
 
+@include('partials.admin-academic-year-selector', ['inputId' => 'admin-hours-year', 'compact' => true])
+
 @include('partials.admin-hours-filter')
 
 @php
     $overview = $report['overview'];
     $period = $report['period'];
     $locationOf = function ($scholar) {
-        $parts = array_filter([
-            $scholar->city ?: $scholar->municipalityName(),
-            $scholar->province ?: $scholar->provinceName(),
-        ]);
+        $address = $scholar->homeAddress();
 
-        return $parts !== [] ? implode(', ', $parts) : '—';
+        return $address !== '' ? $address : '—';
     };
 @endphp
 
@@ -26,8 +25,8 @@
 
 <div class="staff-card">
     <div class="staff-card-header"><h2>Scholar Service Hours</h2></div>
-    <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table">
+    <div class="staff-table-wrap admin-data-table-wrap">
+        <table class="staff-table staff-manage-table admin-data-table admin-hours-table">
             <thead>
                 <tr>
                     <th>Scholar</th>
@@ -36,7 +35,7 @@
                     <th>Approved</th>
                     <th>Pending</th>
                     <th>Remaining</th>
-                    <th>Status</th>
+                    <th class="staff-col-status">Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -48,7 +47,7 @@
                         <td data-label="Approved">{{ number_format($row['approved'], 2) }}</td>
                         <td data-label="Pending">{{ number_format($row['pending'], 2) }}</td>
                         <td data-label="Remaining">{{ number_format($row['remaining'], 2) }}</td>
-                        <td data-label="Status"><span class="staff-badge {{ $row['status'] === 'Completed' ? 'green' : ($row['status'] === 'In Progress' ? 'orange' : 'gray') }}">{{ $row['status'] }}</span></td>
+                        <td data-label="Status" class="staff-col-status"><span class="staff-badge {{ $row['status'] === 'Completed' ? 'green' : ($row['status'] === 'In Progress' ? 'orange' : 'gray') }}">{{ $row['status'] }}</span></td>
                     </tr>
                 @empty
                     <tr class="staff-table-empty"><td colspan="7">No records found</td></tr>

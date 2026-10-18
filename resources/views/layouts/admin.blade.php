@@ -43,31 +43,15 @@
             }
 
             var selectedCity = selectedCityEl ? selectedCityEl.value : '';
-            var regionSelect = form.querySelector('[data-admin-region]');
             var clubSelect = form.querySelector('[data-admin-club]');
 
-            var visibleProvinces = function () {
-                var island = regionSelect ? regionSelect.value : '';
-                if (!island) {
-                    return tree;
-                }
-
-                return tree.filter(function (province) {
-                    return province.island === island;
-                });
-            };
-
             var provinceNode = function () {
-                return visibleProvinces().find(function (province) {
+                return tree.find(function (province) {
                     return province.name === provinceSelect.value;
                 }) || null;
             };
 
             var fillProvinces = function (keepProvince) {
-                if (!regionSelect) {
-                    return;
-                }
-
                 var current = keepProvince ? provinceSelect.value : '';
                 provinceSelect.innerHTML = '';
                 var empty = document.createElement('option');
@@ -75,7 +59,7 @@
                 empty.textContent = 'Select Province';
                 provinceSelect.appendChild(empty);
 
-                visibleProvinces().forEach(function (province) {
+                tree.forEach(function (province) {
                     var option = document.createElement('option');
                     option.value = province.name;
                     option.setAttribute('data-id', province.id || '');
@@ -141,15 +125,9 @@
                     return false;
                 }
 
-                var island = option.getAttribute('data-island') || '';
                 var province = option.getAttribute('data-province') || '';
                 var city = option.getAttribute('data-city') || '';
                 var programId = option.getAttribute('data-program-id') || '';
-
-                if (regionSelect && island) {
-                    regionSelect.value = island;
-                    fillProvinces(true);
-                }
 
                 if (province) {
                     provinceSelect.value = province;
@@ -178,18 +156,6 @@
             if (typeSelect) {
                 typeSelect.addEventListener('change', function () {
                     selectedCity = '';
-                    fillCities(false);
-                    syncLocation();
-                    form.submit();
-                });
-            }
-            if (regionSelect) {
-                regionSelect.addEventListener('change', function () {
-                    selectedCity = '';
-                    if (clubSelect) {
-                        clubSelect.value = '';
-                    }
-                    fillProvinces(false);
                     fillCities(false);
                     syncLocation();
                     form.submit();

@@ -36,7 +36,7 @@ class AttendanceDriveStorageService
         }
 
         if (! $this->drive->isConnected()) {
-            Log::info('Skipped BSSA Attendance Drive upload because Google Drive is not connected.', [
+            Log::info('Skipped ATTENDANCE Drive upload because Google Drive is not connected.', [
                 'attendance_id' => $attendance->id,
             ]);
 
@@ -63,14 +63,28 @@ class AttendanceDriveStorageService
 
         $year = $this->yearLabel($attendance);
         $eventTitle = $this->drive->sanitizeDriveName((string) $event->title) ?: 'Event';
-        $folderId = $this->drive->getOrCreateAttendanceEventFolder(
-            $year,
-            (string) $scholar->scholar_id,
-            (string) $scholar->full_name,
-            (int) $event->id,
-            $eventTitle
-        );
-        $fileName = $this->photoFileName($scholar, $eventTitle, $attendance);
+        $originalName = trim((string) ($attendance->photo_original_name ?: ''));
+        $fileName = $originalName !== ''
+            ? $this->drive->sanitizeDriveName($originalName)
+            : $this->photoFileName($scholar, $eventTitle, $attendance);
+
+        try {
+            $folderId = $this->drive->getOrCreateAttendanceEventFolder(
+                $year,
+                (string) $scholar->scholar_id,
+                (string) $scholar->full_name,
+                (int) $event->id,
+                $eventTitle,
+                $scholar
+            );
+        } catch (RuntimeException $e) {
+            Log::warning('ATTENDANCE event folder could not be prepared.', [
+                'attendance_id' => $attendance->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return;
+        }
 
         $existing = $this->drive->findChildFile($fileName, $folderId);
         if ($existing) {
@@ -91,7 +105,7 @@ class AttendanceDriveStorageService
                 Storage::disk('public')->mimeType($path) ?: 'image/jpeg'
             );
         } catch (RuntimeException $e) {
-            Log::warning('BSSA Attendance photo upload failed.', [
+            Log::warning('ATTENDANCE photo upload failed.', [
                 'attendance_id' => $attendance->id,
                 'message' => $e->getMessage(),
             ]);
@@ -127,13 +141,9 @@ class AttendanceDriveStorageService
         }
 
         try {
-            $this->drive->getOrCreateAttendanceRootFolder();
-
-            foreach ($this->academic->managedYears() as $year) {
-                $this->drive->getOrCreateAttendanceYearFolder($year->periodLabel());
-            }
+            $this->drive->ensureOrganizationFolders();
         } catch (Throwable $e) {
-            Log::warning('Could not sync BSSA Attendance academic year folders.', [
+            Log::warning('Could not sync BSSA organization Drive folders.', [
                 'message' => $e->getMessage(),
             ]);
         }
@@ -145,10 +155,12 @@ class AttendanceDriveStorageService
         $end = (int) ($attendance->academic_year_end ?? 0);
 
         if ($start >= 2000 && $end === $start + 1) {
-            return $start.'–'.$end;
+            return $this->drive->driveYearFolderName($start, $end);
         }
 
-        return $this->academic->current()->periodLabel();
+        $current = $this->academic->current();
+
+        return $this->drive->driveYearFolderName((int) $current->year_start, (int) $current->year_end);
     }
 
     private function photoFileName(User $scholar, string $eventTitle, Attendance $attendance): string
@@ -159,7 +171,7 @@ class AttendanceDriveStorageService
         }
 
         $base = $this->drive->sanitizeDriveName(
-            trim((string) $scholar->scholar_id).' - '.trim((string) $scholar->full_name).' - '.$eventTitle
+            trim((string) $scholar->scholar_id).' – '.trim((string) $scholar->full_name).' – '.$eventTitle
         );
 
         return $base.'.'.$extension;

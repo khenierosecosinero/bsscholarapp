@@ -4,7 +4,6 @@
 
 @php
     $backQuery = array_filter([
-        'region' => request('region') ?: null,
         'location' => request('location', $locationKey ?? 'all'),
         'club' => request('club') ?: null,
         'search' => request('search') ?: null,

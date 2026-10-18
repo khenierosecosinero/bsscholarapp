@@ -20,10 +20,11 @@ class AdminDocumentsFilterTest extends TestCase
         $this->actingAs($this->makeAdmin())
             ->get(route('admin.documents'))
             ->assertOk()
-            ->assertSee('All Regions')
-            ->assertSee('Luzon')
-            ->assertSee('Visayas')
-            ->assertSee('Mindanao')
+            ->assertDontSee('All Regions')
+            ->assertDontSee('name="region"', false)
+            ->assertDontSee('>Luzon<', false)
+            ->assertDontSee('>Visayas<', false)
+            ->assertDontSee('>Mindanao<', false)
             ->assertSee('All Scholarship Clubs')
             ->assertSee('Province')
             ->assertSee('Municipality / City')
@@ -90,17 +91,11 @@ class AdminDocumentsFilterTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.documents', ['region' => PhilippineIslandGroup::LUZON]))
             ->assertOk()
+            ->assertDontSee('name="region"', false)
             ->assertSee($luzonScholar->full_name)
-            ->assertDontSee($keniScholar->full_name)
-            ->assertDontSee($dapaScholar->full_name);
-
-        $this->actingAs($admin)
-            ->get(route('admin.documents', ['region' => PhilippineIslandGroup::MINDANAO]))
-            ->assertOk()
             ->assertSee($keniScholar->full_name)
             ->assertSee($dapaScholar->full_name)
-            ->assertSee($provinceScholar->full_name)
-            ->assertDontSee($luzonScholar->full_name);
+            ->assertSee($provinceScholar->full_name);
 
         $this->actingAs($admin)
             ->get(route('admin.documents', ['location' => $dapa->id]))

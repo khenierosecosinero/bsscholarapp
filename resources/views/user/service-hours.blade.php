@@ -16,6 +16,8 @@
     <div class="stat card"><div class="stat-icon purple">&#9203;</div><div class="stat-body"><div class="stat-title">Remaining Hours</div><div class="stat-value purple-text">{{ number_format($hourStats['remaining'], 2) }} hours</div></div></div>
 </section>
 
+@include('partials.program-hour-progress')
+
 <div class="card progress-bar-card">
     <div class="progress-bar-header"><span>Overall Progress ({{ $semesterInfo['semester'] }})</span><strong>{{ $pct }}%</strong></div>
     <div class="progress-bar"><div class="progress-fill" style="width:{{ $pct }}%"></div></div>

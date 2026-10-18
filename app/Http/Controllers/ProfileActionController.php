@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ScholarshipClubSchool;
 use App\Models\ScholarshipProgram;
 use App\Support\CourseCatalog;
+use App\Support\LocationAddress;
 use App\Services\AccountService;
 use App\Services\AcademicSettingsService;
 use App\Services\GoogleDriveService;
@@ -34,9 +35,34 @@ class ProfileActionController extends Controller
     public function update(Request $request)
     {
         $user = Auth::user();
+        $currentProvince = $user->provinceName();
+        $provinceProvided = $request->exists('province');
+        $rawProvince = $provinceProvided ? trim((string) $request->input('province')) : '';
+        $provinceToSave = $currentProvince;
+
+        if ($provinceProvided) {
+            if ($rawProvince === '') {
+                $provinceToSave = null;
+            } else {
+                $canonical = ScholarshipProgram::canonicalPickerProvince($rawProvince);
+                if ($canonical !== null) {
+                    $provinceToSave = $canonical;
+                } elseif ($currentProvince !== null && strcasecmp($currentProvince, $rawProvince) === 0) {
+                    $provinceToSave = $currentProvince;
+                } else {
+                    throw ValidationException::withMessages([
+                        'province' => 'Please choose Surigao del Norte or Surigao del Sur.',
+                    ])->redirectTo(route('user.profile'));
+                }
+            }
+        }
+
+        $keepCurrentCity = filled($provinceToSave)
+            && filled($currentProvince)
+            && strcasecmp((string) $provinceToSave, (string) $currentProvince) === 0;
         $allowedCities = ScholarshipProgram::municipalityOptions(
-            $user->provinceName(),
-            $user->municipalityName()
+            $provinceToSave,
+            $keepCurrentCity ? $user->municipalityName() : null
         );
 
         $clubId = $user->scholarship_club_id;
@@ -62,6 +88,8 @@ class ProfileActionController extends Controller
                 },
             ],
             'date_of_birth' => ['nullable', 'date', 'after:1900-01-01', 'before:today'],
+            'street' => ['nullable', 'string', 'max:255'],
+            'province' => ['nullable', 'string', 'max:255', Rule::in(ScholarshipProgram::provinceOptions($currentProvince))],
             'city' => ['nullable', 'string', 'max:255', Rule::in($allowedCities)],
             'course_year_level' => CourseCatalog::courseRules(),
             'year_level' => ['nullable', 'string', 'max:50', Rule::in(CourseCatalog::yearLevels())],
@@ -75,7 +103,8 @@ class ProfileActionController extends Controller
                 ]
                 : ['nullable'],
         ], [
-            'city.in' => 'Please choose a City Address from the list.',
+            'province.in' => 'Please choose Surigao del Norte or Surigao del Sur.',
+            'city.in' => 'Please choose a Municipality or City that belongs to your Province.',
             'date_of_birth.before' => 'Date of Birth must be a past date.',
             'date_of_birth.after' => 'Please enter a valid Date of Birth.',
             'date_of_birth.date' => 'Please enter a valid Date of Birth.',
@@ -86,8 +115,20 @@ class ProfileActionController extends Controller
 
         $updates = collect($data)->only([
             'date_of_birth',
-            'city',
         ])->all();
+
+        if ($request->exists('street')) {
+            $updates['street'] = LocationAddress::normalizeStreet($data['street'] ?? null);
+        }
+
+        if ($provinceProvided) {
+            $updates['province'] = $provinceToSave;
+        }
+
+        if ($request->exists('city')) {
+            $city = trim((string) ($data['city'] ?? ''));
+            $updates['city'] = $city !== '' ? $city : null;
+        }
 
         $contactNumber = trim((string) ($data['cellphone_number'] ?? ''));
         $updates['cellphone_number'] = $contactNumber !== '' ? $contactNumber : null;
@@ -169,23 +210,22 @@ class ProfileActionController extends Controller
     {
         $user = Auth::user();
 
+        if (! $user->isScholar()) {
+            abort(403, 'Only scholars can set a Start Academic Year on this page.');
+        }
+
         $validated = $request->validate([
-            'year_start' => 'required|integer|min:2000|max:2100',
-            'semester' => 'required|in:1st Semester,2nd Semester',
+            'program_start_year' => ['required', 'integer'],
         ]);
 
-        $this->academic->updateUserPreference($user, $validated);
-        $this->scholar->logActivity($user, 'profile', 'Academic period preference updated', $validated);
-        $this->scholar->notify(
-            $user,
-            'Academic Period Updated',
-            "Your records now reflect {$validated['semester']} of {$validated['year_start']}-".($validated['year_start'] + 1).'.',
-            'system'
-        );
+        $start = $this->scholar->setProgramStartYear($user, (int) $validated['program_start_year']);
+        $this->scholar->logActivity($user, 'profile', 'Start Academic Year updated', [
+            'program_start_year' => $start,
+        ]);
 
         return redirect()
             ->route('user.profile', ['tab' => 'academic-settings'])
-            ->with('success', 'Your academic period has been updated. Service hours and progress now reflect the selected semester.');
+            ->with('success', 'Start Academic Year saved as AY '.$start.'–'.($start + 1).'. Year 1–Year 4 now follow from this year.');
     }
 
     public function updateGlobalAcademicSettings(Request $request)

@@ -132,7 +132,15 @@
                                 </div>
                             @endif
                             @if($att?->status === 'pending' && $att?->isReadyForVerification() && auth()->user()->isAdmin())
-                                <form method="POST" action="{{ route('user.attendances.approve', $att->id) }}" class="attendance-approve-form">
+                                <form
+                                    method="POST"
+                                    action="{{ route('user.attendances.approve', $att->id) }}"
+                                    class="attendance-approve-form"
+                                    data-confirm="Approve this attendance and credit service hours?"
+                                    data-confirm-title="Confirm participation?"
+                                    data-confirm-yes="Confirm"
+                                    data-confirm-no="Cancel"
+                                >
                                     @csrf
                                     <button type="submit" class="btn full">Confirm Participation</button>
                                 </form>

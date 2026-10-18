@@ -19,6 +19,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class ScholarService
@@ -45,6 +46,13 @@ class ScholarService
         $this->programScope->scopeByPrograms($query, $user->visibleLocationIds());
 
         return $query->visibleToAccount($user);
+    }
+
+    public function scopeEventsForSelectedPeriod(Builder $query): Builder
+    {
+        $this->academic->scopeEventsForReport($query, $this->academic->selectedReportFilter());
+
+        return $query;
     }
 
     public function scopeAnnouncementsForUser(Builder $query, User $user): Builder
@@ -95,7 +103,7 @@ class ScholarService
      */
     public function serviceHourStats(User $user, ?AcademicSetting $period = null): array
     {
-        $period ??= $this->academic->forUser($user);
+        $period ??= $this->academic->selectedPeriod();
 
         return $this->statsFromSlot(
             $this->slotFromAllocation($this->allocatedHours($user), $period)
@@ -111,11 +119,13 @@ class ScholarService
 
     public function allocatedHours(User $user): array
     {
-        $cacheKey = (int) $user->id;
+        $year = (int) $this->academic->selectedPeriod()->year_start;
+        $cacheKey = (int) $user->id.':'.$year;
         if (! isset($this->hourAllocationCache[$cacheKey])) {
             $records = $user->attendances()
                 ->whereNotNull('check_in')
                 ->whereIn('status', [Attendance::STATUS_APPROVED, Attendance::STATUS_PENDING])
+                ->where('academic_year_start', $year)
                 ->get(['academic_year_start', 'semester', 'status', 'hours_earned']);
 
             $this->hourAllocationCache[$cacheKey] = $this->allocateHoursFromRecords($records);
@@ -217,7 +227,7 @@ class ScholarService
 
     public function semesterHoursComparison(User $user): array
     {
-        $period = $this->academic->forUser($user);
+        $period = $this->academic->selectedPeriod();
         $required = (float) self::REQUIRED_HOURS;
         $maxScale = 40;
         $allocation = $this->allocatedHours($user);
@@ -275,7 +285,7 @@ class ScholarService
             'approved' => $approved,
             'pending' => $pending,
             'required' => $required,
-            'remaining' => max(0, round($required - $approved, 2)),
+            'remaining' => (float) max(0, round($required - $approved, 2)),
             'raw_approved' => (float) ($slot['raw_approved'] ?? 0),
             'carried_in' => (float) ($slot['carried_in'] ?? 0),
             'carried_out' => (float) ($slot['carried_out'] ?? 0),
@@ -283,46 +293,110 @@ class ScholarService
     }
 
     /**
-     * Year 1 of the 4-year program: scholar year level + current academic
-     * preference, pulled earlier when older stamped attendance exists.
-     * Attendance rows are never rewritten.
+     * Year 1 of this scholar's 4-year program (the original scholarship start).
+     * Null when the scholar has not saved a Start Academic Year yet.
      */
-    public function startingAcademicYear(User $user): int
+    public function startingAcademicYear(User $user): ?int
     {
-        $period = $this->academic->forUser($user);
-        $fromPreference = (int) $period->year_start - ($this->programYearNumber($user) - 1);
-
-        $fromRecords = (int) $user->attendances()
-            ->whereNotNull('academic_year_start')
-            ->where('academic_year_start', '>', 0)
-            ->min('academic_year_start');
-
-        if ($fromRecords > 0) {
-            return min($fromPreference, $fromRecords);
+        if (! $user->isScholar()) {
+            return null;
         }
 
-        return max(2000, $fromPreference);
+        return $user->program_start_year ? (int) $user->program_start_year : null;
     }
 
     /**
-     * Per-semester / per-year completed hours for the scholar's 4-year span.
-     * Pending hours stay out of completed and remaining.
+     * Academic years a scholar may choose as Start Academic Year.
+     * Includes the scholar's saved start year even if it was later removed
+     * from the administrator's configured list.
+     *
+     * @return array<int, string>
+     */
+    public function programStartYearOptions(?User $user = null): array
+    {
+        $options = $this->academic->yearOptions();
+
+        if ($user?->program_start_year) {
+            $year = (int) $user->program_start_year;
+            if (! isset($options[$year])) {
+                $options[$year] = $year.'–'.($year + 1);
+                ksort($options);
+            }
+        }
+
+        return $options;
+    }
+
+    /**
+     * Permanently save Year 1. Viewing filters and the administrator's current
+     * academic year do not change this value.
+     */
+    public function setProgramStartYear(User $user, int $yearStart): int
+    {
+        if (! $user->isScholar()) {
+            throw ValidationException::withMessages([
+                'program_start_year' => 'Only scholars have a Start Academic Year.',
+            ]);
+        }
+
+        $options = $this->academic->yearOptions();
+        if (! isset($options[$yearStart])) {
+            throw ValidationException::withMessages([
+                'program_start_year' => 'Choose a Start Academic Year configured by the Administrator.',
+            ]);
+        }
+
+        if ((int) $user->program_start_year !== $yearStart) {
+            $user->forceFill(['program_start_year' => $yearStart])->save();
+        }
+
+        return $yearStart;
+    }
+
+    /**
+     * Keep an existing Start Academic Year. Does not invent a year when missing.
+     */
+    public function syncProgramStartYear(User $user, bool $recalculate = false): ?int
+    {
+        return $this->startingAcademicYear($user);
+    }
+
+    /**
+     * Year 1 through Year 4 for this scholar. The selected academic year only
+     * highlights a semester. Attendance rows are not moved.
      *
      * @return array<string, mixed>
      */
     public function programHourTracking(User $user): array
     {
         $required = (float) self::REQUIRED_HOURS;
-        $period = $this->academic->forUser($user);
-        $hourStats = $this->serviceHourStats($user, $period);
-        $allocation = $this->allocatedHours($user);
+        $period = $this->academic->selectedPeriod();
         $startYear = $this->startingAcademicYear($user);
-        $endYear = $startYear + 3;
+        $hourStats = $this->serviceHourStats($user, $period);
 
-        if ($allocation !== []) {
-            $recordYears = array_map('intval', array_keys($allocation));
-            $endYear = max($endYear, ...$recordYears);
+        if ($startYear === null) {
+            return [
+                'required' => $required,
+                'start_year' => null,
+                'end_year' => null,
+                'needs_start_year' => true,
+                'year_start' => (int) $period->year_start,
+                'year_end' => (int) $period->year_start + 1,
+                'academic_year' => 'AY '.$period->year_start.'–'.((int) $period->year_start + 1),
+                'years' => [],
+                'current' => $hourStats,
+                'period' => $this->academic->infoForUser($user, $hourStats),
+            ];
         }
+
+        $endYear = $startYear + 3;
+        $allocation = $this->allocateHoursFromRecords(
+            $user->attendances()
+                ->whereNotNull('check_in')
+                ->whereIn('status', [Attendance::STATUS_APPROVED, Attendance::STATUS_PENDING])
+                ->whereBetween('academic_year_start', [$startYear, $endYear])
+                ->get(['academic_year_start', 'semester', 'status', 'hours_earned'])
+        );
 
         $years = [];
         $programYear = 1;
@@ -361,10 +435,30 @@ class ScholarService
             'required' => $required,
             'start_year' => $startYear,
             'end_year' => $endYear,
+            'needs_start_year' => false,
+            'year_start' => (int) $period->year_start,
+            'year_end' => (int) $period->year_start + 1,
+            'academic_year' => 'AY '.$period->year_start.'–'.((int) $period->year_start + 1),
             'years' => $years,
             'current' => $hourStats,
             'period' => $this->academic->infoForUser($user, $hourStats),
         ];
+    }
+
+    /**
+     * Current Year 1–4 placement from Start Academic Year vs the recording year.
+     * Returns 0 when Start Academic Year has not been saved.
+     */
+    public function programYearForScholar(User $user): int
+    {
+        $start = $this->startingAcademicYear($user);
+        if ($start === null) {
+            return 0;
+        }
+
+        $reference = (int) $this->academic->current()->year_start;
+
+        return max(1, min(4, $reference - $start + 1));
     }
 
     /**
@@ -420,13 +514,13 @@ class ScholarService
             'approved' => $approved,
             'pending' => $pending,
             'required' => $required,
-            'remaining' => max(0, round($required - $approved, 2)),
+            'remaining' => (float) max(0, round($required - $approved, 2)),
         ];
     }
 
-    private function programYearNumber(User $user): int
+    public static function programYearIndex(?string $yearLevel): int
     {
-        $raw = strtolower(trim((string) ($user->year_level ?? '')));
+        $raw = strtolower(trim((string) $yearLevel));
         if ($raw === '') {
             return 1;
         }
@@ -454,32 +548,38 @@ class ScholarService
                 'completed' => $hours['approved'],
                 'required' => $hours['required'],
             ],
-            'upcoming_events' => $this->scopeEventsForUser(
-                Event::query()->where('starts_at', '>=', now())
-                    ->where('starts_at', '<=', now()->addWeek()),
-                $user
-            )->count(),
+            'upcoming_events' => $this->countUpcomingEventsForPeriod($user),
             'pending_attendances' => $this->academic
                 ->scopeAttendancesForPeriod(
                     $user->attendances()->where('status', Attendance::STATUS_PENDING)->whereNotNull('check_in'),
-                    $this->academic->forUser($user)
+                    $this->academic->selectedPeriod()
                 )
                 ->count(),
             'notifications' => $unreadNotifications ?? $user->unreadNotificationCount(),
         ];
     }
 
+    private function countUpcomingEventsForPeriod(User $user): int
+    {
+        $query = Event::query()
+            ->where('starts_at', '>=', now())
+            ->where('starts_at', '<=', now()->addWeek());
+        $this->scopeEventsForSelectedPeriod($query);
+
+        return $this->scopeEventsForUser($query, $user)->count();
+    }
+
     public function upcomingEvents(User $user, int $limit = 10): Collection
     {
         $attendances = $this->attendancesByEvent($user);
 
-        return $this->scopeEventsForUser(
-            Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-                ->where('starts_at', '>=', now()->subDay())
-                ->orderBy('starts_at')
-                ->limit($limit),
-            $user
-        )->get()
+        $query = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
+            ->where('starts_at', '>=', now()->subDay())
+            ->orderBy('starts_at')
+            ->limit($limit);
+        $this->scopeEventsForSelectedPeriod($query);
+
+        return $this->scopeEventsForUser($query, $user)->get()
             ->map(fn (Event $event) => $this->formatEvent($event, $user, $attendances));
     }
 
@@ -487,21 +587,20 @@ class ScholarService
     {
         $attendances = $this->attendancesByEvent($user);
 
-        $event = $this->scopeEventsForUser(
-            Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-                ->where('starts_at', '>', now())
-                ->whereHas('registrations', fn ($q) => $q->where('user_id', $user->id))
-                ->orderBy('starts_at'),
-            $user
-        )->first();
+        $registered = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
+            ->where('starts_at', '>', now())
+            ->whereHas('registrations', fn ($q) => $q->where('user_id', $user->id))
+            ->orderBy('starts_at');
+        $this->scopeEventsForSelectedPeriod($registered);
+
+        $event = $this->scopeEventsForUser($registered, $user)->first();
 
         if (! $event) {
-            $event = $this->scopeEventsForUser(
-                Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-                    ->where('starts_at', '>', now())
-                    ->orderBy('starts_at'),
-                $user
-            )->first();
+            $open = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
+                ->where('starts_at', '>', now())
+                ->orderBy('starts_at');
+            $this->scopeEventsForSelectedPeriod($open);
+            $event = $this->scopeEventsForUser($open, $user)->first();
         }
 
         return $event ? $this->formatEvent($event, $user, $attendances) : null;
@@ -509,12 +608,12 @@ class ScholarService
 
     public function eventsForUser(User $user, ?string $search = null, ?string $status = null): Collection
     {
-        $query = $this->scopeEventsForUser(
-            Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-                ->upcomingForFreshScholar($user)
-                ->orderBy('starts_at'),
-            $user
-        );
+        $base = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
+            ->upcomingForFreshScholar($user)
+            ->orderBy('starts_at');
+        $this->scopeEventsForSelectedPeriod($base);
+
+        $query = $this->scopeEventsForUser($base, $user);
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -669,7 +768,7 @@ class ScholarService
             $registration->update(['status' => EventRegistration::STATUS_FAILED_CHECK_IN]);
         }
 
-        $stamp = $this->academic->attendanceStamp($this->academic->forUser($user));
+        $stamp = $this->academic->preservedAttendanceStamp($attendance);
 
         $attendance = Attendance::updateOrCreate(
             ['user_id' => $user->id, 'event_id' => $event->id],
@@ -1095,13 +1194,13 @@ class ScholarService
         $end = $monthDate->copy()->endOfMonth()->endOfWeek(Carbon::SATURDAY)->endOfDay();
         $attendances = $this->attendancesByEvent($user);
 
-        return $this->scopeEventsForUser(
-            Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-                ->overlappingDates($start, $end)
-                ->upcomingForFreshScholar($user)
-                ->orderBy('starts_at'),
-            $user
-        )->get()
+        $query = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
+            ->overlappingDates($start, $end)
+            ->upcomingForFreshScholar($user)
+            ->orderBy('starts_at');
+        $this->scopeEventsForSelectedPeriod($query);
+
+        return $this->scopeEventsForUser($query, $user)->get()
             ->map(fn (Event $event) => $this->formatEvent($event, $user, $attendances));
     }
 

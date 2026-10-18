@@ -2,15 +2,16 @@
     $requiredFallback = \App\Services\ScholarService::REQUIRED_HOURS;
     $hs = $hourStats ?? ['approved' => 0, 'pending' => 0, 'required' => $requiredFallback, 'remaining' => $requiredFallback];
     $pct = $hs['required'] > 0 ? min(100, (int) round(($hs['approved'] / $hs['required']) * 100)) : 0;
-    $selectedYear = old('year_start', $user->academic_year_start ?? $globalAcademicSettings->year_start ?? now()->year);
-    $selectedSemester = old('semester', $user->semester ?? $globalAcademicSettings->semester ?? '2nd Semester');
+    $selectedYear = $academicPeriod->year_start ?? $globalAcademicSettings->year_start ?? now()->year;
+    $selectedSemester = $academicPeriod->semester ?? $globalAcademicSettings->semester ?? '2nd Semester';
 @endphp
 
 <div class="card hours-overview service-hours-sidebar-card">
     <div class="card-header">SERVICE HOURS OVERVIEW</div>
 
-    <form method="POST" action="{{ route('user.profile.academic') }}" class="sh-sidebar-filters">
-        @csrf @method('PUT')
+    <form method="POST" action="{{ route('academic.period.update') }}" class="sh-sidebar-filters">
+        @csrf
+        @method('PUT')
         <div class="sh-filter-field">
             <select name="year_start" class="sh-filter-select" aria-label="Academic year" onchange="this.form.submit()">
                 @foreach($academicYearOptions ?? [] as $year => $label)

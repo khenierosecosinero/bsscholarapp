@@ -1,7 +1,7 @@
 @extends('layouts.user')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/documents-page.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/documents-page.css') }}?v={{ filemtime(public_path('css/documents-page.css')) }}">
 @endpush
 
 @section('page-content')
@@ -15,7 +15,14 @@
         <div><span>Academic Year</span><strong>{{ $academicYearLabel ?? '—' }}</strong></div>
     </div>
     @if(empty($driveReady))
-        <p class="muted">Google Drive is not connected yet. Ask Scholar Staff or an administrator to connect Drive before uploading.</p>
+        @include('partials.bssa-alert', [
+            'type' => 'warning',
+            'title' => 'Uploads unavailable',
+            'message' => 'Google Drive is not connected yet. Ask Scholar Staff or an administrator to connect Drive before uploading.',
+            'dismissible' => false,
+            'autoDismiss' => false,
+            'class' => 'bssa-alert--banner',
+        ])
     @endif
 </section>
 
@@ -122,7 +129,15 @@
                                     @if($doc->status !== 'approved')
                                         <button type="button" class="btn small" onclick="document.getElementById('doc-type-select').value='{{ $doc->document_type_id }}';document.getElementById('file-input').click()">{{ $doc->hasFile() ? 'Replace' : 'Upload' }}</button>
                                         @if($doc->hasFile())
-                                            <form method="POST" action="{{ route('user.documents.destroy', $doc) }}" onsubmit="return confirm('Delete this {{ addslashes($doc->documentType->name) }}?')">
+                                            <form
+                                                method="POST"
+                                                action="{{ route('user.documents.destroy', $doc) }}"
+                                                data-confirm="This file will be removed. You can upload a new one afterward."
+                                                data-confirm-title="Delete this {{ $doc->documentType->name }}?"
+                                                data-confirm-yes="Delete"
+                                                data-confirm-no="Cancel"
+                                                data-confirm-variant="danger"
+                                            >
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit" class="btn small danger">Delete</button>
@@ -141,10 +156,14 @@
             <p class="table-footer muted">Showing {{ $filtered->count() }} document(s)</p>
         </div>
 
-        <div class="info-banner">
-            <span class="info-icon-lg">&#8505;</span>
-            <div><strong>Why do we need these documents?</strong><p>These documents help us verify your identity, enrollment, and eligibility as a Batang Surigaonon Scholar.</p></div>
-        </div>
+        @include('partials.bssa-alert', [
+            'type' => 'info',
+            'title' => 'Why do we need these documents?',
+            'message' => 'These documents help us verify your identity, enrollment, and eligibility as a Batang Surigaonon Scholar.',
+            'dismissible' => false,
+            'autoDismiss' => false,
+            'class' => 'bssa-alert--banner',
+        ])
     </div>
 
     <aside class="documents-sidebar">
@@ -153,7 +172,16 @@
             @if($documentTypes->isEmpty())
                 <p class="muted" style="margin:0">Uploads will be available after Scholar Staff posts a required document.</p>
             @else
-            <form method="POST" action="{{ route('user.documents.upload') }}" enctype="multipart/form-data" id="upload-form">
+            <form
+                method="POST"
+                action="{{ route('user.documents.upload') }}"
+                enctype="multipart/form-data"
+                id="upload-form"
+                data-confirm="Submit this file for Scholar Staff review?"
+                data-confirm-title="Upload document?"
+                data-confirm-yes="Upload"
+                data-confirm-no="Cancel"
+            >
                 @csrf
                 <div class="upload-zone" onclick="document.getElementById('file-input').click()">
                     <div class="upload-icon">&#9729;</div>

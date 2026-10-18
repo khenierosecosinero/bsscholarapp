@@ -78,18 +78,40 @@
                 @endif
 
                 @if($selected['registration_status'] === 'not_joined' && (! $selected['is_past'] || !empty($selected['attendance_open'])))
-                    <form method="POST" action="{{ route('user.events.register', $selected['id']) }}">@csrf<button type="submit" class="btn full">Attend / Register</button></form>
+                    <form
+                        method="POST"
+                        action="{{ route('user.events.register', $selected['id']) }}"
+                        data-confirm="You will be registered to participate in this event."
+                        data-confirm-title="Confirm participation?"
+                        data-confirm-yes="Attend"
+                        data-confirm-no="Cancel"
+                    >@csrf<button type="submit" class="btn full">Attend / Register</button></form>
                 @endif
 
-                <div class="reminder-box {{ !empty($selected['attendance_open']) ? 'attendance-open-box' : 'attendance-closed-box' }}" data-attendance-event-message>
-                    <strong>Attendance {{ $selected['attendance_status'] ?? 'CLOSED' }}:</strong>
-                    {{ $selected['attendance_message'] }}
+                <div class="bssa-alert {{ !empty($selected['attendance_open']) ? 'bssa-alert--success' : 'bssa-alert--info' }} bssa-alert--banner reminder-box {{ !empty($selected['attendance_open']) ? 'attendance-open-box' : 'attendance-closed-box' }}" data-attendance-event-message role="status">
+                    <div class="bssa-alert__icon" aria-hidden="true">
+                        @if(!empty($selected['attendance_open']))
+                            <svg class="bssa-alert__icon-svg" viewBox="0 0 24 24" fill="none" focusable="false"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.15"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.75"/><path d="M7.5 12.5l3 3 6-6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        @else
+                            <svg class="bssa-alert__icon-svg" viewBox="0 0 24 24" fill="none" focusable="false"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.12"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.75"/><path d="M12 10.5V17M12 7.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                        @endif
+                    </div>
+                    <div class="bssa-alert__body">
+                        <p class="bssa-alert__title">Attendance {{ $selected['attendance_status'] ?? 'CLOSED' }}</p>
+                        <p class="bssa-alert__message">{{ $selected['attendance_message'] }}</p>
+                    </div>
                 </div>
 
                 @if($selected['failed_to_check_in'] && empty($selected['attendance_open']))
-                    <div class="reminder-box failed">
-                        <strong>Failed to Check In:</strong> You registered for this event but did not check in through the attendance system. No service hours were credited.
-                    </div>
+                    @include('partials.bssa-alert', [
+                        'type' => 'error',
+                        'title' => 'Failed to Check In',
+                        'message' => 'You registered for this event but did not check in through the attendance system. No service hours were credited.',
+                        'dismissible' => false,
+                        'autoDismiss' => false,
+                        'class' => 'bssa-alert--banner',
+                    ])
+
                     <div class="card inner-card">
                         <div class="card-header">Your Attendance Record <span class="badge failed-to-check-in">Failed to Check In</span></div>
                         <div class="table-wrap attendance-record-wrap">
@@ -105,18 +127,40 @@
                         </div>
                     </div>
                 @elseif(in_array($selected['registration_status'], ['confirmed', 'failed_to_check_in'], true))
-                    <div class="reminder-box"><strong>Reminder:</strong> Check in after Scholar Staff opens attendance, then attach a photo of your participation so they can verify your hours.</div>
+                    @include('partials.bssa-alert', [
+                        'type' => 'info',
+                        'title' => 'Reminder',
+                        'message' => 'Check in after Scholar Staff opens attendance, then attach a photo of your participation so they can verify your hours.',
+                        'dismissible' => false,
+                        'autoDismiss' => false,
+                        'class' => 'bssa-alert--banner',
+                    ])
                     <div class="card inner-card">
                         <div class="card-header">Attendance</div>
                         @php $att = $selected['attendance']; @endphp
                         @if(!$att || !$att->check_in)
-                            <form method="POST" action="{{ route('user.events.check-in', $selected['id']) }}">@csrf<button type="submit" class="btn full checkin-btn" {{ empty($selected['can_check_in']) ? 'disabled' : '' }}>&#128247; Check In</button></form>
+                            <form
+                                method="POST"
+                                action="{{ route('user.events.check-in', $selected['id']) }}"
+                                data-confirm="Start your attendance for this event now?"
+                                data-confirm-title="Check in?"
+                                data-confirm-yes="Check In"
+                                data-confirm-no="Cancel"
+                            >@csrf<button type="submit" class="btn full checkin-btn" {{ empty($selected['can_check_in']) ? 'disabled' : '' }}>&#128247; Check In</button></form>
                             <p class="muted center small">{{ !empty($selected['attendance_open']) ? 'Attendance is OPEN. You can check in now.' : 'Attendance is CLOSED. You can no longer submit or modify your attendance.' }}</p>
                         @else
                             <div class="attendance-action-stack">
                                 @include('partials.attendance-photo-upload', ['attendance' => $att, 'eventId' => $selected['id'], 'canModify' => !empty($selected['can_modify_attendance'])])
                                 @if(!empty($selected['can_check_out']))
-                                    <form method="POST" action="{{ route('user.events.check-out', $selected['id']) }}" class="attendance-checkout-form">
+                                    <form
+                                        method="POST"
+                                        action="{{ route('user.events.check-out', $selected['id']) }}"
+                                        class="attendance-checkout-form"
+                                        data-confirm="End your attendance session for this event?"
+                                        data-confirm-title="Check out?"
+                                        data-confirm-yes="Check Out"
+                                        data-confirm-no="Cancel"
+                                    >
                                         @csrf
                                         <button type="submit" class="btn full">Check Out</button>
                                     </form>
@@ -164,7 +208,15 @@
                             </div>
                         @endif
                         @if($att && $att->status === 'pending' && $att->isReadyForVerification() && auth()->user()->isAdmin())
-                            <form method="POST" action="{{ route('user.attendances.approve', $att->id) }}" class="attendance-approve-form">
+                            <form
+                                method="POST"
+                                action="{{ route('user.attendances.approve', $att->id) }}"
+                                class="attendance-approve-form"
+                                data-confirm="Approve this attendance and credit service hours?"
+                                data-confirm-title="Confirm participation?"
+                                data-confirm-yes="Confirm"
+                                data-confirm-no="Cancel"
+                            >
                                 @csrf
                                 <button type="submit" class="btn full">Confirm Participation</button>
                             </form>

@@ -20,10 +20,11 @@ class AdminEventsFilterTest extends TestCase
         $this->actingAs($this->makeAdmin())
             ->get(route('admin.events'))
             ->assertOk()
-            ->assertSee('All Regions')
-            ->assertSee('Luzon')
-            ->assertSee('Visayas')
-            ->assertSee('Mindanao')
+            ->assertDontSee('All Regions')
+            ->assertDontSee('name="region"', false)
+            ->assertDontSee('>Luzon<', false)
+            ->assertDontSee('>Visayas<', false)
+            ->assertDontSee('>Mindanao<', false)
             ->assertSee('All Scholarship Clubs')
             ->assertSee('Province')
             ->assertSee('Municipality / City')
@@ -83,17 +84,11 @@ class AdminEventsFilterTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.events', ['region' => PhilippineIslandGroup::LUZON]))
             ->assertOk()
+            ->assertDontSee('name="region"', false)
             ->assertSee($luzonEvent->title)
-            ->assertDontSee($keniEvent->title)
-            ->assertDontSee($dapaEvent->title);
-
-        $this->actingAs($admin)
-            ->get(route('admin.events', ['region' => PhilippineIslandGroup::MINDANAO]))
-            ->assertOk()
             ->assertSee($keniEvent->title)
             ->assertSee($dapaEvent->title)
-            ->assertSee($provinceEvent->title)
-            ->assertDontSee($luzonEvent->title);
+            ->assertSee($provinceEvent->title);
 
         $this->actingAs($admin)
             ->get(route('admin.events', ['location' => $dapa->id]))

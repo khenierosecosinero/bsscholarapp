@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-  @vite(['resources/css/styles.css'])
+  @vite(['resources/css/styles.css', 'resources/js/app.js'])
   @stack('styles')
 </head>
 <body>
@@ -28,6 +28,7 @@
     </div>
   </div>
   @yield('content')
+  @include('partials.bssa-toast-host')
   <div id="avatar-preview-modal" class="avatar-preview-modal" hidden>
     <button type="button" class="avatar-preview-backdrop" data-avatar-preview-close aria-label="Close photo preview"></button>
     <div class="avatar-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="avatar-preview-title">

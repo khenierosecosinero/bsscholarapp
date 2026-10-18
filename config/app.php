@@ -56,6 +56,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Public URL (email / external links)
+    |--------------------------------------------------------------------------
+    |
+    | When APP_URL is loopback (127.0.0.1 / localhost), verification links in
+    | emails should use a host reachable from phones and other devices. Set
+    | this to the Network URL from `php artisan serve --host=0.0.0.0`, or leave
+    | empty to auto-detect the LAN IPv4 address in local environments.
+    |
+    */
+
+    'public_url' => env('APP_PUBLIC_URL'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

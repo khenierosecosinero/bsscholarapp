@@ -23,9 +23,11 @@ class AdminRegionalReportsTest extends TestCase
             ->get(route('admin.reports'))
             ->assertOk()
             ->assertSee('Academic Year')
-            ->assertSee('LUZON')
-            ->assertSee('VISAYAS')
-            ->assertSee('MINDANAO')
+            ->assertSee('SURIGAO DEL NORTE')
+            ->assertSee('SURIGAO DEL SUR')
+            ->assertDontSee('LUZON')
+            ->assertDontSee('VISAYAS')
+            ->assertDontSee('MINDANAO')
             ->assertSee('Scholarship Clubs')
             ->assertSee('Completed Students (Completed Service Hours)')
             ->assertSee('Participation')
@@ -34,68 +36,69 @@ class AdminRegionalReportsTest extends TestCase
             ->assertDontSee('City Scholarship Program Data')
             ->assertDontSee('Province Scholarship Program Data')
             ->assertDontSee('Scholarship Category')
+            ->assertDontSee('class="academic-period-filter"', false)
+            ->assertSee('admin-reports-year', false)
+            ->assertSee('Viewing Academic Year')
             ->getContent();
 
-        $this->assertSame(12, substr_count($html, 'admin-pie-card'));
+        $this->assertSame(8, substr_count($html, 'admin-pie-card'));
+        $this->assertStringContainsString('name="year_start"', $html);
+        $this->assertStringNotContainsString('aria-label="Semester"', $html);
     }
 
     public function test_regional_reports_use_academic_year_and_do_not_mix_island_groups(): void
     {
-        $luzon = $this->makeCityProgram('Quezon City', 'Metro Manila', 'National Capital Region', 'qc-regional-reports');
-        $visayas = $this->makeCityProgram('Cebu City', 'Cebu', 'Central Visayas', 'cebu-regional-reports');
-        $mindanao = $this->makeCityProgram('Dapa', 'Surigao del Norte', 'Caraga', 'dapa-regional-reports');
+        $norte = $this->makeCityProgram('Dapa', 'Surigao del Norte', 'Caraga', 'dapa-regional-reports');
+        $sur = $this->makeCityProgram('Tandag', 'Surigao del Sur', 'Caraga', 'tandag-regional-reports');
+        $manila = $this->makeCityProgram('Quezon City', 'Metro Manila', 'National Capital Region', 'qc-regional-reports');
 
-        ScholarshipClub::createForProgram('Quezon Scholars Club', $luzon->id);
-        ScholarshipClub::createForProgram('Cebu Scholars Club', $visayas->id);
+        ScholarshipClub::createForProgram('Dapa Scholars Club', $norte->id);
+        ScholarshipClub::createForProgram('Tandag Scholars Club', $sur->id);
 
-        $luzonScholar = $this->makeScholar($luzon, 'LUZON', User::STATUS_APPROVED);
-        $this->makeScholar($luzon, 'PENDING', User::STATUS_PENDING);
-        $visayasScholar = $this->makeScholar($visayas, 'VISAYAS', User::STATUS_APPROVED);
-        $mindanaoScholar = $this->makeScholar($mindanao, 'MINDANAO', User::STATUS_APPROVED);
+        $norteScholar = $this->makeScholar($norte, 'NORTE', User::STATUS_APPROVED);
+        $this->makeScholar($norte, 'PENDING', User::STATUS_PENDING);
+        $surScholar = $this->makeScholar($sur, 'SUR', User::STATUS_APPROVED);
+        $this->makeScholar($manila, 'MANILA', User::STATUS_APPROVED);
 
-        $this->makeAttendance($luzon, $luzonScholar, 2025, '1st Semester', 30);
-        $this->makeAttendance($mindanao, $mindanaoScholar, 2026, '1st Semester', ScholarService::REQUIRED_HOURS);
-        $this->makeAttendance($visayas, $visayasScholar, 2026, '1st Semester', 10);
+        $this->makeAttendance($norte, $norteScholar, 2025, '1st Semester', 30);
+        $this->makeAttendance($sur, $surScholar, 2026, '1st Semester', 10);
 
         $service = app(AdminDashboardService::class);
         $academic = app(AcademicSettingsService::class);
 
         $for2026 = $service->regionalReports($academic->resolveReportFilter(2026, AcademicSettingsService::SEMESTER_ALL));
 
-        $this->assertSame(2, $for2026['luzon']['scholars']['total']);
-        $this->assertSame(1, $for2026['luzon']['scholars']['approved']);
-        $this->assertSame(1, $for2026['luzon']['scholars']['pending']);
-        $this->assertSame(1, $for2026['luzon']['clubs']['total']);
-        $this->assertSame(0, $for2026['luzon']['completed']['total']);
-        $this->assertSame(0, $for2026['luzon']['participation']['total']);
+        $this->assertSame(2, $for2026['surigao_del_norte']['scholars']['total']);
+        $this->assertSame(1, $for2026['surigao_del_norte']['scholars']['approved']);
+        $this->assertSame(1, $for2026['surigao_del_norte']['scholars']['pending']);
+        $this->assertSame(1, $for2026['surigao_del_norte']['clubs']['total']);
+        $this->assertSame(0, $for2026['surigao_del_norte']['completed']['total']);
+        $this->assertSame(0, $for2026['surigao_del_norte']['participation']['total']);
 
-        $this->assertSame(1, $for2026['visayas']['scholars']['total']);
-        $this->assertSame(1, $for2026['visayas']['clubs']['total']);
-        $this->assertSame(0, $for2026['visayas']['completed']['total']);
-        $this->assertSame(1, $for2026['visayas']['completed']['in_progress']);
-        $this->assertSame(1, $for2026['visayas']['participation']['total']);
-
-        $this->assertSame(1, $for2026['mindanao']['scholars']['total']);
-        $this->assertSame(0, $for2026['mindanao']['clubs']['total']);
-        $this->assertSame(1, $for2026['mindanao']['completed']['total']);
-        $this->assertSame(1, $for2026['mindanao']['participation']['total']);
+        $this->assertSame(1, $for2026['surigao_del_sur']['scholars']['total']);
+        $this->assertSame(1, $for2026['surigao_del_sur']['clubs']['total']);
+        $this->assertSame(0, $for2026['surigao_del_sur']['completed']['total']);
+        $this->assertSame(1, $for2026['surigao_del_sur']['completed']['in_progress']);
+        $this->assertSame(1, $for2026['surigao_del_sur']['participation']['total']);
 
         $for2025 = $service->regionalReports($academic->resolveReportFilter(2025, AcademicSettingsService::SEMESTER_ALL));
 
-        $this->assertSame(1, $for2025['luzon']['scholars']['total']);
-        $this->assertSame(1, $for2025['luzon']['completed']['total']);
-        $this->assertSame(1, $for2025['luzon']['participation']['total']);
-        $this->assertSame(0, $for2025['mindanao']['scholars']['total']);
-        $this->assertSame(0, $for2025['mindanao']['completed']['total']);
-        $this->assertSame(0, $for2025['visayas']['participation']['total']);
+        $this->assertSame(1, $for2025['surigao_del_norte']['scholars']['total']);
+        $this->assertSame(1, $for2025['surigao_del_norte']['completed']['total']);
+        $this->assertSame(1, $for2025['surigao_del_norte']['participation']['total']);
+        $this->assertSame(0, $for2025['surigao_del_sur']['scholars']['total']);
+        $this->assertSame(0, $for2025['surigao_del_sur']['completed']['total']);
+        $this->assertSame(0, $for2025['surigao_del_sur']['participation']['total']);
 
         $this->actingAs($this->makeAdmin())
             ->get(route('admin.reports', ['year' => 2026]))
             ->assertOk()
             ->assertSee('AY 2026–2027')
-            ->assertSee('LUZON')
-            ->assertSee('VISAYAS')
-            ->assertSee('MINDANAO')
+            ->assertSee('SURIGAO DEL NORTE')
+            ->assertSee('SURIGAO DEL SUR')
+            ->assertDontSee('LUZON')
+            ->assertDontSee('VISAYAS')
+            ->assertDontSee('MINDANAO')
             ->assertSee('pie chart', false)
             ->assertDontSee('bar chart');
     }
@@ -111,11 +114,10 @@ class AdminRegionalReportsTest extends TestCase
         $regions = app(AdminDashboardService::class)
             ->regionalReports(app(AcademicSettingsService::class)->resolveReportFilter(2026, AcademicSettingsService::SEMESTER_ALL));
 
-        $this->assertSame(2, $regions['mindanao']['scholars']['total']);
-        $this->assertSame(1, $regions['mindanao']['completed']['total']);
-        $this->assertSame(1, $regions['mindanao']['completed']['not_started']);
-        $this->assertSame(0, $regions['luzon']['completed']['total']);
-        $this->assertSame(0, $regions['visayas']['completed']['total']);
+        $this->assertSame(2, $regions['surigao_del_norte']['scholars']['total']);
+        $this->assertSame(1, $regions['surigao_del_norte']['completed']['total']);
+        $this->assertSame(1, $regions['surigao_del_norte']['completed']['not_started']);
+        $this->assertSame(0, $regions['surigao_del_sur']['completed']['total']);
     }
 
     private function makeAdmin(): User

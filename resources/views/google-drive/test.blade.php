@@ -7,35 +7,25 @@
             <h1>Google Drive test</h1>
             <p class="lead">Temporary page to prove OAuth and a Drive upload. This is not the scholar document workflow.</p>
 
-            @if(session('success'))
-                <div class="alert success">{{ session('success') }}</div>
-            @endif
-
-            @if(session('error'))
-                <div class="errors">{{ session('error') }}</div>
-            @endif
-
-            @if($errors->any())
-                <div class="errors">
-                    @foreach($errors->all() as $error)
-                        <div>{{ $error }}</div>
-                    @endforeach
-                </div>
-            @endif
+            @include('partials.flash-messages')
 
             <p class="muted">
                 @if($connected)
                     Google Drive is connected. In My Drive you should see
-                    <strong>BSSA Scholar Documents</strong> and a separate
-                    <strong>BSSA Attendance</strong> folder
-                    @if(! empty($attendanceReady))
-                        (the Attendance folder was created or confirmed just now)
+                    <strong>BSSA</strong> with
+                    <strong>DOCUMENTS</strong> and
+                    <strong>ATTENDANCE</strong>
+                    @if(! empty($organizationReady) || ! empty($attendanceReady))
+                        (organization folders were created or confirmed just now)
                     @endif
                     .
+                    Scholar files go under province → municipality/city → scholar folders.
                 @else
                     Connect Google first. After you connect, My Drive will have
-                    <strong>BSSA Scholar Documents</strong> and a separate
-                    <strong>BSSA Attendance</strong> folder. Then you can upload a small PDF or image.
+                    <strong>BSSA / DOCUMENTS</strong> and
+                    <strong>BSSA / ATTENDANCE</strong>,
+                    each split by Surigao del Norte and Surigao del Sur.
+                    Then you can upload a small PDF or image.
                     If Google shows <strong>Access blocked</strong>, add that Gmail as a test user under Google Cloud → Auth Platform → Audience. Laravel cannot override that.
                 @endif
             </p>

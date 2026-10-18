@@ -24,6 +24,8 @@
             <div class="card profile-section-card">
                 @php
                     $profileInfoErrors = $errors->hasAny([
+                        'street',
+                        'province',
                         'city',
                         'cellphone_number',
                         'scholarship_club_school_id',
@@ -75,9 +77,30 @@
                         <div class="form-group"><label for="full_name">Full Name</label><input id="full_name" type="text" value="{{ $user->full_name }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group"><label for="scholar_id">Scholar ID</label><input id="scholar_id" type="text" value="{{ $user->scholar_id }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group form-group-wide"><label for="email">Login Email</label><input id="email" type="email" value="{{ $user->email }}" readonly disabled aria-readonly="true"></div>
+                        <div class="form-group form-group-wide" data-profile-address>
+                            <label for="street">No./Street</label>
+                            <input id="street" type="text" name="street" value="{{ old('street', $user->streetName()) }}" maxlength="255" autocomplete="address-line1" placeholder="House number and street name" data-profile-editable data-saved-value="{{ $user->streetName() }}">
+                            <small class="muted">House number and street name.</small>
+                            @error('street')
+                                <small class="muted" style="color:#dc2626">{{ $message }}</small>
+                            @enderror
+                            <script type="application/json" data-profile-municipalities>@json($municipalitiesByProvince ?? [])</script>
+                        </div>
                         <div class="form-group">
-                            <label for="city">City Address</label>
-                            <select id="city" name="city" class="form-select" data-profile-editable data-saved-value="{{ $user->municipalityName() }}">
+                            <label for="province">Province</label>
+                            <select id="province" name="province" class="form-select" data-profile-editable data-location-province data-saved-value="{{ $selectedProvince }}">
+                                <option value="">Select province</option>
+                                @foreach($provinceOptions ?? [] as $provinceOption)
+                                    <option value="{{ $provinceOption }}" @selected((string) old('province', $selectedProvince) === (string) $provinceOption)>{{ $provinceOption }}</option>
+                                @endforeach
+                            </select>
+                            @error('province')
+                                <small class="muted" style="color:#dc2626">{{ $message }}</small>
+                            @enderror
+                        </div>
+                        <div class="form-group">
+                            <label for="city">Municipality / City</label>
+                            <select id="city" name="city" class="form-select" data-profile-editable data-location-city data-saved-value="{{ $user->municipalityName() }}">
                                 <option value="">Select municipality or city</option>
                                 @foreach($municipalityOptions as $municipality)
                                     <option value="{{ $municipality }}" @selected(old('city', $user->municipalityName()) === $municipality)>{{ $municipality }}</option>
@@ -88,6 +111,7 @@
                             @enderror
                         </div>
                         <div class="form-group form-group-wide"><label for="registered_program">Scholarship Club</label><input id="registered_program" type="text" value="{{ $user->scholarshipClubName() }}" readonly disabled aria-readonly="true"></div>
+                        <div class="form-group form-group-wide"><label for="registered_club_street">Scholarship Club No./Street</label><input id="registered_club_street" type="text" value="{{ $user->scholarshipClubStreet() ?: '—' }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group"><label for="registered_club_city">Scholarship Club Municipality / City</label><input id="registered_club_city" type="text" value="{{ $user->scholarshipClubCity() ?? '—' }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group"><label for="registered_province">Scholarship Club Province</label><input id="registered_province" type="text" value="{{ $user->scholarshipClubProvince() ?? '—' }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group">
@@ -179,63 +203,74 @@
         </div>
 
         <div class="tab-panel {{ $activeProfileTab === 'academic-settings' ? 'active' : '' }}" id="academic-settings" @if($activeProfileTab !== 'academic-settings') hidden @endif>
+            @php
+                $startYearOptions = $programStartYearOptions ?? $academicYearOptions ?? [];
+                $savedStartYear = old('program_start_year', $user->program_start_year);
+                $viewPeriod = $academicPeriod ?? $globalAcademicSettings;
+                $selectedYearStart = (int) old('year_start', $viewPeriod->year_start);
+                $selectedSemester = (string) old('semester', $viewPeriod->semester);
+            @endphp
+
             <div class="card">
-                <div class="card-header">YOUR ACADEMIC PERIOD</div>
-                <p class="muted small">Select the semester and academic year used to calculate your service hours, progress, and related records throughout the app.</p>
-                @php
-                    $userYear = old('year_start', $user->academic_year_start ?? $globalAcademicSettings->year_start);
-                    $userSemester = old('semester', $user->semester ?? $globalAcademicSettings->semester);
-                @endphp
+                <div class="card-header">START ACADEMIC YEAR</div>
+                <p class="muted small">This is the academic year when you originally began the scholarship. Year 1–Year 4 are calculated from this year and stay fixed. Changing the viewing Academic Year and Semester below does not change your Start Academic Year.</p>
+                @if(! $user->program_start_year)
+                    <p class="muted small" style="color:#b45309">Select and save your Start Academic Year so your four-year service-hour progress can be displayed correctly.</p>
+                @endif
                 <form method="POST" action="{{ route('user.profile.academic') }}">
-                    @csrf @method('PUT')
+                    @csrf
+                    @method('PUT')
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="program_start_year">Start Academic Year</label>
+                            <select id="program_start_year" name="program_start_year" class="form-select" required>
+                                <option value="" disabled @selected($savedStartYear === null || $savedStartYear === '')>Select start academic year</option>
+                                @foreach($startYearOptions as $year => $label)
+                                    <option value="{{ $year }}" @selected((int) $savedStartYear === (int) $year)>AY {{ $label }}</option>
+                                @endforeach
+                            </select>
+                            @error('program_start_year')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+                    <div class="form-actions-right"><button type="submit" class="btn blue">Save Start Academic Year</button></div>
+                </form>
+            </div>
+
+            <div class="card" style="margin-top:16px">
+                <div class="card-header">CURRENT ACADEMIC PERIOD</div>
+                <p class="muted small">Choose an academic year and semester to filter your service hours and records. This does not change your Start Academic Year, saved attendance, or the administrator's academic years.</p>
+                <form method="POST" action="{{ route('academic.period.update') }}">
+                    @csrf
+                    @method('PUT')
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="year_start">Academic Year</label>
                             <select id="year_start" name="year_start" class="form-select" required>
                                 @foreach($academicYearOptions as $year => $label)
-                                    <option value="{{ $year }}" {{ (int) $userYear === (int) $year ? 'selected' : '' }}>{{ $label }}</option>
+                                    <option value="{{ $year }}" @selected($selectedYearStart === (int) $year)>AY {{ $label }}</option>
                                 @endforeach
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="semester">Current Semester</label>
+                            <label for="semester">Semester</label>
                             <select id="semester" name="semester" class="form-select" required>
                                 @foreach($semesterOptions as $option)
-                                    <option value="{{ $option }}" {{ $userSemester === $option ? 'selected' : '' }}>{{ $option }}</option>
+                                    <option value="{{ $option }}" @selected($selectedSemester === $option)>{{ $option }}</option>
                                 @endforeach
                             </select>
                         </div>
                     </div>
-                    <div class="form-actions-right"><button type="submit" class="btn blue">Save Academic Period</button></div>
+                    <div class="form-actions-right"><button type="submit" class="btn blue">Apply View</button></div>
                 </form>
             </div>
 
             @if($user->isAdmin())
                 <div class="card" style="margin-top:16px">
-                    <div class="card-header">SYSTEM-WIDE ACADEMIC PERIOD (ADMIN)</div>
-                    <p class="muted small">Set the default academic year and semester for the entire system. New attendance records will be tagged with this period.</p>
-                    <form method="POST" action="{{ route('user.profile.academic.global') }}">
-                        @csrf @method('PUT')
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label for="global_year_start">Default Academic Year</label>
-                                <select id="global_year_start" name="year_start" class="form-select" required>
-                                    @foreach($academicYearOptions as $year => $label)
-                                        <option value="{{ $year }}" {{ (int) $globalAcademicSettings->year_start === (int) $year ? 'selected' : '' }}>{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="global_semester">Default Semester</label>
-                                <select id="global_semester" name="semester" class="form-select" required>
-                                    @foreach($semesterOptions as $option)
-                                        <option value="{{ $option }}" {{ $globalAcademicSettings->semester === $option ? 'selected' : '' }}>{{ $option }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-actions-right"><button type="submit" class="btn blue">Update System Period</button></div>
-                    </form>
+                    <div class="card-header">ACADEMIC YEARS</div>
+                    <p class="muted small">Add and edit academic years from Admin Settings. The dropdown above only changes which year and semester you are viewing.</p>
+                    <div class="form-actions-right"><a href="{{ route('admin.settings') }}" class="btn blue">Manage Academic Years</a></div>
                 </div>
             @endif
         </div>
@@ -389,5 +424,64 @@
         history.replaceState(null, '', next);
     }
 })();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var root = document.querySelector('[data-profile-address]');
+    var form = document.getElementById('scholar-profile-form');
+    if (!root || !form) {
+        return;
+    }
+
+    var provinceSelect = form.querySelector('[data-location-province]');
+    var citySelect = form.querySelector('[data-location-city]');
+    var catalogEl = root.querySelector('[data-profile-municipalities]');
+    var catalog = {};
+
+    try {
+        catalog = JSON.parse(catalogEl ? catalogEl.textContent || '{}' : '{}');
+    } catch (error) {
+        catalog = {};
+    }
+
+    if (!provinceSelect || !citySelect) {
+        return;
+    }
+
+    function fillCities(selectedCity) {
+        var provinceName = provinceSelect.value;
+        var cities = catalog[provinceName] || [];
+        var editing = form.classList.contains('is-editing');
+
+        citySelect.innerHTML = '';
+        var empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = 'Select municipality or city';
+        citySelect.appendChild(empty);
+
+        cities.forEach(function (city) {
+            var option = document.createElement('option');
+            option.value = city;
+            option.textContent = city;
+            if (selectedCity && city === selectedCity) {
+                option.selected = true;
+            }
+            citySelect.appendChild(option);
+        });
+
+        if (!provinceName) {
+            citySelect.disabled = true;
+            return;
+        }
+
+        citySelect.disabled = !editing;
+    }
+
+    provinceSelect.addEventListener('change', function () {
+        var current = citySelect.value;
+        var cities = catalog[provinceSelect.value] || [];
+        fillCities(cities.indexOf(current) !== -1 ? current : '');
+    });
+});
 </script>
 @endpush

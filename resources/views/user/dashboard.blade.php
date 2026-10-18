@@ -9,9 +9,14 @@
 @php $accountPending = auth()->user()->isPendingApproval(); @endphp
 
 @if($accountPending)
-    <div class="account-pending-banner">
-        Your account is awaiting approval from Scholar Staff. Some features are temporarily unavailable.
-    </div>
+    @include('partials.bssa-alert', [
+        'type' => 'warning',
+        'title' => 'Account pending approval',
+        'message' => 'Your account is awaiting approval from Scholar Staff. Some features are temporarily unavailable.',
+        'dismissible' => true,
+        'autoDismiss' => false,
+        'class' => 'bssa-alert--banner',
+    ])
 @endif
 
 <section class="stats grid">

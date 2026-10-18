@@ -7,16 +7,20 @@ use App\Models\ScholarshipClubSchool;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
 use App\Services\AccountService;
+use App\Services\MailConfigService;
 use App\Services\ScholarshipProgramAssignmentService;
 use App\Support\CourseCatalog;
+use App\Support\LocationAddress;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class AuthController extends Controller
 {
@@ -52,6 +56,18 @@ class AuthController extends Controller
         RateLimiter::clear($this->loginThrottleKey($request));
 
         $user = Auth::user();
+
+        if ($user->isAccessRestricted()) {
+            $message = $user->accessRestrictedMessage();
+
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            throw ValidationException::withMessages([
+                'email' => $message,
+            ]);
+        }
 
         if ($user->isScholarStaff() && $user->isStaffPendingApproval()) {
             Auth::logout();
@@ -98,6 +114,12 @@ class AuthController extends Controller
 
         if ($user->isScholarStaff()) {
             return redirect()->intended(route('staff.dashboard'));
+        }
+
+        if ($user->isScholar() && ! $user->hasVerifiedEmail()) {
+            return redirect()
+                ->route('verification.notice')
+                ->with('warning', 'Please verify your email address. Check your inbox for the verification link we sent.');
         }
 
         if ($user->isPendingApproval()) {
@@ -149,6 +171,7 @@ class AuthController extends Controller
             'course_year_level' => CourseCatalog::courseRules(),
             'year_level' => ['nullable', 'string', 'max:50', Rule::in(CourseCatalog::yearLevels())],
             'cellphone_number' => ['nullable', 'string', 'max:50'],
+            'street' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'confirmed', PasswordRule::min(8)],
         ], [
@@ -166,7 +189,7 @@ class AuthController extends Controller
             ->where('scholarship_club_id', $assignment['scholarship_club_id'])
             ->findOrFail((int) $data['scholarship_club_school_id']);
 
-        DB::transaction(function () use ($data, $assignment, $school) {
+        $user = DB::transaction(function () use ($data, $assignment, $school) {
             $user = User::register([
                 'full_name' => $data['full_name'],
                 'scholar_id' => $data['scholar_id'],
@@ -175,6 +198,7 @@ class AuthController extends Controller
                 'scholarship_club_school_id' => $school->id,
                 'city' => $assignment['city'],
                 'province' => $assignment['province'],
+                'street' => LocationAddress::normalizeStreet($data['street'] ?? null),
                 'school_university' => $school->name,
                 'course_year_level' => CourseCatalog::normalize($data['course_year_level'] ?? null),
                 'year_level' => $data['year_level'] ?? null,
@@ -186,12 +210,25 @@ class AuthController extends Controller
             ]);
 
             $this->accounts->provisionNewAccount($user);
+
+            return $user;
         });
+
+        // Send verification once via SMTP (do not also fire Registered → default listener,
+        // which would duplicate the email when the framework registers that listener).
+        $verificationSent = $this->sendScholarVerificationEmail($user);
 
         RateLimiter::hit($this->registerThrottleKey($request), 60);
 
-        return redirect()->route('login')
-            ->with('success', 'Scholar account created successfully. Your account is permanent — you may log in at any time, including after a long period of inactivity, while Scholar Staff reviews your registration.');
+        $message = 'Scholar account created successfully. Your account is permanent — you may log in at any time, including after a long period of inactivity, while Scholar Staff reviews your registration.';
+
+        if ($verificationSent) {
+            $message .= ' A verification link was sent to your email address.';
+        } else {
+            $message .= ' We could not send the verification email yet — after login, use Resend verification email.';
+        }
+
+        return redirect()->route('login')->with('success', $message);
     }
 
     public function registerStaff(Request $request)
@@ -210,6 +247,7 @@ class AuthController extends Controller
             'scholarship_club_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
             'cellphone_number' => ['required', 'string', 'max:50'],
+            'street' => ['nullable', 'string', 'max:255'],
             'password' => ['required', 'confirmed', PasswordRule::min(8)],
         ], [
             'scholarship_program_id.required' => 'Please select the Province and Municipality or City where the Scholarship Club is located.',
@@ -221,11 +259,14 @@ class AuthController extends Controller
         $this->assertStaffRegistrationIsUnique($data);
 
         $assignment = $this->programAssignment->resolveRegistrationAssignment((int) $data['scholarship_program_id']);
+        $street = LocationAddress::normalizeStreet($data['street'] ?? null);
 
-        DB::transaction(function () use ($data, $assignment) {
+        DB::transaction(function () use ($data, $assignment, $street) {
             $club = ScholarshipClub::createForProgram(
                 $data['scholarship_club_name'],
                 $assignment['scholarship_program_id'],
+                null,
+                $street,
             );
 
             $user = User::register([
@@ -234,6 +275,7 @@ class AuthController extends Controller
                 'scholarship_club_id' => $club->id,
                 'city' => $assignment['city'],
                 'province' => $assignment['province'],
+                'street' => $street,
                 'email' => $data['email'],
                 'cellphone_number' => $data['cellphone_number'],
                 'password' => $data['password'],
@@ -334,6 +376,45 @@ class AuthController extends Controller
             };
 
             throw ValidationException::withMessages(['email' => $message]);
+        }
+    }
+
+    private function sendScholarVerificationEmail(User $user): bool
+    {
+        if (! $user->isScholar() || $user->hasVerifiedEmail()) {
+            return false;
+        }
+
+        $mailConfig = app(MailConfigService::class);
+        $mailConfig->syncRuntimeCredentials();
+
+        if (! $mailConfig->isReady()) {
+            Log::warning('Scholar verification email skipped: SMTP is not configured.', [
+                'user_id' => $user->id,
+                'issues' => $mailConfig->status()['issues'],
+            ]);
+
+            return false;
+        }
+
+        try {
+            $user->sendEmailVerificationNotification();
+
+            Log::info('Scholar verification email sent via SMTP.', [
+                'user_id' => $user->id,
+                'recipient_domain' => substr((string) strrchr((string) $user->email, '@'), 1),
+                'mailer' => config('mail.default'),
+                'username_preview' => $mailConfig->status()['username_preview'] ?? null,
+            ]);
+
+            return true;
+        } catch (Throwable $e) {
+            Log::warning('Scholar verification email failed at SMTP transport.', [
+                'user_id' => $user->id,
+                'exception' => $e::class,
+            ]);
+
+            return false;
         }
     }
 }

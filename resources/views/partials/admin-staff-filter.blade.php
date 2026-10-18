@@ -1,7 +1,6 @@
 @php
     $preserve = request()->except(['location', 'program_type', 'page', 'club', 'search', 'region']);
     $selectedClubId = (int) ($selectedClubId ?? 0);
-    $selectedRegion = (string) ($selectedRegion ?? '');
     $scholarshipClubs = $scholarshipClubs ?? collect();
 @endphp
 
@@ -19,23 +18,17 @@
         @include('partials.admin-location-cascade', [
             'idPrefix' => 'admin-staff',
             'showCategory' => false,
-            'showRegion' => true,
-            'selectedRegion' => $selectedRegion,
         ])
         <div class="admin-location-cascade-field">
             <label class="admin-location-cascade-label" for="admin-staff-club">Scholarship Club</label>
             <select id="admin-staff-club" name="club" data-admin-club data-admin-club-sync-location aria-label="Scholarship Club">
                 <option value="">All Scholarship Clubs</option>
                 @foreach($scholarshipClubs as $club)
-                    @php
-                        $clubIsland = $club->program ? \App\Support\PhilippineIslandGroup::fromProgram($club->program) : '';
-                    @endphp
                     <option
                         value="{{ $club->id }}"
                         data-province="{{ $club->province }}"
                         data-city="{{ $club->city }}"
                         data-program-id="{{ $club->scholarship_program_id }}"
-                        data-island="{{ $clubIsland }}"
                         @selected($selectedClubId === (int) $club->id)
                     >
                         {{ $club->name }}{{ $club->addressLine() ? ' — '.$club->addressLine() : '' }}

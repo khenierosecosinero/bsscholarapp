@@ -26,15 +26,25 @@ class AdminAcademicYearSettingsTest extends TestCase
             ->get(route('admin.settings'))
             ->assertOk()
             ->assertSee('Academic Year')
-            ->assertSee('Active: '.$current->periodLabel())
+            ->assertSee($current->periodLabel())
             ->assertSee('Add Academic Year')
+            ->assertSee('Edit')
             ->assertSee('Delete')
+            ->assertDontSee('>Active<', false)
+            ->assertDontSee('Inactive')
+            ->assertDontSee('Activate')
+            ->assertDontSee('Deactivate')
             ->assertSee('placeholder="2026–2027"', false)
             ->assertDontSee('Current Admin Scope')
             ->assertDontSee('Showing City Scholar records')
             ->assertDontSee('City Scholar — All Locations')
             ->assertDontSee('admin-location-pill', false)
-            ->assertDontSee('The active academic year is used for scholars');
+            ->assertDontSee('The active academic year is used for scholars')
+            ->assertDontSee('class="academic-period-filter"', false)
+            ->assertDontSee('aria-label="Semester"', false)
+            ->assertSee('Viewing Academic Year')
+            ->assertSee('Manage Academic Years')
+            ->assertSee('admin-settings-view-year', false);
     }
 
     public function test_admin_can_add_an_academic_year(): void
@@ -86,23 +96,54 @@ class AdminAcademicYearSettingsTest extends TestCase
             ->assertSessionHasErrors('academic_year');
     }
 
-    public function test_activating_an_academic_year_deactivates_the_previous_one(): void
+    public function test_admin_dashboard_shows_centered_academic_year_selector_without_semester(): void
+    {
+        $admin = $this->makeAdmin();
+        $academic = app(AcademicSettingsService::class);
+        $current = $academic->current();
+        $next = $academic->createYear('2027–2028', $admin);
+
+        $this->actingAs($admin)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('admin-academic-year-selector', false)
+            ->assertSee('admin-dashboard-year', false)
+            ->assertSee('Academic Year')
+            ->assertSee('AY '.$current->periodLabel())
+            ->assertDontSee('class="academic-period-filter"', false)
+            ->assertDontSee('aria-label="Semester"', false);
+
+        $this->actingAs($admin)
+            ->from(route('admin.dashboard'))
+            ->put(route('academic.period.update'), [
+                'year_start' => $next->year_start,
+                'semester' => $current->semester,
+            ])
+            ->assertRedirect(route('admin.dashboard'))
+            ->assertSessionHas('success');
+
+        $this->assertSame($current->year_start, $academic->current()->year_start);
+        $this->assertSame($next->year_start, $academic->selectedPeriod()->year_start);
+        $this->assertSame($current->semester, $academic->selectedPeriod()->semester);
+    }
+
+    public function test_viewing_another_academic_year_does_not_change_saved_attendance(): void
     {
         $admin = $this->makeAdmin();
         $academic = app(AcademicSettingsService::class);
         $first = $academic->current();
         $next = $academic->createYear('2027–2028', $admin);
 
-        $this->assertFalse($next->fresh()->is_active);
-        $this->assertTrue($first->fresh()->is_active);
-
         $this->actingAs($admin)
-            ->post(route('admin.settings.academic-years.activate', $next))
-            ->assertRedirect(route('admin.settings'));
+            ->put(route('academic.period.update'), [
+                'year_start' => $next->year_start,
+                'semester' => '1st Semester',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
 
-        $this->assertFalse($first->fresh()->is_active);
-        $this->assertTrue($next->fresh()->is_active);
-        $this->assertSame($next->id, $academic->current()->id);
+        $this->assertSame($first->year_start, $academic->current()->year_start);
+        $this->assertSame($next->year_start, $academic->selectedPeriod()->year_start);
         $this->assertSame([$first->year_start, $next->year_start], array_keys($academic->yearOptions()));
     }
 
@@ -125,35 +166,18 @@ class AdminAcademicYearSettingsTest extends TestCase
         ]);
     }
 
-    public function test_the_last_academic_year_cannot_be_deactivated(): void
+    public function test_the_only_academic_year_cannot_be_deleted(): void
     {
         $admin = $this->makeAdmin();
         $current = app(AcademicSettingsService::class)->current();
 
         $this->actingAs($admin)
             ->from(route('admin.settings'))
-            ->post(route('admin.settings.academic-years.deactivate', $current))
+            ->delete(route('admin.settings.academic-years.destroy', $current))
             ->assertRedirect(route('admin.settings'))
             ->assertSessionHasErrors('academic_year');
 
-        $this->assertTrue($current->fresh()->is_active);
-    }
-
-    public function test_deactivating_an_academic_year_activates_another_registered_year(): void
-    {
-        $admin = $this->makeAdmin();
-        $academic = app(AcademicSettingsService::class);
-        $first = $academic->current();
-        $next = $academic->createYear('2027–2028', $admin);
-        $academic->activate($next, $admin);
-
-        $this->actingAs($admin)
-            ->post(route('admin.settings.academic-years.deactivate', $next))
-            ->assertRedirect(route('admin.settings'));
-
-        $this->assertFalse($next->fresh()->is_active);
-        $this->assertTrue($first->fresh()->is_active);
-        $this->assertSame($first->id, $academic->current()->id);
+        $this->assertDatabaseHas('academic_settings', ['id' => $current->id]);
     }
 
     public function test_year_options_come_from_registered_academic_years_not_a_hardcoded_range(): void
@@ -184,24 +208,24 @@ class AdminAcademicYearSettingsTest extends TestCase
             ->assertSessionHas('success');
 
         $this->assertDatabaseMissing('academic_settings', ['id' => $extra->id]);
-        $this->assertDatabaseHas('academic_settings', ['id' => $current->id, 'is_active' => true]);
-        $this->assertTrue($current->fresh()->is_active);
+        $this->assertDatabaseHas('academic_settings', ['id' => $current->id]);
     }
 
-    public function test_the_active_academic_year_cannot_be_deleted(): void
+    public function test_a_configured_academic_year_can_be_deleted_without_removing_attendance(): void
     {
         $admin = $this->makeAdmin();
         $academic = app(AcademicSettingsService::class);
         $current = $academic->current();
-        $academic->createYear('2027–2028', $admin);
+        $extra = $academic->createYear('2027–2028', $admin);
 
         $this->actingAs($admin)
             ->from(route('admin.settings'))
             ->delete(route('admin.settings.academic-years.destroy', $current))
             ->assertRedirect(route('admin.settings'))
-            ->assertSessionHasErrors('academic_year');
+            ->assertSessionHas('success');
 
-        $this->assertDatabaseHas('academic_settings', ['id' => $current->id, 'is_active' => true]);
+        $this->assertDatabaseMissing('academic_settings', ['id' => $current->id]);
+        $this->assertDatabaseHas('academic_settings', ['id' => $extra->id]);
     }
 
     public function test_deleting_an_academic_year_warns_when_records_exist_and_does_not_remove_them(): void

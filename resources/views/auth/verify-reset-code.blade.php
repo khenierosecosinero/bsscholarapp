@@ -4,16 +4,10 @@
 <div class="auth-page">
     <div class="auth-container">
         <div class="auth-card">
-            <h1>Verification Code</h1>
-            <p class="lead">Enter the 6-digit code sent to <strong>{{ $email }}</strong>. It must match the code in that email exactly.</p>
+            <h1>Verify Reset</h1>
+            <p class="lead">Open the reset link in the email sent to <strong>{{ $email }}</strong>, or enter the 6-digit code from that message.</p>
 
-            @if(session('success'))
-                <div class="alert success">{{ session('success') }}</div>
-            @endif
-
-            @if($errors->any())
-                <div class="errors">{{ $errors->first() }}</div>
-            @endif
+            @include('partials.flash-messages')
 
             <form method="POST" action="{{ route('password.verify.post') }}" class="auth-form">
                 @csrf

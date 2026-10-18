@@ -2,9 +2,10 @@
 
 @section('page-content')
 
+@include('partials.admin-academic-year-selector', ['inputId' => 'admin-documents-year', 'compact' => true])
+
 @php
     $documentsListQuery = array_filter([
-        'region' => $selectedRegion ?: null,
         'location' => $locationKey ?? 'all',
         'club' => $selectedClubId ?: null,
         'search' => filled($search ?? '') ? $search : null,
@@ -23,15 +24,15 @@
 
 <div class="staff-card">
     <div class="staff-card-header"><h2>Document Submissions</h2></div>
-    <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table">
+    <div class="staff-table-wrap admin-data-table-wrap">
+        <table class="staff-table staff-manage-table admin-data-table admin-documents-table">
             <thead>
                 <tr>
                     <th>Scholar</th>
                     <th>Document Type</th>
                     <th>Scholarship Club</th>
                     <th>Submitted</th>
-                    <th>Status</th>
+                    <th class="staff-col-status">Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -47,7 +48,7 @@
                         <td data-label="Document Type">{{ $document->documentType?->name ?? 'Document' }}</td>
                         <td data-label="Scholarship Club">{{ $document->user?->scholarshipClub?->name ?: '—' }}</td>
                         <td data-label="Submitted">{{ $document->created_at?->format('M j, Y') ?? '—' }}</td>
-                        <td data-label="Status"><span class="staff-badge {{ $document->reviewBadgeClass() }}">{{ ucfirst(str_replace('_', ' ', $document->reviewStatus())) }}</span></td>
+                        <td data-label="Status" class="staff-col-status"><span class="staff-badge {{ $document->reviewBadgeClass() }}">{{ ucfirst(str_replace('_', ' ', $document->reviewStatus())) }}</span></td>
                     </tr>
                 @empty
                     <tr class="staff-table-empty"><td colspan="5">No documents found</td></tr>

@@ -443,9 +443,9 @@ Unread count: `User::unreadNotificationCount()` (`is_read = false`). Shown as a 
 
 The Notifications page loads **5** newest items first. Extra rows are in the page but hidden. **See More Notifications** / **Show Less Notifications** toggle them in the browser without deleting records.
 
-Staff settings “Email Notifications” / “System Alerts” toggles on the staff Settings page are **display-only** (not wired to a save action).
+Staff Settings shows whether **Gmail SMTP** is configured for transactional mail. Scholar event/attendance/document/announcement alerts remain **in-app** (`scholar_notifications`).
 
-Forgot Password sends the verification code with `PasswordResetCodeMail` over **Gmail SMTP** (`MAIL_MAILER=smtp`). In-app `scholar_notifications` still do not send email. See [§17.1](#171-gmail-smtp-for-forgot-password).
+Forgot Password sends the verification code with `PasswordResetCodeMail` over **Gmail SMTP** (`MAIL_MAILER=smtp`). That email is the account verification step before a password can be changed. See [§17.1](#171-gmail-smtp-for-forgot-password).
 
 Flash messages use `partials/flash-messages.blade.php` (`success`, `error`, validation `$errors`).
 
@@ -1065,14 +1065,23 @@ MAIL_FROM_NAME="${APP_NAME}"
 4. Put that App Password in `.env` as `MAIL_PASSWORD`. Do **not** use the normal Gmail login password. Google will reject SMTP if you do.
 5. Set `MAIL_USERNAME` and `MAIL_FROM_ADDRESS` to the **same** sending Gmail address.
 6. Keep `MAIL_MAILER=smtp`, `MAIL_HOST=smtp.gmail.com`, `MAIL_PORT=587`, and `MAIL_ENCRYPTION=tls`.
-7. After any `.env` mail change, clear cached config:
+7. After any `.env` mail change, clear cached config (required — a stale `bootstrap/cache/config.php` keeps the old App Password and causes Gmail login failures):
 
 ```bash
 php artisan config:clear
 php artisan cache:clear
 ```
 
-8. Test with a **real registered Scholar or Scholar Staff** Gmail:
+8. Confirm Laravel loaded the mailer (no secrets are printed):
+
+```bash
+php artisan mail:inspect
+php artisan mail:inspect --send=your-inbox@gmail.com
+```
+
+`ready=yes` and `send=ok` mean Gmail accepted the SMTP login.
+
+9. Test with a **real registered Scholar or Scholar Staff** Gmail:
    - Login → **Forgot Password?**
    - Enter that account’s registration email
    - Open Gmail (and Spam) for *Your BSSA password reset verification code*

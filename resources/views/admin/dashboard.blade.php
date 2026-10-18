@@ -2,6 +2,8 @@
 
 @section('page-content')
 
+@include('partials.admin-academic-year-selector', ['inputId' => 'admin-dashboard-year', 'compact' => true])
+
 @include('partials.admin-dashboard-scope-select')
 
 <div class="staff-date-banner">

@@ -14,20 +14,27 @@
         <span>🔍</span>
         <input type="search" name="search" value="{{ $search }}" placeholder="Search by name, scholar ID, or email...">
     </div>
+    <select name="school" class="staff-select" aria-label="School / University" onchange="this.form.submit()">
+        @foreach($schoolOptions as $option)
+            <option value="{{ $option['key'] }}" @selected($selectedSchoolKey === $option['key'])>{{ $option['label'] }}</option>
+        @endforeach
+    </select>
     <button type="submit" class="staff-btn">Search</button>
 </form>
 
 <div class="staff-card">
     <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table staff-scholars-table">
+        <table class="staff-table staff-stack-table staff-scholars-table staff-manage-table">
             <thead>
                 <tr>
                     <th>Scholar Information</th>
                     <th>Scholar ID</th>
+                    <th>No./Street</th>
                     <th>Municipality / City</th>
                     <th>Province</th>
                     <th>School</th>
-                    <th>Status</th>
+                    <th class="staff-col-status">Status</th>
+                    <th class="staff-col-actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -48,18 +55,28 @@
                             </div>
                         </td>
                         <td data-label="Scholar ID"><div class="staff-stack-value">{{ $scholar->scholar_id }}</div></td>
-                        <td data-label="Municipality / City"><div class="staff-stack-value">{{ $scholar->scholarshipClubCity() ?? '—' }}</div></td>
-                        <td data-label="Province"><div class="staff-stack-value">{{ $scholar->scholarshipClubProvince() ?? '—' }}</div></td>
-                        <td data-label="School"><div class="staff-stack-value">{{ $scholar->school_university ?? '—' }}</div></td>
-                        <td data-label="Status"><div class="staff-stack-value"><span class="staff-badge {{ $scholar->status === 'approved' ? 'green' : ($scholar->status === 'pending' ? 'orange' : 'red') }}">{{ ucfirst($scholar->status) }}</span></div></td>
+                        <td data-label="No./Street"><div class="staff-stack-value">{{ $scholar->streetName() ?: '—' }}</div></td>
+                        <td data-label="Municipality / City"><div class="staff-stack-value">{{ $scholar->municipalityName() ?: ($scholar->scholarshipClubCity() ?? '—') }}</div></td>
+                        <td data-label="Province"><div class="staff-stack-value">{{ $scholar->provinceName() ?: ($scholar->scholarshipClubProvince() ?? '—') }}</div></td>
+                        <td data-label="School"><div class="staff-stack-value">{{ $scholar->scholarshipClubSchool?->name ?: ($scholar->school_university ?: '—') }}</div></td>
+                        <td data-label="Status" class="staff-col-status"><div class="staff-stack-value">@include('partials.account-suspension-status', ['account' => $scholar])</div></td>
+                        <td data-label="Actions" class="staff-col-actions">
+                            <div class="staff-stack-value">
+                                @include('partials.account-access-actions', [
+                                    'account' => $scholar,
+                                    'blockUrl' => route('staff.scholars.block', $scholar),
+                                    'suspendUrl' => route('staff.scholars.suspend', $scholar),
+                                    'reactivateUrl' => route('staff.scholars.reactivate', $scholar),
+                                ])
+                            </div>
+                        </td>
                     </tr>
                 @empty
-                    <tr class="staff-table-empty"><td colspan="6">No scholars found for this Scholarship Club.</td></tr>
+                    <tr class="staff-table-empty"><td colspan="8">No scholars found for this Scholarship Club.</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
-    <div class="staff-pagination">{{ $scholars->links() }}</div>
 </div>
 
 <div hidden id="staff-scholar-presence-root" data-presence-url="{{ route('staff.scholars.presence') }}"></div>

@@ -10,23 +10,10 @@
     $selectedCity = $address['city'] ?? '';
     $isCityScholar = $programType === 'city_municipality';
     $showCategory = $showCategory ?? true;
-    $showRegion = $showRegion ?? false;
-    $selectedRegion = $selectedRegion ?? request('region', '');
     $cityEnabled = $showCategory ? $isCityScholar : true;
 @endphp
 
 <div class="admin-location-cascade" data-admin-location-cascade>
-    @if($showRegion)
-        <div class="admin-location-cascade-field">
-            <label class="admin-location-cascade-label" for="{{ $idPrefix ?? 'admin' }}-region">Region</label>
-            <select name="region" id="{{ $idPrefix ?? 'admin' }}-region" data-admin-region aria-label="Region">
-                <option value="">All Regions</option>
-                @foreach(\App\Support\PhilippineIslandGroup::LABELS as $islandKey => $islandLabel)
-                    <option value="{{ $islandKey }}" @selected($selectedRegion === $islandKey)>{{ $islandLabel }}</option>
-                @endforeach
-            </select>
-        </div>
-    @endif
     @if($showCategory)
         <div class="admin-location-cascade-field">
             <label class="admin-location-cascade-label" for="{{ $idPrefix ?? 'admin' }}-program-type">Scholarship category</label>

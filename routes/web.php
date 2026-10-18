@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\AcademicPeriodController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AnnouncementActionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DocumentActionController;
+use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\EventActionController;
 use App\Http\Controllers\GoogleDriveController;
 use App\Http\Controllers\NotificationActionController;
@@ -14,6 +16,7 @@ use App\Http\Controllers\StaffDocumentController;
 use App\Http\Controllers\StaffSchoolController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\KeepFlashedAlerts;
+use App\Support\AccountAccessGuard;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -23,8 +26,15 @@ Route::get('/', function () {
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+Route::get('/backup-email/verify/{backupEmail}', [AdminController::class, 'verifyBackupEmail'])
+    ->middleware('signed')
+    ->name('admin.backup-email.verify');
+Route::get('/forgot-password/link', [PasswordResetController::class, 'consumeResetLink'])
+    ->middleware('signed')
+    ->name('password.reset.link');
 Route::middleware('guest')->group(function () {
     Route::get('/forgot-password', [PasswordResetController::class, 'showRequestForm'])->name('password.request');
+    Route::post('/forgot-password/find', [PasswordResetController::class, 'findAccount'])->name('password.find');
     Route::post('/forgot-password', [PasswordResetController::class, 'sendCode'])->name('password.email');
     Route::get('/forgot-password/verify', [PasswordResetController::class, 'showVerifyForm'])->name('password.verify');
     Route::post('/forgot-password/verify', [PasswordResetController::class, 'verifyCode'])->name('password.verify.post');
@@ -38,13 +48,22 @@ Route::get('/register/staff', [AuthController::class, 'showStaffRegister'])->nam
 Route::post('/register/staff', [AuthController::class, 'registerStaff'])->name('register.staff.post');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-Route::get('/auth/google', [GoogleDriveController::class, 'redirectToGoogle'])
-    ->name('google.redirect');
-
 Route::get('/auth/google/callback', [GoogleDriveController::class, 'handleGoogleCallback'])
     ->name('google.callback');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/email/verify', [EmailVerificationController::class, 'notice'])
+        ->name('verification.notice');
+    Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+        ->middleware(['signed', 'throttle:6,1'])
+        ->name('verification.verify');
+    Route::post('/email/verification-notification', [EmailVerificationController::class, 'resend'])
+        ->middleware('throttle:6,1')
+        ->name('verification.send');
+
+    Route::put('/academic-period', [AcademicPeriodController::class, 'update'])->name('academic.period.update');
+    Route::get('/auth/google', [GoogleDriveController::class, 'redirectToGoogle'])
+        ->name('google.redirect');
     Route::get('/google-drive', [GoogleDriveController::class, 'showTest'])
         ->name('google.drive.test');
     Route::post('/google-drive/upload', [GoogleDriveController::class, 'upload'])
@@ -55,6 +74,10 @@ Route::middleware('auth')->get('/events/{event}/image', [EventActionController::
 
 Route::get('/dashboard', function () {
     $user = auth()->user();
+
+    if ($redirect = AccountAccessGuard::redirectIfRestricted(request())) {
+        return $redirect;
+    }
 
     if ($user->isRejected()) {
         Auth::logout();
@@ -100,6 +123,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/scholars/{scholar}', [AdminController::class, 'showScholar'])->name('scholars.show');
     Route::get('/staff', [AdminController::class, 'staff'])->name('staff');
     Route::get('/staff/{staffMember}', [AdminController::class, 'showStaff'])->name('staff.show');
+    Route::put('/staff/{staffMember}/started-year', [AdminController::class, 'updateStaffStartedYear'])->name('staff.started-year');
     Route::get('/events', [AdminController::class, 'events'])->name('events');
     Route::get('/events/{event}', [AdminController::class, 'showEvent'])->name('events.show');
     Route::get('/events/{event}/attendances/{attendance}/photo', [AdminController::class, 'viewAttendancePhoto'])->name('events.attendances.photo');
@@ -112,13 +136,18 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/settings', [AdminController::class, 'settings'])->name('settings');
     Route::put('/settings', [AdminController::class, 'updateSettings'])->name('settings.update');
     Route::put('/settings/password', [AdminController::class, 'changePassword'])->name('settings.password');
+    Route::post('/settings/backup-emails', [AdminController::class, 'storeBackupEmail'])->name('settings.backup-emails.store');
+    Route::put('/settings/backup-emails/{backupEmail}', [AdminController::class, 'updateBackupEmail'])->name('settings.backup-emails.update');
+    Route::post('/settings/backup-emails/{backupEmail}/resend', [AdminController::class, 'resendBackupEmailVerification'])->name('settings.backup-emails.resend');
+    Route::delete('/settings/backup-emails/{backupEmail}', [AdminController::class, 'destroyBackupEmail'])->name('settings.backup-emails.destroy');
     Route::post('/settings/academic-years', [AdminController::class, 'storeAcademicYear'])->name('settings.academic-years.store');
     Route::put('/settings/academic-years/{academicYear}', [AdminController::class, 'updateAcademicYear'])->name('settings.academic-years.update');
-    Route::post('/settings/academic-years/{academicYear}/activate', [AdminController::class, 'activateAcademicYear'])->name('settings.academic-years.activate');
-    Route::post('/settings/academic-years/{academicYear}/deactivate', [AdminController::class, 'deactivateAcademicYear'])->name('settings.academic-years.deactivate');
     Route::delete('/settings/academic-years/{academicYear}', [AdminController::class, 'destroyAcademicYear'])->name('settings.academic-years.destroy');
     Route::post('/staff/{staffMember}/approve', [AdminController::class, 'approveStaff'])->name('staff.approve');
     Route::post('/staff/{staffMember}/reject', [AdminController::class, 'rejectStaff'])->name('staff.reject');
+    Route::post('/staff/{staffMember}/block', [AdminController::class, 'blockStaff'])->name('staff.block');
+    Route::post('/staff/{staffMember}/suspend', [AdminController::class, 'suspendStaff'])->name('staff.suspend');
+    Route::post('/staff/{staffMember}/reactivate', [AdminController::class, 'reactivateStaff'])->name('staff.reactivate');
     Route::post('/staff/{staffMember}/activate', [AdminController::class, 'activateStaff'])->name('staff.activate');
     Route::post('/staff/{staffMember}/deactivate', [AdminController::class, 'deactivateStaff'])->name('staff.deactivate');
     Route::delete('/staff/{staffMember}', [AdminController::class, 'deleteStaff'])->name('staff.delete');
@@ -169,6 +198,10 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
         Route::get('/reports/completion', [StaffController::class, 'completionReports'])->name('reports.completion');
         Route::post('/scholars/{scholar}/approve', [StaffController::class, 'approveScholar'])->name('scholars.approve');
         Route::post('/scholars/{scholar}/reject', [StaffController::class, 'rejectScholar'])->name('scholars.reject');
+        Route::post('/scholars/{scholar}/block', [StaffController::class, 'blockScholar'])->name('scholars.block');
+        Route::post('/scholars/{scholar}/suspend', [StaffController::class, 'suspendScholar'])->name('scholars.suspend');
+        Route::post('/scholars/{scholar}/reactivate', [StaffController::class, 'reactivateScholar'])->name('scholars.reactivate');
+        Route::put('/scholars/{scholar}/program-start', [StaffController::class, 'updateScholarProgramStart'])->name('scholars.program-start');
     });
 });
 

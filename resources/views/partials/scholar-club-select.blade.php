@@ -53,6 +53,7 @@
                     value="{{ $club['id'] }}"
                     data-city="{{ $club['city'] ?? '' }}"
                     data-province="{{ $club['province'] ?? '' }}"
+                    data-street="{{ $club['street'] ?? '' }}"
                     data-schools="{{ json_encode($club['schools'] ?? []) }}"
                     {{ (string) $selectedClubId === (string) $club['id'] ? 'selected' : '' }}
                 >
@@ -60,6 +61,20 @@
                 </option>
             @endforeach
         </select>
+    </div>
+
+    <div>
+        <label class="location-cascade-label" for="scholarship_club_street">Scholarship Club No./Street</label>
+        <input
+            class="form-input"
+            type="text"
+            id="scholarship_club_street"
+            data-scholar-club-street
+            value=""
+            placeholder="No./Street"
+            readonly
+            tabindex="-1"
+        >
     </div>
 
     <div>
@@ -110,6 +125,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-scholar-club-select]').forEach(function (field) {
         var clubSelect = field.querySelector('[data-scholar-club]');
+        var streetInput = field.querySelector('[data-scholar-club-street]');
         var provinceInput = field.querySelector('[data-scholar-club-province]');
         var cityInput = field.querySelector('[data-scholar-club-city]');
         var schoolSelect = field.querySelector('[data-scholar-school]');
@@ -136,6 +152,9 @@ document.addEventListener('DOMContentLoaded', function () {
             var hasClub = option && option.value;
             var schools = hasClub ? parseSchools(option) : [];
 
+            if (streetInput) {
+                streetInput.value = hasClub ? (option.getAttribute('data-street') || '') : '';
+            }
             provinceInput.value = hasClub ? (option.getAttribute('data-province') || '') : '';
             cityInput.value = hasClub ? (option.getAttribute('data-city') || '') : '';
 

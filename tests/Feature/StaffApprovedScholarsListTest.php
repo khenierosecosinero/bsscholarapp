@@ -19,6 +19,7 @@ class StaffApprovedScholarsListTest extends TestCase
         $this->actingAs($staff)
             ->get(route('staff.scholars'))
             ->assertOk()
+            ->assertSee('All Schools / Universities')
             ->assertSee($approved->full_name)
             ->assertSee($approved->scholar_id)
             ->assertDontSee($pending->full_name)

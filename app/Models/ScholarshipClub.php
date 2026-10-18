@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\LocationAddress;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +15,7 @@ class ScholarshipClub extends Model
         'name',
         'province',
         'city',
+        'street',
         'scholarship_program_id',
         'created_by',
         'is_active',
@@ -152,11 +154,7 @@ class ScholarshipClub extends Model
 
     public function addressLine(): string
     {
-        if ($this->city && $this->province) {
-            return $this->city.', '.$this->province;
-        }
-
-        return $this->city ?: $this->province ?: '';
+        return LocationAddress::line($this->street, $this->city, $this->province);
     }
 
     /**
@@ -175,6 +173,7 @@ class ScholarshipClub extends Model
                 'name' => $club->name,
                 'city' => $club->city,
                 'province' => $club->province,
+                'street' => $club->street,
                 'schools' => $club->schools
                     ->map(fn (ScholarshipClubSchool $school) => [
                         'id' => $school->id,
@@ -192,7 +191,7 @@ class ScholarshipClub extends Model
         return trim(preg_replace('/\s+/', ' ', $name) ?? $name);
     }
 
-    public static function createForProgram(string $name, int $programId, ?int $createdBy = null): self
+    public static function createForProgram(string $name, int $programId, ?int $createdBy = null, ?string $street = null): self
     {
         $name = static::normalizeName($name);
 
@@ -229,6 +228,7 @@ class ScholarshipClub extends Model
             'name' => $name,
             'city' => $location['city'],
             'province' => $location['province'],
+            'street' => LocationAddress::normalizeStreet($street),
             'scholarship_program_id' => $program->id,
             'created_by' => $createdBy,
             'is_active' => true,
@@ -240,7 +240,7 @@ class ScholarshipClub extends Model
         $this->updateDetails($name, (int) $this->scholarship_program_id);
     }
 
-    public function updateDetails(string $name, int $programId): void
+    public function updateDetails(string $name, int $programId, ?string $street = null, bool $syncStreet = false): void
     {
         $name = static::normalizeName($name);
 
@@ -277,6 +277,9 @@ class ScholarshipClub extends Model
         $this->name = $name;
         $this->city = $location['city'];
         $this->province = $location['province'];
+        if ($syncStreet) {
+            $this->street = LocationAddress::normalizeStreet($street);
+        }
         $this->scholarship_program_id = $program->id;
         $this->save();
 

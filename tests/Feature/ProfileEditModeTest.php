@@ -43,7 +43,8 @@ class ProfileEditModeTest extends TestCase
 
     public function test_staff_and_admin_settings_use_the_same_edit_save_workflow(): void
     {
-        $staffHtml = $this->actingAs($this->makeStaff())
+        $staff = $this->makeStaff();
+        $staffHtml = $this->actingAs($staff)
             ->get(route('staff.settings'))
             ->assertOk()
             ->getContent();
@@ -53,6 +54,16 @@ class ProfileEditModeTest extends TestCase
         $this->assertStringContainsString('Save Changes', $staffHtml);
         $this->assertStringContainsString('name="scholarship_club_name"', $staffHtml);
         $this->assertStringContainsString('name="cellphone_number"', $staffHtml);
+        $this->assertStringContainsString('Academic Year and Semester', $staffHtml);
+        $this->assertStringContainsString('id="staff_year_start"', $staffHtml);
+        $this->assertStringContainsString('id="staff_semester"', $staffHtml);
+        $this->assertStringContainsString('Apply View', $staffHtml);
+
+        $this->actingAs($staff)
+            ->get(route('staff.dashboard'))
+            ->assertOk()
+            ->assertDontSee('class="academic-period-filter"', false)
+            ->assertDontSee('aria-label="Academic year"', false);
 
         $adminHtml = $this->actingAs($this->makeAdmin())
             ->get(route('admin.settings'))

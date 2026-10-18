@@ -7,7 +7,10 @@ use App\Models\Event;
 use App\Models\EventRegistration;
 use App\Models\ScholarshipClub;
 use App\Models\ScholarshipProgram;
+use App\Support\LocationAddress;
 use App\Models\User;
+use App\Services\AcademicSettingsService;
+use App\Services\AccountAccessService;
 use App\Services\AccountService;
 use App\Services\AttendanceSessionService;
 use App\Services\ScholarService;
@@ -27,8 +30,10 @@ class StaffController extends Controller
 {
     public function __construct(
         private ScholarService $scholar,
+        private AcademicSettingsService $academic,
         private StaffDashboardService $staffData,
         private AccountService $accounts,
+        private AccountAccessService $accountAccess,
         private AttendanceSessionService $attendanceSessions,
         private ScholarshipProgramAssignmentService $programAssignment,
     ) {}
@@ -47,14 +52,29 @@ class StaffController extends Controller
         $this->scholar->syncMissedCheckInsForPrograms($programIds);
         $this->scholar->syncCompletedEventHoursForPrograms($programIds);
 
+        $address = $staff->scholarshipClubAddress();
+        $subtitle = "Welcome back, {$staff->full_name}!";
+        if ($address !== '') {
+            $subtitle .= " Scholarship Club address: {$address}.";
+        } else {
+            $subtitle .= " Here's what's happening in {$staff->scholarshipClubName()}.";
+        }
+
         return view('staff.dashboard', array_merge(
-            $this->layoutData('dashboard', 'Dashboard', "Welcome back, {$staff->full_name}! Here's what's happening in {$staff->scholarshipClubName()}."),
+            $this->layoutData('dashboard', 'Dashboard', $subtitle),
             [
                 'stats' => $this->staffData->dashboardStats($programIds, $staff),
                 'pendingApprovals' => $this->staffData->pendingApprovals($programIds),
                 'upcomingEvents' => $this->staffData->upcomingEvents($programIds, 3, $staff),
                 'recentActivities' => $this->staffData->recentActivities($programIds),
-                'attendanceBreakdown' => $this->staffData->attendanceBreakdown($programIds),
+                'attendanceBreakdown' => $this->staffData->attendanceBreakdown(
+                    $programIds,
+                    $this->academic->resolveReportFilter(
+                        (int) $this->academic->selectedPeriod()->year_start,
+                        $this->academic->selectedPeriod()->semester
+                    ),
+                    $staff
+                ),
                 'hoursOverview' => $this->staffData->hoursOverview($programIds),
             ]
         ));
@@ -65,27 +85,39 @@ class StaffController extends Controller
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
         $search = trim((string) $request->get('search', ''));
+        $schoolFilter = $this->staffData->scholarsSchoolFilter($request, $programIds, $staff);
 
-        $scholars = $this->staffData->scholarsQuery($programIds, $staff)
-            ->where('status', User::STATUS_APPROVED)
-            ->with(['scholarshipProgram', 'scholarshipClub'])
+        $scholarsQuery = $this->staffData->scholarsQuery($programIds, $staff)
+            ->whereIn('status', [User::STATUS_APPROVED, User::STATUS_BLOCKED, User::STATUS_SUSPENDED])
+            ->with(['scholarshipProgram', 'scholarshipClub', 'scholarshipClubSchool', 'activeSuspension.issuer'])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('full_name', 'like', "%{$search}%")
                         ->orWhere('scholar_id', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%");
                 });
-            })
+            });
+
+        $this->staffData->applySchoolFilter($scholarsQuery, $schoolFilter);
+
+        $scholars = $scholarsQuery
             ->orderBy('full_name')
-            ->paginate(10)
-            ->withQueryString();
+            ->get();
 
         $stats = $this->staffData->scholarPageStats($programIds, $staff);
-        $stats['total_scholars'] = $stats['active_scholars'];
+        $stats['total_scholars'] = $this->staffData->scholarsQuery($programIds, $staff)
+            ->whereIn('status', [User::STATUS_APPROVED, User::STATUS_BLOCKED, User::STATUS_SUSPENDED])
+            ->count();
 
         return view('staff.scholars', array_merge(
             $this->layoutData('scholars', 'Scholars', 'Scholars registered in '.$staff->scholarshipClubLabel().'.'),
-            compact('scholars', 'search', 'stats')
+            [
+                'scholars' => $scholars,
+                'search' => $search,
+                'stats' => $stats,
+                'schoolOptions' => $schoolFilter['options'],
+                'selectedSchoolKey' => $schoolFilter['key'],
+            ]
         ));
     }
 
@@ -121,7 +153,7 @@ class StaffController extends Controller
             'You can only manage scholars assigned to your municipality, city, or province.'
         );
 
-        $scholar->load(['scholarshipProgram', 'scholarshipClub']);
+        $scholar->load(['scholarshipProgram', 'scholarshipClub', 'scholarshipClubSchool', 'activeSuspension.issuer']);
         $this->scholar->ensureUserDocuments($scholar);
         $this->scholar->syncMissedCheckInsForUser($scholar);
         $this->scholar->syncCompletedEventHoursForUser($scholar);
@@ -135,11 +167,41 @@ class StaffController extends Controller
                 'hourStats' => $hourTracking['current'],
                 'semesterInfo' => $hourTracking['period'],
                 'hourTracking' => $hourTracking,
+                'programStartYearOptions' => $this->scholar->programStartYearOptions($scholar),
                 'documents' => $scholar->documents()->with('documentType')->get(),
                 'recentActivities' => $scholar->activities()->latest()->limit(10)->get(),
-                'attendances' => $scholar->attendances()->with('event')->latest()->get(),
+                'attendances' => $this->academic->scopeAttendancesForPeriod(
+                    $scholar->attendances()->with('event')->latest(),
+                    $this->academic->selectedPeriod()
+                )->get(),
             ]
         ));
+    }
+
+    public function updateScholarProgramStart(Request $request, User $scholar)
+    {
+        $staff = Auth::user();
+
+        abort_unless($scholar->isScholar(), 404);
+        abort_unless(
+            $staff->canManageScholar($scholar),
+            403,
+            'You can only manage scholars assigned to your Scholarship Club.'
+        );
+
+        $validated = $request->validate([
+            'program_start_year' => ['required', 'integer'],
+        ]);
+
+        $start = $this->scholar->setProgramStartYear($scholar, (int) $validated['program_start_year']);
+        $this->scholar->logActivity($staff, 'staff', 'Scholar Start Academic Year updated', [
+            'scholar_id' => $scholar->id,
+            'program_start_year' => $start,
+        ]);
+
+        return redirect()
+            ->route('staff.scholars.show', $scholar)
+            ->with('success', 'Start Academic Year saved as AY '.$start.'–'.($start + 1).'.');
     }
 
     public function events(Request $request)
@@ -396,6 +458,7 @@ class StaffController extends Controller
                 ),
             ],
             'cellphone_number' => ['nullable', 'string', 'max:50'],
+            'street' => ['nullable', 'string', 'max:255'],
         ], [
             'scholarship_club_name.required' => 'Please enter a Scholarship Club Name.',
             'scholarship_program_id.required' => 'Please select the Province and Municipality or City where the Scholarship Club is located.',
@@ -403,18 +466,22 @@ class StaffController extends Controller
         ]);
 
         $assignment = $this->programAssignment->resolveRegistrationAssignment((int) $validated['scholarship_program_id']);
+        $street = LocationAddress::normalizeStreet($validated['street'] ?? null);
 
-        DB::transaction(function () use ($staff, $validated, $assignment) {
+        DB::transaction(function () use ($staff, $validated, $assignment, $street) {
             if ($staff->scholarshipClub) {
                 $staff->scholarshipClub->updateDetails(
                     $validated['scholarship_club_name'],
-                    (int) $assignment['scholarship_program_id']
+                    (int) $assignment['scholarship_program_id'],
+                    $street,
+                    true
                 );
             } else {
                 $club = ScholarshipClub::createForProgram(
                     $validated['scholarship_club_name'],
                     (int) $assignment['scholarship_program_id'],
-                    $staff->id
+                    $staff->id,
+                    $street
                 );
                 $staff->scholarship_club_id = $club->id;
             }
@@ -422,6 +489,7 @@ class StaffController extends Controller
             $staff->scholarship_program_id = $assignment['scholarship_program_id'];
             $staff->city = $assignment['city'];
             $staff->province = $assignment['province'];
+            $staff->street = $street;
             $contactNumber = trim((string) ($validated['cellphone_number'] ?? ''));
             $staff->cellphone_number = $contactNumber !== '' ? $contactNumber : null;
             $staff->save();
@@ -585,6 +653,67 @@ class StaffController extends Controller
             "{$scholarName}'s account has been rejected and permanently removed from the system.",
             ['action' => 'rejected', 'scholar_id' => $scholarId]
         );
+    }
+
+    public function blockScholar(User $scholar)
+    {
+        return $this->restrictScholar($scholar, User::STATUS_BLOCKED);
+    }
+
+    public function suspendScholar(Request $request, User $scholar)
+    {
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        return $this->restrictScholar($scholar, User::STATUS_SUSPENDED, $validated['reason'] ?? null);
+    }
+
+    public function reactivateScholar(User $scholar)
+    {
+        $staff = Auth::user();
+
+        abort_unless($scholar->isScholar(), 404);
+        abort_unless($staff->canRestrictAccount($scholar), 403);
+
+        if (! $scholar->isAccessRestricted()) {
+            return back()->with('error', 'Only blocked or suspended scholar accounts can be reactivated.');
+        }
+
+        $this->accountAccess->reactivate($scholar, $staff);
+
+        return back()->with('success', "{$scholar->full_name}'s account has been reactivated.");
+    }
+
+    private function restrictScholar(User $scholar, string $status, ?string $reason = null)
+    {
+        $staff = Auth::user();
+
+        abort_unless($scholar->isScholar(), 404);
+        abort_unless($staff->canRestrictAccount($scholar), 403);
+
+        if (! $scholar->canBeRestricted()) {
+            return back()->with('error', 'Only active scholar accounts can be blocked or suspended.');
+        }
+
+        if ($scholar->status === $status) {
+            $label = $scholar->accountStatusLabel();
+
+            return back()->with('error', "{$scholar->full_name}'s account is already {$label}.");
+        }
+
+        $this->accountAccess->restrict($scholar, $status, $staff, $reason);
+
+        if ($status === User::STATUS_SUSPENDED) {
+            $ends = $scholar->fresh()->openSuspension()?->ends_at;
+            $until = $ends
+                ? $ends->timezone(config('app.timezone'))->format('M j, Y g:i A')
+                : '7 days from now';
+
+            return back()->with('success', "{$scholar->full_name}'s account has been suspended for 7 days, until {$until}.");
+        }
+
+        return back()->with('success', "{$scholar->full_name}'s account has been blocked.");
     }
 
     private function approvalActionSucceeded(Request $request, string $message, array $extra = [])

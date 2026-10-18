@@ -13,6 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->web(append: [
+            \App\Http\Middleware\EnsureAccountAccess::class,
+        ]);
+
         $middleware->alias([
             'scholar' => \App\Http\Middleware\EnsureScholar::class,
             'scholar.approved' => \App\Http\Middleware\EnsureScholarApproved::class,

@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Support\PhilippineIslandGroup;
+use App\Support\SurigaoLocations;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -12,6 +12,11 @@ use Illuminate\Support\Str;
 
 class ScholarshipProgram extends Model
 {
+    public const PICKER_PROVINCES = [
+        'Surigao del Norte',
+        'Surigao del Sur',
+    ];
+
     protected $fillable = [
         'psgc_code',
         'location_name',
@@ -220,29 +225,74 @@ class ScholarshipProgram extends Model
 
     /**
      * City and municipality names for profile pickers.
-     * Scoped to the scholar's province when that province has city records.
+     * Only municipalities/cities that belong to the selected province are listed.
+     * The scholar's currently saved city is kept so existing records still display.
      *
      * @return list<string>
      */
+    /**
+     * Province names shown in location dropdowns.
+     * Saved provinces outside Surigao del Norte and Surigao del Sur stay selectable
+     * so existing records can still be displayed and saved.
+     *
+     * @return list<string>
+     */
+    public static function provinceOptions(?string $currentProvince = null): array
+    {
+        $options = self::PICKER_PROVINCES;
+
+        if (filled($currentProvince) && static::canonicalPickerProvince($currentProvince) === null) {
+            array_unshift($options, trim((string) $currentProvince));
+        }
+
+        return $options;
+    }
+
+    /**
+     * Municipality and city names keyed by province for cascading location fields.
+     *
+     * @return array<string, list<string>>
+     */
+    public static function municipalitiesByProvince(?string $currentProvince = null, ?string $currentCity = null): array
+    {
+        $catalog = [];
+
+        foreach (self::PICKER_PROVINCES as $province) {
+            $includeCurrent = filled($currentProvince)
+                && strcasecmp((string) $currentProvince, $province) === 0;
+
+            $catalog[$province] = static::municipalityOptions(
+                $province,
+                $includeCurrent ? $currentCity : null
+            );
+        }
+
+        if (filled($currentProvince) && static::canonicalPickerProvince($currentProvince) === null) {
+            $catalog[trim((string) $currentProvince)] = static::municipalityOptions($currentProvince, $currentCity);
+        }
+
+        return $catalog;
+    }
+
     public static function municipalityOptions(?string $provinceName, ?string $currentCity = null): array
     {
-        $query = static::active()->cities();
-
-        if (filled($provinceName)) {
-            $query->where('province_name', $provinceName);
+        $provinceName = static::canonicalPickerProvince($provinceName);
+        if ($provinceName === null) {
+            return filled($currentCity) ? [(string) $currentCity] : [];
         }
 
-        $names = $query
-            ->orderBy('location_name')
-            ->pluck('location_name')
+        $names = collect(SurigaoLocations::municipalities($provinceName))
+            ->merge(
+                static::active()->cities()
+                    ->where('province_name', $provinceName)
+                    ->orderBy('location_name')
+                    ->pluck('location_name')
+            )
             ->unique()
             ->filter()
+            ->sort(SORT_NATURAL)
             ->values()
             ->all();
-
-        if ($names === [] && filled($provinceName)) {
-            return static::municipalityOptions(null, $currentCity);
-        }
 
         if (filled($currentCity) && ! in_array($currentCity, $names, true)) {
             array_unshift($names, $currentCity);
@@ -251,8 +301,35 @@ class ScholarshipProgram extends Model
         return $names;
     }
 
+    public static function isPickerProvince(?string $name): bool
+    {
+        if (! filled($name)) {
+            return false;
+        }
+
+        foreach (self::PICKER_PROVINCES as $province) {
+            if (strcasecmp($province, trim((string) $name)) === 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Constrain a scholarship_programs query to active Municipality/City programs
+     * in Surigao del Norte or Surigao del Sur.
+     */
+    public static function constrainActivePickerCities(Builder $query): Builder
+    {
+        return $query->where('is_active', true)
+            ->where('location_type', 'city_municipality')
+            ->whereIn('province_name', self::PICKER_PROVINCES);
+    }
+
     /**
      * Provinces with nested municipalities/cities for registration pickers.
+     * The Province list is always Surigao del Norte and Surigao del Sur.
      *
      * @return list<array<string, mixed>>
      */
@@ -260,7 +337,7 @@ class ScholarshipProgram extends Model
     {
         $programs = static::active()
             ->orderBy('location_name')
-            ->get(['id', 'location_name', 'location_type', 'province_name', 'region_name', 'psgc_code', 'name', 'display_name']);
+            ->get(['id', 'location_name', 'location_type', 'province_name', 'name', 'display_name']);
 
         $clubsByProgram = $includeClubs
             ? ScholarshipClub::query()
@@ -285,61 +362,64 @@ class ScholarshipProgram extends Model
                 ->all();
         };
 
-        $provinces = $programs->where('location_type', 'province')->values();
-        $citiesByProvince = $programs
-            ->where('location_type', 'city_municipality')
-            ->groupBy(fn (self $program) => $program->province_name ?: 'Other');
+        $cityPayload = function (BaseCollection $cities) use ($clubPayload): array {
+            return static::sortAlphabetically($cities)->map(fn (self $city) => [
+                'id' => $city->id,
+                'name' => $city->location_name,
+                'label' => $city->programLabel(),
+                'club_name' => $city->clubName(),
+                'clubs' => $clubPayload($city->id),
+            ])->values()->all();
+        };
 
-        $tree = [];
-        $listedProvinces = [];
+        $provincesByName = $programs
+            ->where('location_type', 'province')
+            ->filter(fn (self $program) => static::isPickerProvince($program->location_name))
+            ->keyBy(fn (self $program) => static::canonicalPickerProvince($program->location_name));
 
-        foreach ($provinces as $province) {
-            $listedProvinces[] = $province->location_name;
-            $cities = $citiesByProvince->get($province->location_name, collect());
+        $citiesByProvince = collect(self::PICKER_PROVINCES)
+            ->mapWithKeys(fn (string $name) => [$name => collect()]);
 
-            $tree[] = [
-                'id' => $province->id,
-                'name' => $province->location_name,
-                'label' => $province->programLabel(),
-                'club_name' => $province->clubName(),
-                'clubs' => $clubPayload($province->id),
-                'region' => $province->region_name,
-                'island' => PhilippineIslandGroup::fromProgram($province),
-                'cities' => static::sortAlphabetically($cities)->map(fn (self $city) => [
-                    'id' => $city->id,
-                    'name' => $city->location_name,
-                    'label' => $city->programLabel(),
-                    'club_name' => $city->clubName(),
-                    'clubs' => $clubPayload($city->id),
-                ])->values()->all(),
-            ];
-        }
-
-        foreach ($citiesByProvince as $provinceName => $cities) {
-            if (in_array($provinceName, $listedProvinces, true)) {
+        foreach ($programs->where('location_type', 'city_municipality') as $city) {
+            $provinceName = static::canonicalPickerProvince($city->province_name);
+            if ($provinceName === null) {
                 continue;
             }
 
+            $citiesByProvince[$provinceName]->push($city);
+        }
+
+        $tree = [];
+
+        foreach (self::PICKER_PROVINCES as $provinceName) {
+            $province = $provincesByName->get($provinceName);
+            $cities = $citiesByProvince->get($provinceName, collect());
+
             $tree[] = [
-                'id' => null,
+                'id' => $province?->id,
                 'name' => $provinceName,
-                'label' => $provinceName,
-                'club_name' => $provinceName,
-                'clubs' => [],
-                'region' => $cities->first()?->region_name,
-                'island' => $cities->first() ? PhilippineIslandGroup::fromProgram($cities->first()) : null,
-                'cities' => static::sortAlphabetically($cities)->map(fn (self $city) => [
-                    'id' => $city->id,
-                    'name' => $city->location_name,
-                    'label' => $city->programLabel(),
-                    'club_name' => $city->clubName(),
-                    'clubs' => $clubPayload($city->id),
-                ])->values()->all(),
+                'label' => $province?->programLabel() ?? $provinceName,
+                'club_name' => $province?->clubName() ?? $provinceName,
+                'clubs' => $clubPayload($province?->id),
+                'cities' => $cityPayload($cities),
             ];
         }
 
-        usort($tree, fn (array $a, array $b) => strcasecmp($a['name'], $b['name']));
-
         return $tree;
+    }
+
+    public static function canonicalPickerProvince(?string $name): ?string
+    {
+        if (! filled($name)) {
+            return null;
+        }
+
+        foreach (self::PICKER_PROVINCES as $province) {
+            if (strcasecmp($province, trim((string) $name)) === 0) {
+                return $province;
+            }
+        }
+
+        return null;
     }
 }

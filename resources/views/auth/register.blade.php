@@ -6,9 +6,7 @@
         <div class="auth-card">
             <h1>Registration</h1>
 
-            @if($errors->any())
-                <div class="errors">{{ implode(' ', $errors->all()) }}</div>
-            @endif
+            @include('partials.flash-messages')
 
             <form method="POST" action="{{ route('register.post') }}" class="auth-form">
                 @csrf
@@ -18,8 +16,10 @@
                     @include('partials.scholar-club-select', [
                         'clubs' => $clubs,
                     ])
+                    <label class="location-cascade-label" for="street" style="display:block;font-size:12px;font-weight:600;color:#6b7280;margin:0 0 6px;padding-left:4px">No./Street</label>
+                    <input class="form-input" id="street" type="text" name="street" placeholder="House number and street name" value="{{ old('street') }}" maxlength="255" autocomplete="address-line1" />
                     <p class="muted small" style="margin:-4px 0 12px;padding-left:4px">
-                        Choose a Scholarship Club. The Province, Municipality/City, and School/University list come from that club.
+                        Choose a Scholarship Club. Province and Municipality/City come from that club. No./Street is your house number and street name.
                     </p>
                     <input class="form-input" type="email" name="email" placeholder="Email" value="{{ old('email') }}" required autocomplete="email" />
                     <label class="location-cascade-label" for="course_year_level" style="display:block;font-size:12px;font-weight:600;color:#6b7280;margin:0 0 6px;padding-left:4px">Course</label>

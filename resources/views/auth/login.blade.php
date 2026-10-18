@@ -7,21 +7,7 @@
             <h1>Login</h1>
             <p class="lead">Welcome back. You can log in at any time — accounts stay active even after a long period of inactivity.</p>
 
-            @if(session('success'))
-                <div class="alert success">{{ session('success') }}</div>
-            @endif
-
-            @if(session('error'))
-                <div class="errors">{{ session('error') }}</div>
-            @endif
-
-            @if(session('warning'))
-                <div class="errors" style="background:#fff7ed;border-color:#fed7aa;color:#9a3412">{{ session('warning') }}</div>
-            @endif
-
-            @if($errors->any())
-                <div class="errors">{{ $errors->first() }}</div>
-            @endif
+            @include('partials.flash-messages')
 
             <form method="POST" action="{{ route('login.post') }}" class="auth-form">
                 @csrf

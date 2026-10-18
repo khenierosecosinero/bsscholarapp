@@ -296,8 +296,10 @@ body:has(.admin-shell) {
     font-weight: 700;
     text-decoration: underline;
     text-underline-offset: 2px;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
 }
 
 .admin-scholar-name-link {
@@ -421,6 +423,259 @@ body:has(.admin-shell) {
     margin: 0;
 }
 
+/* Shared Admin list tables: centered headers/cells, readable text, horizontal scroll */
+.admin-data-table-wrap,
+.admin-staff-pending-wrap,
+.admin-staff-accounts-wrap {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.admin-staff-pending-card,
+.admin-staff-accounts-card {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.admin-data-table.staff-manage-table {
+    width: 100%;
+    margin: 0 auto;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+.admin-data-table thead th,
+.admin-data-table tbody td {
+    text-align: center;
+    vertical-align: middle;
+    padding: 14px 12px;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+}
+
+.admin-data-table tr.staff-table-empty td {
+    text-align: center;
+    vertical-align: middle;
+    padding: 28px 16px;
+    color: #6b7280;
+    font-weight: 600;
+}
+
+.admin-data-table .staff-scholar-cell {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.admin-data-table .staff-scholar-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 0 1 auto;
+    width: auto;
+    max-width: calc(100% - 52px);
+    min-width: 0;
+    text-align: center;
+}
+
+.admin-data-table .staff-scholar-meta strong,
+.admin-data-table .staff-scholar-meta small,
+.admin-data-table .admin-scholar-name-link,
+.admin-data-table .admin-event-name-link,
+.admin-data-table .admin-staff-pending-name,
+.admin-data-table .admin-staff-accounts-name {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    line-height: 1.35;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+}
+
+.admin-data-table .admin-staff-pending-name,
+.admin-data-table .admin-staff-accounts-name,
+.admin-data-table .admin-scholar-name-link,
+.admin-data-table .admin-event-name-link {
+    font-weight: 700;
+}
+
+.admin-data-table td.staff-col-status .staff-badge {
+    margin: 0 auto;
+}
+
+.admin-data-table th.staff-col-status,
+.admin-data-table td.staff-col-status {
+    width: 110px;
+    min-width: 110px;
+}
+
+.admin-data-table th.staff-col-actions,
+.admin-data-table td.staff-col-actions {
+    width: 120px;
+    min-width: 120px;
+    max-width: 132px;
+    overflow: visible;
+}
+
+.admin-data-table td.staff-col-actions .admin-staff-actions.staff-action-group {
+    display: flex;
+    flex-direction: column;
+    flex-flow: column nowrap;
+    align-items: stretch;
+    justify-content: center;
+    gap: 8px;
+    width: 104px;
+    max-width: 104px;
+    min-width: 0;
+    margin: 0 auto;
+    white-space: normal;
+}
+
+.admin-data-table td.staff-col-actions .admin-staff-actions form {
+    display: block;
+    width: 100%;
+    margin: 0;
+    flex: 0 0 auto;
+}
+
+.admin-data-table td.staff-col-actions .admin-staff-actions .staff-btn,
+.admin-data-table td.staff-col-actions .admin-staff-actions form .staff-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    min-height: 34px;
+    padding: 7px 12px;
+    box-sizing: border-box;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+/* Scholars */
+.admin-scholars-table.admin-data-table {
+    min-width: 1120px;
+}
+
+.admin-scholars-table th:nth-child(1),
+.admin-scholars-table td:nth-child(1) { width: 20%; min-width: 210px; }
+.admin-scholars-table th:nth-child(2),
+.admin-scholars-table td:nth-child(2) { width: 12%; min-width: 120px; white-space: nowrap; }
+.admin-scholars-table th:nth-child(3),
+.admin-scholars-table td:nth-child(3) { width: 14%; min-width: 150px; }
+.admin-scholars-table th:nth-child(4),
+.admin-scholars-table td:nth-child(4) { width: 14%; min-width: 150px; }
+.admin-scholars-table th:nth-child(5),
+.admin-scholars-table td:nth-child(5) { width: 14%; min-width: 140px; }
+.admin-scholars-table th:nth-child(6),
+.admin-scholars-table td:nth-child(6) { width: 14%; min-width: 150px; }
+
+/* Pending Scholar Staff */
+.admin-staff-pending-table.admin-data-table {
+    min-width: 1080px;
+}
+
+.admin-staff-pending-table th.admin-staff-pending-name-col,
+.admin-staff-pending-table td.admin-staff-pending-name-col { width: 20%; min-width: 200px; }
+.admin-staff-pending-table th:nth-child(2),
+.admin-staff-pending-table td:nth-child(2) { width: 18%; min-width: 170px; }
+.admin-staff-pending-table th:nth-child(3),
+.admin-staff-pending-table td:nth-child(3) { width: 14%; min-width: 140px; }
+.admin-staff-pending-table th:nth-child(4),
+.admin-staff-pending-table td:nth-child(4) { width: 12%; min-width: 110px; white-space: nowrap; }
+.admin-staff-pending-table th:nth-child(5),
+.admin-staff-pending-table td:nth-child(5) { width: 14%; min-width: 140px; }
+
+/* All Scholar Staff Accounts */
+.admin-staff-accounts-table.admin-data-table {
+    min-width: 1080px;
+}
+
+.admin-staff-accounts-table th.admin-staff-accounts-name-col,
+.admin-staff-accounts-table td.admin-staff-accounts-name-col { width: 20%; min-width: 200px; }
+.admin-staff-accounts-table th:nth-child(2),
+.admin-staff-accounts-table td:nth-child(2) { width: 18%; min-width: 180px; }
+.admin-staff-accounts-table th:nth-child(3),
+.admin-staff-accounts-table td:nth-child(3) { width: 12%; min-width: 120px; white-space: nowrap; }
+.admin-staff-accounts-table th:nth-child(4),
+.admin-staff-accounts-table td:nth-child(4) { width: 14%; min-width: 140px; }
+.admin-staff-accounts-table th:nth-child(5),
+.admin-staff-accounts-table td:nth-child(5) { width: 12%; min-width: 110px; white-space: nowrap; }
+
+/* Events */
+.admin-events-table.admin-data-table {
+    min-width: 980px;
+}
+
+.admin-events-table th:nth-child(1),
+.admin-events-table td:nth-child(1) { width: 24%; min-width: 200px; }
+.admin-events-table th:nth-child(2),
+.admin-events-table td:nth-child(2) { width: 18%; min-width: 150px; }
+.admin-events-table th:nth-child(3),
+.admin-events-table td:nth-child(3) { width: 12%; min-width: 110px; white-space: nowrap; }
+.admin-events-table th:nth-child(4),
+.admin-events-table td:nth-child(4) { width: 18%; min-width: 160px; }
+.admin-events-table th:nth-child(6),
+.admin-events-table td:nth-child(6) { width: 12%; min-width: 120px; white-space: nowrap; }
+
+/* Service Hours */
+.admin-hours-table.admin-data-table {
+    min-width: 1020px;
+}
+
+.admin-hours-table th:nth-child(1),
+.admin-hours-table td:nth-child(1) { width: 18%; min-width: 170px; }
+.admin-hours-table th:nth-child(2),
+.admin-hours-table td:nth-child(2) { width: 16%; min-width: 140px; }
+.admin-hours-table th:nth-child(3),
+.admin-hours-table td:nth-child(3) { width: 18%; min-width: 160px; }
+.admin-hours-table th:nth-child(4),
+.admin-hours-table td:nth-child(4),
+.admin-hours-table th:nth-child(5),
+.admin-hours-table td:nth-child(5),
+.admin-hours-table th:nth-child(6),
+.admin-hours-table td:nth-child(6) {
+    width: 10%;
+    min-width: 100px;
+    white-space: nowrap;
+}
+
+/* Documents */
+.admin-documents-table.admin-data-table {
+    min-width: 880px;
+}
+
+.admin-documents-table th:nth-child(1),
+.admin-documents-table td:nth-child(1) { width: 22%; min-width: 180px; }
+.admin-documents-table th:nth-child(2),
+.admin-documents-table td:nth-child(2) { width: 22%; min-width: 160px; }
+.admin-documents-table th:nth-child(3),
+.admin-documents-table td:nth-child(3) { width: 22%; min-width: 160px; }
+.admin-documents-table th:nth-child(4),
+.admin-documents-table td:nth-child(4) { width: 14%; min-width: 120px; white-space: nowrap; }
+
 .flash-alert {
     margin-bottom: 16px;
     padding: 12px 16px;
@@ -450,6 +705,184 @@ body:has(.admin-shell) {
 .admin-report-year-banner {
     background: #fff7ed;
     border-color: #fed7aa;
+}
+
+.admin-academic-year-selector {
+    display: block;
+    margin: 0 0 20px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(15, 39, 68, 0.06), 0 1px 2px rgba(15, 39, 68, 0.04);
+    padding: 20px 22px 18px;
+}
+
+.admin-academic-year-selector.staff-card {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 20px 22px 18px;
+}
+
+.admin-academic-year-selector-compact {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.admin-academic-year-selector-header {
+    margin: 0 0 12px;
+    padding: 0;
+    border: 0;
+}
+
+.admin-academic-year-selector-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.25;
+    color: #0f2744;
+}
+
+.admin-academic-year-selector-form {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 0 14px;
+}
+
+.admin-academic-year-selector-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    flex: none;
+}
+
+.admin-academic-year-selector-field label {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+    line-height: 1.3;
+}
+
+.admin-academic-year-selector-field .staff-select,
+.admin-academic-year-selector-select {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-height: 42px;
+    padding: 10px 40px 10px 12px;
+    box-sizing: border-box;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    appearance: none;
+    -webkit-appearance: none;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: #0f2744;
+    line-height: 1.3;
+    cursor: pointer;
+}
+
+.admin-academic-year-selector-field .staff-select:focus,
+.admin-academic-year-selector-select:focus {
+    outline: none;
+    border-color: #c2410c;
+    box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.15);
+}
+
+.admin-academic-year-selector-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 12px 14px;
+    box-sizing: border-box;
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    border-radius: 10px;
+    color: #9a3412;
+}
+
+.admin-academic-year-selector-banner-icon {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    margin-top: 1px;
+    color: #c2410c;
+}
+
+.admin-academic-year-selector-banner-icon svg {
+    display: block;
+    width: 22px;
+    height: 22px;
+}
+
+.admin-academic-year-selector-banner-text {
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.45;
+    color: #9a3412;
+    overflow-wrap: anywhere;
+}
+
+.admin-academic-year-selector-banner-text strong {
+    font-weight: 800;
+    color: #9a3412;
+}
+
+@media (max-width: 900px) {
+    .admin-academic-year-selector,
+    .admin-academic-year-selector.staff-card,
+    .admin-academic-year-selector-compact {
+        width: 100%;
+        max-width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+        padding: 18px 16px 16px;
+    }
+}
+
+@media (max-width: 700px) {
+    .admin-academic-year-selector,
+    .admin-academic-year-selector.staff-card,
+    .admin-academic-year-selector-compact {
+        padding: 16px 14px 14px;
+    }
+
+    .admin-academic-year-selector-header h2 {
+        font-size: 17px;
+    }
+
+    .admin-academic-year-selector-field .staff-select,
+    .admin-academic-year-selector-select {
+        min-height: 44px;
+    }
+
+    .admin-academic-year-selector-banner {
+        padding: 12px;
+    }
 }
 
 .admin-regional-reports {
@@ -709,6 +1142,11 @@ body:has(.admin-shell) {
         gap: 8px;
     }
     .admin-staff-page .staff-action-group .staff-btn {
+        min-height: 40px;
+    }
+
+    .admin-data-table td.staff-col-actions .admin-staff-actions .staff-btn,
+    .admin-data-table td.staff-col-actions .admin-staff-actions form .staff-btn {
         min-height: 40px;
     }
 }

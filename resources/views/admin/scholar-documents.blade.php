@@ -4,7 +4,6 @@
 
 @php
     $backQuery = array_filter([
-        'region' => request('region') ?: null,
         'location' => request('location', $locationKey ?? 'all'),
         'club' => request('club') ?: null,
         'search' => request('search') ?: null,
@@ -28,7 +27,7 @@
             </div>
             <div class="admin-scholar-field">
                 <span>Location</span>
-                <strong>{{ collect([$scholar->city, $scholar->province])->filter()->implode(', ') ?: '—' }}</strong>
+                <strong>{{ $scholar->homeAddress() !== '' ? $scholar->homeAddress() : '—' }}</strong>
             </div>
             <div class="admin-scholar-field">
                 <span>Submitted Files</span>
@@ -44,13 +43,13 @@
             <span class="staff-muted">{{ $documents->count() }} {{ \Illuminate\Support\Str::plural('record', $documents->count()) }}</span>
         </div>
         <div class="staff-table-wrap">
-            <table class="staff-table staff-stack-table">
+            <table class="staff-table staff-stack-table staff-manage-table">
                 <thead>
                     <tr>
                         <th>Document Type</th>
                         <th>Submitted</th>
-                        <th>Status</th>
-                        <th>File</th>
+                        <th class="staff-col-status">Status</th>
+                        <th class="staff-col-actions">File</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -65,13 +64,13 @@
                             <td data-label="Submitted">
                                 {{ $document->uploaded_at?->timezone(config('app.timezone'))->format('M j, Y g:i A') ?? '—' }}
                             </td>
-                            <td data-label="Status">
+                            <td data-label="Status" class="staff-col-status">
                                 <span class="staff-badge {{ $document->reviewBadgeClass() }}">{{ ucfirst(str_replace('_', ' ', $document->reviewStatus())) }}</span>
                                 @if($document->status === 'rejected' && $document->review_notes)
                                     <div class="staff-muted" style="margin-top:4px">{{ $document->review_notes }}</div>
                                 @endif
                             </td>
-                            <td data-label="File">
+                            <td data-label="File" class="staff-col-actions">
                                 @if($document->hasFile())
                                     <div class="staff-action-group">
                                         <a href="{{ route('admin.documents.view', $document) }}" class="staff-btn staff-btn-sm" target="_blank" rel="noopener">Preview</a>

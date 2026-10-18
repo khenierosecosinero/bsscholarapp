@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\GoogleDriveConnection;
 use App\Models\GoogleDriveFolder;
+use App\Models\ScholarshipProgram;
 use App\Models\User;
 use Google\Client;
 use Google\Service\Drive;
@@ -15,11 +16,21 @@ use Throwable;
 
 class GoogleDriveService
 {
-    public const ROOT_FOLDER_NAME = 'BSSA Scholar Documents';
+    public const ORG_ROOT_FOLDER_NAME = 'BSSA';
 
-    public const ROOT_FOLDER_KEY = 'root';
+    public const ORG_ROOT_FOLDER_KEY = 'bssa_root';
 
-    public const ATTENDANCE_ROOT_FOLDER_NAME = 'BSSA Attendance';
+    public const DOCUMENTS_ROOT_FOLDER_NAME = 'DOCUMENTS';
+
+    public const DOCUMENTS_ROOT_FOLDER_KEY = 'documents_root';
+
+    /** @deprecated Use DOCUMENTS_ROOT_FOLDER_KEY; kept for older cached rows. */
+    public const ROOT_FOLDER_KEY = self::DOCUMENTS_ROOT_FOLDER_KEY;
+
+    /** @deprecated Use DOCUMENTS_ROOT_FOLDER_NAME. */
+    public const ROOT_FOLDER_NAME = self::DOCUMENTS_ROOT_FOLDER_NAME;
+
+    public const ATTENDANCE_ROOT_FOLDER_NAME = 'ATTENDANCE';
 
     public const ATTENDANCE_ROOT_FOLDER_KEY = 'attendance_root';
 
@@ -28,22 +39,50 @@ class GoogleDriveService
         private AcademicSettingsService $academic,
     ) {}
 
-    public function isConnected(): bool
+    public function isConnected(bool $verifyRemote = false): bool
     {
         try {
             $this->token();
-
-            return true;
         } catch (Throwable) {
             return false;
         }
+
+        if (! $verifyRemote) {
+            return true;
+        }
+
+        try {
+            $this->client();
+
+            return true;
+        } catch (Throwable $e) {
+            Log::warning('Google Drive token is present but remote verification failed.', [
+                'message' => $e->getMessage(),
+            ]);
+
+            // Keep the stored connection when verification fails transiently.
+            // Only token()/client() refresh failures with invalid_grant clear it.
+            return $this->hasStoredUsableToken();
+        }
+    }
+
+    public function clearConnection(): void
+    {
+        GoogleDriveConnection::query()->delete();
+        session()->forget('google_drive_token');
     }
 
     public function storeToken(array $token, ?int $connectedBy = null): void
     {
+        $token = $this->mergePreservedRefreshToken($token);
+
         $connection = GoogleDriveConnection::query()->first() ?? new GoogleDriveConnection;
         $connection->token = $token;
-        $connection->connected_by = $connectedBy;
+        if ($connectedBy !== null) {
+            $connection->connected_by = $connectedBy;
+        } elseif (! $connection->exists) {
+            $connection->connected_by = null;
+        }
         $connection->save();
 
         session(['google_drive_token' => $token]);
@@ -53,83 +92,85 @@ class GoogleDriveService
     {
         $setting = $user ? $this->academic->forUser($user) : $this->academic->current();
 
-        return $setting->year_start.'-'.$setting->year_end;
+        return $this->driveYearFolderName((int) $setting->year_start, (int) $setting->year_end);
+    }
+
+    public function driveYearFolderName(int $yearStart, ?int $yearEnd = null): string
+    {
+        $end = $yearEnd && $yearEnd === $yearStart + 1 ? $yearEnd : $yearStart + 1;
+
+        return 'AY '.$yearStart.'–'.$end;
+    }
+
+    public function normalizeYearFolderLabel(string $academicYear): string
+    {
+        $clean = $this->sanitizeDriveName($academicYear);
+        if ($clean === '') {
+            return '';
+        }
+
+        if (preg_match('/(\d{4})\s*[–-]\s*(\d{4})/u', $clean, $matches) === 1) {
+            return $this->driveYearFolderName((int) $matches[1], (int) $matches[2]);
+        }
+
+        return str_starts_with($clean, 'AY ') ? $clean : 'AY '.$clean;
     }
 
     public function studentFolderName(string $scholarCode, string $fullName): string
     {
-        return trim($scholarCode).' - '.trim($fullName);
+        return trim($scholarCode).' – '.trim($fullName);
     }
 
+    /**
+     * @return array{province: string, municipality: string}
+     */
+    public function locationForScholar(User $scholar): array
+    {
+        $province = trim((string) ($scholar->provinceName() ?: $scholar->scholarshipClubProvince() ?: ''));
+        $municipality = trim((string) ($scholar->municipalityName() ?: $scholar->scholarshipClubCity() ?: ''));
+
+        foreach (ScholarshipProgram::PICKER_PROVINCES as $known) {
+            if (strcasecmp($province, $known) === 0) {
+                $province = $known;
+                break;
+            }
+        }
+
+        if ($province === '') {
+            $province = 'Unassigned Province';
+        }
+
+        if ($municipality === '') {
+            $municipality = 'Unassigned Municipality';
+        }
+
+        return [
+            'province' => $this->sanitizeDriveName($province) ?: 'Unassigned Province',
+            'municipality' => $this->sanitizeDriveName($municipality) ?: 'Unassigned Municipality',
+        ];
+    }
+
+    public function getOrCreateOrgRootFolder(): string
+    {
+        return $this->rememberedFolder(self::ORG_ROOT_FOLDER_KEY, self::ORG_ROOT_FOLDER_NAME, null);
+    }
+
+    public function getOrCreateDocumentsRootFolder(): string
+    {
+        return $this->rememberedFolder(
+            self::DOCUMENTS_ROOT_FOLDER_KEY,
+            self::DOCUMENTS_ROOT_FOLDER_NAME,
+            $this->getOrCreateOrgRootFolder()
+        );
+    }
+
+    /** @deprecated Prefer getOrCreateDocumentsRootFolder(). */
     public function getOrCreateRootFolder(): string
     {
-        $folderId = $this->rememberedFolder(self::ROOT_FOLDER_KEY, self::ROOT_FOLDER_NAME, null);
-
-        $this->ensureAttendanceFoldersOnce();
-
-        return $folderId;
-    }
-
-    public function getOrCreateAcademicYearFolder(string $academicYear): string
-    {
-        $year = trim($academicYear);
-
-        if ($year === '') {
-            throw new RuntimeException('Academic year is required for the Google Drive folder.');
-        }
-
-        return $this->rememberedFolder('year:'.$year, $year, $this->getOrCreateRootFolder());
-    }
-
-    public function getOrCreateStudentFolder(string $academicYear, string $scholarCode, string $fullName, ?User $scholar = null): string
-    {
-        $code = trim($scholarCode);
-        $name = trim($fullName);
-
-        if ($code === '') {
-            throw new RuntimeException('Scholar Code is required for the Google Drive folder.');
-        }
-
-        $expected = $this->studentFolderName($code, $name);
-        $yearFolderId = $this->getOrCreateAcademicYearFolder($academicYear);
-
-        if ($scholar?->google_drive_folder_id) {
-            $existing = $this->folderById($scholar->google_drive_folder_id);
-            if ($existing) {
-                if ($existing->getName() !== $expected) {
-                    $this->renameFolder($existing->getId(), $expected);
-                }
-
-                return $existing->getId();
-            }
-        }
-
-        $match = $this->findStudentFolder($yearFolderId, $code, $expected);
-
-        if ($match) {
-            if ($match->getName() !== $expected) {
-                $this->renameFolder($match->getId(), $expected);
-            }
-
-            $this->rememberStudentFolder($scholar, $match->getId());
-
-            return $match->getId();
-        }
-
-        $folderId = $this->createFolder($expected, $yearFolderId);
-        $this->rememberStudentFolder($scholar, $folderId);
+        $folderId = $this->getOrCreateDocumentsRootFolder();
+        $this->ensureOrganizationFoldersOnce();
 
         return $folderId;
-    }
-
-    public function ensureScholarFolder(User $scholar): string
-    {
-        return $this->getOrCreateStudentFolder(
-            $this->academicYearLabel($scholar),
-            (string) $scholar->scholar_id,
-            (string) $scholar->full_name,
-            $scholar
-        );
     }
 
     public function getOrCreateAttendanceRootFolder(): string
@@ -137,16 +178,106 @@ class GoogleDriveService
         return $this->rememberedFolder(
             self::ATTENDANCE_ROOT_FOLDER_KEY,
             self::ATTENDANCE_ROOT_FOLDER_NAME,
-            null
+            $this->getOrCreateOrgRootFolder()
         );
+    }
+
+    public function ensureOrganizationFolders(): void
+    {
+        $this->getOrCreateOrgRootFolder();
+        $this->getOrCreateDocumentsRootFolder();
+        $this->getOrCreateAttendanceRootFolder();
+
+        foreach ($this->academic->yearOptions() as $yearStart => $label) {
+            $yearLabel = $this->driveYearFolderName((int) $yearStart);
+            $this->getOrCreateDocumentsYearFolder($yearLabel);
+            $this->getOrCreateAttendanceYearFolder($yearLabel);
+
+            foreach (ScholarshipProgram::PICKER_PROVINCES as $province) {
+                $this->getOrCreateDocumentsProvinceFolder($yearLabel, $province);
+                $this->getOrCreateAttendanceProvinceFolder($yearLabel, $province);
+            }
+        }
+    }
+
+    public function getOrCreateDocumentsYearFolder(string $academicYear): string
+    {
+        $year = $this->normalizeYearFolderLabel($academicYear);
+        if ($year === '') {
+            throw new RuntimeException('Academic year is required for the DOCUMENTS folder.');
+        }
+
+        return $this->rememberedFolder(
+            'documents_year:'.$year,
+            $year,
+            $this->getOrCreateDocumentsRootFolder()
+        );
+    }
+
+    public function getOrCreateDocumentsProvinceFolder(string $academicYear, string $province): string
+    {
+        $year = $this->normalizeYearFolderLabel($academicYear);
+        $name = $this->sanitizeDriveName($province) ?: 'Unassigned Province';
+
+        return $this->rememberedFolder(
+            'documents_province:'.$year.':'.$name,
+            $name,
+            $this->getOrCreateDocumentsYearFolder($year)
+        );
+    }
+
+    public function getOrCreateDocumentsCityFolder(string $academicYear, string $province, string $municipality): string
+    {
+        $year = $this->normalizeYearFolderLabel($academicYear);
+        $provinceName = $this->sanitizeDriveName($province) ?: 'Unassigned Province';
+        $cityName = $this->sanitizeDriveName($municipality) ?: 'Unassigned Municipality';
+
+        return $this->rememberedFolder(
+            'documents_city:'.$year.':'.$provinceName.':'.$cityName,
+            $cityName,
+            $this->getOrCreateDocumentsProvinceFolder($year, $provinceName)
+        );
+    }
+
+    public function getOrCreateStudentFolder(string $academicYear, string $scholarCode, string $fullName, ?User $scholar = null): string
+    {
+        if (! $scholar) {
+            throw new RuntimeException('A scholar account is required for the Google Drive folder.');
+        }
+
+        return $this->ensureScholarFolder($scholar, $academicYear);
+    }
+
+    public function ensureScholarFolder(User $scholar, ?string $academicYear = null): string
+    {
+        $code = trim((string) $scholar->scholar_id);
+        $name = trim((string) $scholar->full_name);
+
+        if ($code === '') {
+            throw new RuntimeException('Scholar Code is required for the Google Drive folder.');
+        }
+
+        $year = $this->normalizeYearFolderLabel($academicYear ?: $this->academicYearLabel($scholar));
+        $location = $this->locationForScholar($scholar);
+        $expected = $this->sanitizeDriveName($this->studentFolderName($code, $name));
+        $cityFolderId = $this->getOrCreateDocumentsCityFolder(
+            $year,
+            $location['province'],
+            $location['municipality']
+        );
+        $key = 'documents_scholar:'.$year.':'.$location['province'].':'.$location['municipality'].':'.$code;
+
+        $folderId = $this->rememberedNamedFolder($key, $expected, $cityFolderId);
+        $this->rememberStudentFolder($scholar, $folderId);
+
+        return $folderId;
     }
 
     public function getOrCreateAttendanceYearFolder(string $academicYear): string
     {
-        $year = $this->sanitizeDriveName($academicYear);
-
+        $year = $this->normalizeYearFolderLabel($academicYear);
         if ($year === '') {
-            throw new RuntimeException('Academic year is required for the BSSA Attendance folder.');
+            throw new RuntimeException('Academic year is required for the ATTENDANCE folder.');
         }
 
         return $this->rememberedFolder(
@@ -156,20 +287,59 @@ class GoogleDriveService
         );
     }
 
-    public function getOrCreateAttendanceScholarFolder(string $academicYear, string $scholarCode, string $fullName): string
+    public function getOrCreateAttendanceProvinceFolder(string $academicYear, string $province): string
     {
+        $year = $this->normalizeYearFolderLabel($academicYear);
+        $name = $this->sanitizeDriveName($province) ?: 'Unassigned Province';
+
+        return $this->rememberedFolder(
+            'attendance_province:'.$year.':'.$name,
+            $name,
+            $this->getOrCreateAttendanceYearFolder($year)
+        );
+    }
+
+    public function getOrCreateAttendanceCityFolder(string $academicYear, string $province, string $municipality): string
+    {
+        $year = $this->normalizeYearFolderLabel($academicYear);
+        $provinceName = $this->sanitizeDriveName($province) ?: 'Unassigned Province';
+        $cityName = $this->sanitizeDriveName($municipality) ?: 'Unassigned Municipality';
+
+        return $this->rememberedFolder(
+            'attendance_city:'.$year.':'.$provinceName.':'.$cityName,
+            $cityName,
+            $this->getOrCreateAttendanceProvinceFolder($year, $provinceName)
+        );
+    }
+
+    public function getOrCreateAttendanceScholarFolder(
+        string $academicYear,
+        string $scholarCode,
+        string $fullName,
+        ?User $scholar = null,
+    ): string {
         $code = trim($scholarCode);
         $name = trim($fullName);
 
         if ($code === '') {
-            throw new RuntimeException('Scholar Code is required for the BSSA Attendance folder.');
+            throw new RuntimeException('Scholar Code is required for the ATTENDANCE folder.');
         }
 
-        $expected = $this->sanitizeDriveName($this->studentFolderName($code, $name));
-        $yearFolderId = $this->getOrCreateAttendanceYearFolder($academicYear);
-        $key = 'attendance_scholar:'.$this->sanitizeDriveName($academicYear).':'.$code;
+        if (! $scholar) {
+            throw new RuntimeException('A scholar account is required for the ATTENDANCE folder.');
+        }
 
-        return $this->rememberedNamedFolder($key, $expected, $yearFolderId);
+        $year = $this->normalizeYearFolderLabel($academicYear);
+        $location = $this->locationForScholar($scholar);
+        $expected = $this->sanitizeDriveName($this->studentFolderName($code, $name));
+        $cityFolderId = $this->getOrCreateAttendanceCityFolder(
+            $year,
+            $location['province'],
+            $location['municipality']
+        );
+        $key = 'attendance_scholar:'.$year.':'.$location['province'].':'.$location['municipality'].':'.$code;
+
+        return $this->rememberedNamedFolder($key, $expected, $cityFolderId);
     }
 
     public function getOrCreateAttendanceEventFolder(
@@ -178,17 +348,30 @@ class GoogleDriveService
         string $fullName,
         int $eventId,
         string $eventTitle,
+        ?User $scholar = null,
     ): string {
+        if (! $scholar) {
+            throw new RuntimeException('A scholar account is required for the ATTENDANCE event folder.');
+        }
+
+        $year = $this->normalizeYearFolderLabel($academicYear);
+        $location = $this->locationForScholar($scholar);
         $title = $this->sanitizeDriveName($eventTitle) ?: 'Event';
-        $scholarFolderId = $this->getOrCreateAttendanceScholarFolder($academicYear, $scholarCode, $fullName);
-        $yearKey = $this->sanitizeDriveName($academicYear);
-        $key = 'attendance_event:'.$yearKey.':'.trim($scholarCode).':'.$eventId;
+        $scholarFolderId = $this->getOrCreateAttendanceScholarFolder(
+            $year,
+            $scholarCode,
+            $fullName,
+            $scholar
+        );
+        $key = 'attendance_event:'.$year.':'.$location['province'].':'.$location['municipality'].':'
+            .trim($scholarCode).':'.$eventId;
 
         return $this->rememberedNamedFolder(
             $key,
             $title,
             $scholarFolderId,
-            'attendance_event:'.$yearKey.':'.trim($scholarCode).':'
+            'attendance_event:'.$year.':'.$location['province'].':'.$location['municipality'].':'
+                .trim($scholarCode).':'
         );
     }
 
@@ -277,10 +460,17 @@ class GoogleDriveService
         $this->ensureScholarFolder($scholar->fresh());
     }
 
+    public function upload(UploadedFile $file): DriveFile
+    {
+        $folderId = $this->getOrCreateDocumentsRootFolder();
+
+        return $this->uploadFile($file, $folderId);
+    }
+
     public function uploadFile(UploadedFile $file, string $parentFolderId, ?string $name = null): DriveFile
     {
         $drive = $this->drive();
-        $displayName = $name ?: $file->getClientOriginalName();
+        $displayName = $name ?: $this->originalUploadName($file);
 
         $driveFile = new DriveFile([
             'name' => $displayName,
@@ -304,6 +494,20 @@ class GoogleDriveService
             Log::error('Google Drive upload failed.', ['message' => $e->getMessage()]);
             throw new RuntimeException('Google Drive upload failed.');
         }
+    }
+
+    public function originalUploadName(UploadedFile $file): string
+    {
+        $original = trim((string) $file->getClientOriginalName());
+        $sanitized = $this->sanitizeDriveName($original);
+
+        if ($sanitized !== '') {
+            return $sanitized;
+        }
+
+        $extension = strtolower($file->getClientOriginalExtension() ?: $file->guessExtension() ?: 'bin');
+
+        return 'upload.'.$extension;
     }
 
     public function deleteFile(string $fileId): void
@@ -359,16 +563,17 @@ class GoogleDriveService
         ];
     }
 
-    private function ensureAttendanceFoldersOnce(): void
+    private function ensureOrganizationFoldersOnce(): void
     {
-        if (GoogleDriveFolder::query()->where('folder_key', self::ATTENDANCE_ROOT_FOLDER_KEY)->exists()) {
+        if (GoogleDriveFolder::query()->where('folder_key', self::ATTENDANCE_ROOT_FOLDER_KEY)->exists()
+            && GoogleDriveFolder::query()->where('folder_key', self::DOCUMENTS_ROOT_FOLDER_KEY)->exists()) {
             return;
         }
 
         try {
-            app(AttendanceDriveStorageService::class)->syncConfiguredYearFolders();
+            $this->ensureOrganizationFolders();
         } catch (Throwable $e) {
-            Log::warning('Could not create BSSA Attendance folders beside Scholar Documents.', [
+            Log::warning('Could not create BSSA organization folders.', [
                 'message' => $e->getMessage(),
             ]);
         }
@@ -429,25 +634,6 @@ class GoogleDriveService
         return $folderId;
     }
 
-    private function findStudentFolder(string $yearFolderId, string $scholarCode, string $expectedName): ?DriveFile
-    {
-        $exact = $this->findFolderByName($expectedName, $yearFolderId);
-        if ($exact) {
-            return $exact;
-        }
-
-        $prefix = $scholarCode.' - ';
-
-        foreach ($this->childFolders($yearFolderId) as $folder) {
-            $name = (string) $folder->getName();
-            if ($name === $scholarCode || str_starts_with($name, $prefix)) {
-                return $folder;
-            }
-        }
-
-        return null;
-    }
-
     private function findFolderByName(string $name, ?string $parentId): ?DriveFile
     {
         $query = sprintf(
@@ -476,38 +662,18 @@ class GoogleDriveService
         return $files[0] ?? null;
     }
 
-    /**
-     * @return list<DriveFile>
-     */
-    private function childFolders(string $parentId): array
-    {
-        $query = sprintf(
-            "mimeType = 'application/vnd.google-apps.folder' and '%s' in parents and trashed = false",
-            $this->escapeQuery($parentId)
-        );
-
-        try {
-            $result = $this->drive()->files->listFiles([
-                'q' => $query,
-                'pageSize' => 100,
-                'fields' => 'files(id,name)',
-                'spaces' => 'drive',
-            ]);
-        } catch (Throwable $e) {
-            Log::warning('Google Drive folder list failed.', ['message' => $e->getMessage()]);
-
-            return [];
-        }
-
-        return $result->getFiles() ?? [];
-    }
-
     private function folderById(string $folderId): ?DriveFile
     {
         try {
-            return $this->drive()->files->get($folderId, [
+            $folder = $this->drive()->files->get($folderId, [
                 'fields' => 'id,name,trashed,mimeType',
             ]);
+
+            if ($folder->getTrashed()) {
+                return null;
+            }
+
+            return $folder;
         } catch (Throwable) {
             return null;
         }
@@ -555,7 +721,7 @@ class GoogleDriveService
 
     private function rememberStudentFolder(?User $scholar, string $folderId): void
     {
-        if (! $scholar) {
+        if (! $scholar || ! $scholar->exists) {
             return;
         }
 
@@ -570,11 +736,13 @@ class GoogleDriveService
     private function client(): Client
     {
         $client = $this->googleClients->make();
-        $client->setAccessToken($this->token());
+        $token = $this->token();
+        $client->setAccessToken($token);
 
         if ($client->isAccessTokenExpired()) {
-            $refresh = $client->getRefreshToken();
-            if (! $refresh) {
+            $refresh = $client->getRefreshToken() ?: ($token['refresh_token'] ?? null);
+            if (! filled($refresh)) {
+                $this->clearConnection();
                 throw new RuntimeException('Google Drive access expired. Reconnect Google Drive.');
             }
 
@@ -582,14 +750,36 @@ class GoogleDriveService
                 $refreshed = $client->fetchAccessTokenWithRefreshToken($refresh);
             } catch (Throwable $e) {
                 Log::warning('Google Drive token refresh failed.', ['message' => $e->getMessage()]);
-                throw new RuntimeException('Google Drive access expired. Reconnect Google Drive.');
+                // Network/API blips must not wipe a still-valid refresh token.
+                throw new RuntimeException('Google Drive is temporarily unavailable. Try again in a moment.');
             }
 
             if (isset($refreshed['error'])) {
-                throw new RuntimeException('Google Drive access expired. Reconnect Google Drive.');
+                $error = (string) $refreshed['error'];
+                Log::warning('Google Drive token refresh returned an error.', [
+                    'error' => $error,
+                ]);
+
+                if (in_array($error, ['invalid_grant', 'invalid_token', 'unauthorized_client'], true)) {
+                    $this->clearConnection();
+                    throw new RuntimeException('Google Drive access expired. Reconnect Google Drive.');
+                }
+
+                throw new RuntimeException('Google Drive is temporarily unavailable. Try again in a moment.');
             }
 
-            $this->storeToken($client->getAccessToken(), GoogleDriveConnection::query()->value('connected_by'));
+            $updated = $client->getAccessToken();
+            if (! is_array($updated)) {
+                $updated = is_array($refreshed) ? $refreshed : [];
+            }
+            if (empty($updated['refresh_token'])) {
+                $updated['refresh_token'] = $refresh;
+            }
+
+            $this->storeToken(
+                $updated,
+                GoogleDriveConnection::query()->value('connected_by')
+            );
         }
 
         return $client;
@@ -600,17 +790,65 @@ class GoogleDriveService
      */
     private function token(): array
     {
-        $sessionToken = session('google_drive_token');
-        if (is_array($sessionToken) && $sessionToken !== []) {
-            return $sessionToken;
-        }
-
+        // Org token in the database is the source of truth for all roles.
         $stored = GoogleDriveConnection::query()->first()?->token;
-        if (is_array($stored) && $stored !== []) {
+        if ($this->isUsableToken($stored)) {
+            session(['google_drive_token' => $stored]);
+
             return $stored;
         }
 
+        $sessionToken = session('google_drive_token');
+        if ($this->isUsableToken($sessionToken)) {
+            // Recover a session-only token into durable storage.
+            $this->storeToken($sessionToken, auth()->id());
+
+            return $sessionToken;
+        }
+
         throw new RuntimeException('Google Drive is not connected.');
+    }
+
+    private function isUsableToken(mixed $token): bool
+    {
+        return is_array($token)
+            && $token !== []
+            && (
+                filled($token['access_token'] ?? null)
+                || filled($token['refresh_token'] ?? null)
+            );
+    }
+
+    private function hasStoredUsableToken(): bool
+    {
+        return $this->isUsableToken(GoogleDriveConnection::query()->first()?->token)
+            || $this->isUsableToken(session('google_drive_token'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $token
+     * @return array<string, mixed>
+     */
+    private function mergePreservedRefreshToken(array $token): array
+    {
+        if (filled($token['refresh_token'] ?? null)) {
+            return $token;
+        }
+
+        $existing = GoogleDriveConnection::query()->first()?->token;
+        if (is_array($existing) && filled($existing['refresh_token'] ?? null)) {
+            $token['refresh_token'] = $existing['refresh_token'];
+        }
+
+        $sessionToken = session('google_drive_token');
+        if (! filled($token['refresh_token'] ?? null)
+            && is_array($sessionToken)
+            && filled($sessionToken['refresh_token'] ?? null)
+        ) {
+            $token['refresh_token'] = $sessionToken['refresh_token'];
+        }
+
+        return $token;
     }
 
     private function escapeQuery(string $value): string

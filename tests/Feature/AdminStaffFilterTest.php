@@ -18,10 +18,11 @@ class AdminStaffFilterTest extends TestCase
         $this->actingAs($this->makeAdmin())
             ->get(route('admin.staff'))
             ->assertOk()
-            ->assertSee('All Regions')
-            ->assertSee('Luzon')
-            ->assertSee('Visayas')
-            ->assertSee('Mindanao')
+            ->assertDontSee('All Regions')
+            ->assertDontSee('name="region"', false)
+            ->assertDontSee('>Luzon<', false)
+            ->assertDontSee('>Visayas<', false)
+            ->assertDontSee('>Mindanao<', false)
             ->assertSee('All Scholarship Clubs')
             ->assertSee('Province')
             ->assertSee('Municipality / City')
@@ -84,17 +85,11 @@ class AdminStaffFilterTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.staff', ['region' => PhilippineIslandGroup::LUZON]))
             ->assertOk()
+            ->assertDontSee('name="region"', false)
             ->assertSee($luzonStaff->full_name)
-            ->assertDontSee($keniStaff->full_name)
-            ->assertDontSee($dapaStaff->full_name);
-
-        $this->actingAs($admin)
-            ->get(route('admin.staff', ['region' => PhilippineIslandGroup::MINDANAO]))
-            ->assertOk()
             ->assertSee($keniStaff->full_name)
             ->assertSee($dapaStaff->full_name)
-            ->assertSee($provinceStaff->full_name)
-            ->assertDontSee($luzonStaff->full_name);
+            ->assertSee($provinceStaff->full_name);
 
         $this->actingAs($admin)
             ->get(route('admin.staff', ['location' => $dapa->id]))

@@ -13,16 +13,46 @@
                     @include('partials.staff-scholar-presence', ['scholar' => $scholar])
                 </div>
                 <small>{{ $scholar->scholar_id }}</small>
-                <span class="staff-badge {{ $scholar->status === 'approved' ? 'green' : ($scholar->status === 'pending' ? 'orange' : 'red') }}">{{ ucfirst($scholar->status) }}</span>
+                <span class="staff-badge-row">
+                    @include('partials.account-suspension-status', ['account' => $scholar, 'detailed' => true])
+                </span>
             </div>
         </div>
         <div class="staff-list-item"><div><strong>Email</strong><div class="staff-muted">{{ $scholar->email }}</div></div></div>
         <div class="staff-list-item"><div><strong>Scholarship Club</strong><div class="staff-muted">{{ $scholar->scholarshipClubName() }}</div></div></div>
-        <div class="staff-list-item"><div><strong>Municipality / City</strong><div class="staff-muted">{{ $scholar->scholarshipClubCity() ?? '—' }}</div></div></div>
-        <div class="staff-list-item"><div><strong>Province</strong><div class="staff-muted">{{ $scholar->scholarshipClubProvince() ?? '—' }}</div></div></div>
-        <div class="staff-list-item"><div><strong>School</strong><div class="staff-muted">{{ $scholar->school_university ?? '—' }}</div></div></div>
+        <div class="staff-list-item"><div><strong>No./Street</strong><div class="staff-muted">{{ $scholar->streetName() ?: '—' }}</div></div></div>
+        <div class="staff-list-item"><div><strong>Municipality / City</strong><div class="staff-muted">{{ $scholar->municipalityName() ?: ($scholar->scholarshipClubCity() ?? '—') }}</div></div></div>
+        <div class="staff-list-item"><div><strong>Province</strong><div class="staff-muted">{{ $scholar->provinceName() ?: ($scholar->scholarshipClubProvince() ?? '—') }}</div></div></div>
+        <div class="staff-list-item"><div><strong>Scholarship Club Address</strong><div class="staff-muted">{{ $scholar->scholarshipClubAddress() !== '' ? $scholar->scholarshipClubAddress() : '—' }}</div></div></div>
+        <div class="staff-list-item"><div><strong>School</strong><div class="staff-muted">{{ $scholar->scholarshipClubSchool?->name ?: ($scholar->school_university ?: '—') }}</div></div></div>
         <div class="staff-list-item"><div><strong>Course</strong><div class="staff-muted">{{ $scholar->course_year_level ?? '—' }}</div></div></div>
         <div class="staff-list-item"><div><strong>Year Level</strong><div class="staff-muted">{{ $scholar->year_level ?? '—' }}</div></div></div>
+        <div class="staff-list-item">
+            <div>
+                <strong>Start Academic Year</strong>
+                <div class="staff-muted" style="margin-bottom:8px">
+                    @if($scholar->program_start_year)
+                        AY {{ $scholar->program_start_year }}–{{ $scholar->program_start_year + 1 }} (Year 1). Years 2–4 follow consecutively.
+                    @else
+                        Not set. Choose the academic year when this scholar originally began the scholarship.
+                    @endif
+                </div>
+                <form method="POST" action="{{ route('staff.scholars.program-start', $scholar) }}" class="staff-form-grid" style="grid-template-columns:1fr auto;gap:8px;align-items:end">
+                    @csrf
+                    @method('PUT')
+                    <div class="staff-form-group" style="margin:0">
+                        <label for="program_start_year" class="staff-muted" style="display:block;margin-bottom:4px">Start Academic Year</label>
+                        <select id="program_start_year" name="program_start_year" class="staff-select" required>
+                            <option value="" disabled @selected(! $scholar->program_start_year)>Select start academic year</option>
+                            @foreach($programStartYearOptions as $year => $label)
+                                <option value="{{ $year }}" @selected((int) $scholar->program_start_year === (int) $year)>AY {{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <button type="submit" class="staff-btn staff-btn-primary">Save</button>
+                </form>
+            </div>
+        </div>
 
         @if($scholar->status === 'pending')
             <div class="staff-scholar-profile-actions" data-approval-actions>
@@ -47,6 +77,16 @@
                     <button type="submit" class="staff-btn" style="border-color:#ef4444;color:#ef4444">Reject &amp; Delete Account</button>
                 </form>
             </div>
+        @else
+            <div class="staff-scholar-profile-actions">
+                @include('partials.account-access-actions', [
+                    'account' => $scholar,
+                    'blockUrl' => route('staff.scholars.block', $scholar),
+                    'suspendUrl' => route('staff.scholars.suspend', $scholar),
+                    'reactivateUrl' => route('staff.scholars.reactivate', $scholar),
+                    'showSuspensionReason' => true,
+                ])
+            </div>
         @endif
     </div>
 
@@ -67,45 +107,21 @@
     </div>
 </section>
 
-<div class="staff-card staff-hours-progress-card">
-    <div class="staff-card-header"><h2>4-Year Service Hour Progress</h2></div>
-    <p class="staff-muted staff-hours-progress-intro">Year 1 starts at AY {{ $hourTracking['start_year'] }}–{{ $hourTracking['start_year'] + 1 }}. Each semester is tracked separately. Completed hours use approved records only.</p>
-    <div class="staff-hours-years">
-        @foreach($hourTracking['years'] as $yearRow)
-            <article class="staff-hours-year {{ !empty($yearRow['is_current']) ? 'is-current' : '' }}">
-                <header class="staff-hours-year-head">
-                    <strong>Year {{ $yearRow['program_year'] }}</strong>
-                    <span>{{ $yearRow['academic_year'] }}</span>
-                    <small>Completed {{ number_format($yearRow['completed'], 2) }} hrs</small>
-                </header>
-                <div class="staff-hours-semesters">
-                    @foreach($yearRow['semesters'] as $semesterRow)
-                        <div class="staff-hours-semester-card {{ !empty($semesterRow['is_current']) ? 'is-current' : '' }}">
-                            <strong>{{ $semesterRow['semester'] }}</strong>
-                            <p>Completed: <strong>{{ number_format($semesterRow['approved'], 2) }}</strong> / {{ number_format($semesterRow['required'], 2) }}</p>
-                            <p>Pending: <strong>{{ number_format($semesterRow['pending'], 2) }}</strong></p>
-                            <p>Remaining: <strong>{{ number_format($semesterRow['remaining'], 2) }}</strong></p>
-                        </div>
-                    @endforeach
-                </div>
-            </article>
-        @endforeach
-    </div>
-</div>
+@include('partials.program-hour-progress')
 
 <div class="staff-card staff-hours-records-card">
     <div class="staff-card-header"><h2>Service Hour Records</h2></div>
     @if($attendances->isEmpty())
-        <p class="staff-muted">No attendance records yet.</p>
+        <p class="staff-muted">No service hour records for this academic year.</p>
     @else
         <div class="staff-table-wrap">
-            <table class="staff-table staff-stack-table">
+            <table class="staff-table staff-stack-table staff-manage-table">
                 <thead>
                     <tr>
                         <th>Event</th>
                         <th>Check In / Out</th>
                         <th>Hours</th>
-                        <th>Status</th>
+                        <th class="staff-col-status">Status</th>
                         <th>Notes</th>
                     </tr>
                 </thead>
@@ -118,7 +134,7 @@
                                 <div class="staff-muted">{{ $attendance->check_out?->format('g:i A') ?? '—' }}</div>
                             </td>
                             <td data-label="Hours">{{ $attendance->hoursLabel() }}</td>
-                            <td data-label="Status">
+                            <td data-label="Status" class="staff-col-status">
                                 @php
                                     $statusClass = match($attendance->status) {
                                         'approved' => 'green',
@@ -143,13 +159,13 @@
         <p class="staff-muted">No documents on file.</p>
     @else
         <div class="staff-table-wrap">
-            <table class="staff-table staff-stack-table">
+            <table class="staff-table staff-stack-table staff-manage-table">
                 <thead>
                     <tr>
                         <th>Document</th>
-                        <th>Status</th>
+                        <th class="staff-col-status">Status</th>
                         <th>Uploaded</th>
-                        <th>Actions</th>
+                        <th class="staff-col-actions">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -162,7 +178,7 @@
                                     Document
                                 @endif
                             </td>
-                            <td data-label="Status">
+                            <td data-label="Status" class="staff-col-status">
                                 @php
                                     $statusClass = match($document->status) {
                                         'approved' => 'green',
@@ -174,10 +190,12 @@
                                 <span class="staff-badge {{ $statusClass }}">{{ ucfirst(str_replace('_', ' ', $document->status)) }}</span>
                             </td>
                             <td data-label="Uploaded">{{ $document->uploaded_at?->format('M d, Y') ?? '—' }}</td>
-                            <td data-label="Actions">
+                            <td data-label="Actions" class="staff-col-actions">
                                 @if($document->file_path)
-                                    <a href="{{ route('staff.documents.view', $document) }}" class="staff-btn staff-btn-sm" target="_blank" rel="noopener">Review</a>
-                                    <a href="{{ route('staff.documents.download', $document) }}" class="staff-btn staff-btn-sm">Download</a>
+                                    <div class="staff-action-group">
+                                        <a href="{{ route('staff.documents.view', $document) }}" class="staff-btn staff-btn-sm" target="_blank" rel="noopener">Review</a>
+                                        <a href="{{ route('staff.documents.download', $document) }}" class="staff-btn staff-btn-sm">Download</a>
+                                    </div>
                                 @else
                                     <span class="staff-muted">No file</span>
                                 @endif

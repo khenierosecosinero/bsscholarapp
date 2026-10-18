@@ -2,9 +2,10 @@
 
 @section('page-content')
 
+@include('partials.admin-academic-year-selector', ['inputId' => 'admin-staff-year', 'compact' => true])
+
 @php
     $staffListQuery = array_filter([
-        'region' => $selectedRegion ?: null,
         'location' => $locationKey ?? 'all',
         'club' => $selectedClubId ?: null,
         'search' => filled($search ?? '') ? $search : null,
@@ -52,36 +53,38 @@
         <h2>Pending Scholar Staff Registrations</h2>
         <span class="staff-badge orange">{{ $pendingStaff->count() }} awaiting approval</span>
     </div>
-    <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table">
+    <div class="staff-table-wrap admin-data-table-wrap admin-staff-pending-wrap">
+        <table class="staff-table staff-manage-table admin-data-table admin-staff-pending-table">
             <thead>
                 <tr>
-                    <th>Staff Member</th>
+                    <th class="admin-staff-pending-name-col">Staff Member</th>
                     <th>Account Details</th>
                     <th>Scholarship Club</th>
+                    <th>Started Year</th>
                     <th>Date Registered</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th class="staff-col-status">Status</th>
+                    <th class="staff-col-actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($pendingStaff as $member)
                     <tr>
-                        <td data-label="Staff Member">
+                        <td data-label="Staff Member" class="admin-staff-pending-name-col">
                             <div class="staff-scholar-cell">
                                 <div class="staff-scholar-avatar">{{ strtoupper(substr($member->full_name, 0, 1)) }}</div>
                                 <div class="staff-scholar-meta">
-                                    <strong>{{ $member->full_name }}</strong>
+                                    <strong class="admin-staff-pending-name">{{ $member->full_name }}</strong>
                                     <small>{{ $member->contactNumber() !== '' ? $member->contactNumber() : '—' }}</small>
                                 </div>
                             </div>
                         </td>
                         <td data-label="Account Details">{{ $member->email }}</td>
                         <td data-label="Scholarship Club">{{ $member->scholarshipClub?->name ?: '—' }}</td>
+                        <td data-label="Started Year">{{ $member->staffStartedYearLabel() ?? '—' }}</td>
                         <td data-label="Date Registered">{{ $member->created_at->format('M j, Y g:i A') }}</td>
-                        <td data-label="Status"><span class="staff-badge orange">Pending</span></td>
-                        <td data-label="Actions">
-                            <div class="staff-action-group">
+                        <td data-label="Status" class="staff-col-status"><span class="staff-badge orange">Pending</span></td>
+                        <td data-label="Actions" class="staff-col-actions">
+                            <div class="staff-action-group admin-staff-actions admin-staff-pending-actions">
                                 <a href="{{ route('admin.staff.show', array_merge(['staffMember' => $member], $staffListQuery)) }}" class="staff-btn staff-btn-sm staff-btn-view" title="View this scholar staff account">View</a>
                                 <form method="POST" action="{{ route('admin.staff.approve', $member) }}">
                                     @csrf
@@ -110,55 +113,59 @@
 </div>
 @endif
 
-<div class="staff-card">
+<div class="staff-card admin-staff-accounts-card">
     <div class="staff-card-header"><h2>All Scholar Staff Accounts</h2></div>
-    <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table">
+    <div class="staff-table-wrap admin-data-table-wrap admin-staff-accounts-wrap">
+        <table class="staff-table staff-manage-table admin-data-table admin-staff-accounts-table">
             <thead>
                 <tr>
-                    <th>Staff Member</th>
+                    <th class="admin-staff-accounts-name-col">Staff Member</th>
                     <th>Email</th>
                     <th>Contact Number</th>
                     <th>Scholarship Club</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th>Started Year</th>
+                    <th class="staff-col-status">Status</th>
+                    <th class="staff-col-actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($staffMembers as $member)
                     <tr>
-                        <td data-label="Staff Member">
+                        <td data-label="Staff Member" class="admin-staff-accounts-name-col">
                             <div class="staff-scholar-cell">
                                 <div class="staff-scholar-avatar">{{ strtoupper(substr($member->full_name, 0, 1)) }}</div>
                                 <div class="staff-scholar-meta">
-                                    <strong>{{ $member->full_name }}</strong>
+                                    <strong class="admin-staff-accounts-name">{{ $member->full_name }}</strong>
                                 </div>
                             </div>
                         </td>
                         <td data-label="Email">{{ $member->email }}</td>
                         <td data-label="Contact Number">{{ $member->contactNumber() !== '' ? $member->contactNumber() : '—' }}</td>
                         <td data-label="Scholarship Club">{{ $member->scholarshipClub?->name ?: '—' }}</td>
-                        <td data-label="Status">
+                        <td data-label="Started Year">{{ $member->staffStartedYearLabel() ?? '—' }}</td>
+                        <td data-label="Status" class="staff-col-status">
                             <span class="staff-badge {{ $member->staffStatusBadgeClass() }}">{{ $member->staffStatusLabel() }}</span>
                         </td>
-                        <td data-label="Actions">
-                            <div class="staff-action-group">
+                        <td data-label="Actions" class="staff-col-actions">
+                            <div class="staff-action-group admin-staff-actions admin-staff-accounts-actions">
                                 <a href="{{ route('admin.staff.show', array_merge(['staffMember' => $member], $staffListQuery)) }}" class="staff-btn staff-btn-sm staff-btn-view" title="View this scholar staff account">View</a>
                                 <button
                                     type="button"
                                     class="staff-btn staff-btn-sm staff-btn-more"
                                     data-staff-more
                                     data-staff-name="{{ $member->full_name }}"
+                                    data-account-status="{{ $member->status }}"
                                     data-activate-url="{{ route('admin.staff.activate', $member) }}"
-                                    data-deactivate-url="{{ route('admin.staff.deactivate', $member) }}"
                                     data-delete-url="{{ route('admin.staff.delete', $member) }}"
+                                    data-block-url="{{ route('admin.staff.block', $member) }}"
+                                    data-suspend-url="{{ route('admin.staff.suspend', $member) }}"
                                     title="More staff account actions"
                                 >More</button>
                             </div>
                         </td>
                     </tr>
                 @empty
-                    <tr class="staff-table-empty"><td colspan="6">No records found</td></tr>
+                    <tr class="staff-table-empty"><td colspan="7">No records found</td></tr>
                 @endforelse
             </tbody>
         </table>

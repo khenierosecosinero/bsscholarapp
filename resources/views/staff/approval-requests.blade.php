@@ -22,17 +22,17 @@
 </form>
 
 <div class="staff-card staff-approval-card">
-    <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table staff-approval-table">
+    <div class="staff-table-wrap staff-data-table-wrap">
+        <table class="staff-table staff-manage-table staff-approval-table staff-data-table">
             <thead>
                 <tr>
                     <th>Scholar Information</th>
                     <th>Account Details</th>
+                    <th>No./Street</th>
                     <th>Municipality / City</th>
                     <th>Province</th>
                     <th>Date Registered</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th class="staff-col-status">Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -43,7 +43,7 @@
                                 <div class="staff-scholar-cell">
                                     <x-user-avatar :user="$request" class="staff-scholar-avatar" />
                                     <div class="staff-scholar-meta">
-                                        <strong>{{ $request->full_name }}</strong>
+                                        <a href="{{ route('staff.scholars.show', $request) }}" class="staff-scholar-name-link" title="View scholar registration">{{ $request->full_name }}</a>
                                         <small>{{ $request->scholar_id }}</small>
                                     </div>
                                 </div>
@@ -55,50 +55,21 @@
                                 <span class="staff-muted">{{ $request->cellphone_number ?? '—' }}</span>
                             </div>
                         </td>
+                        <td data-label="No./Street">
+                            <div class="staff-stack-value">{{ $request->streetName() ?: '—' }}</div>
+                        </td>
                         <td data-label="Municipality / City">
-                            <div class="staff-stack-value">{{ $request->scholarshipClubCity() ?? '—' }}</div>
+                            <div class="staff-stack-value">{{ $request->municipalityName() ?: ($request->scholarshipClubCity() ?? '—') }}</div>
                         </td>
                         <td data-label="Province">
-                            <div class="staff-stack-value">{{ $request->scholarshipClubProvince() ?? '—' }}</div>
+                            <div class="staff-stack-value">{{ $request->provinceName() ?: ($request->scholarshipClubProvince() ?? '—') }}</div>
                         </td>
                         <td data-label="Date Registered">
                             <div class="staff-stack-value">{{ $request->created_at->format('M j, Y g:i A') }}</div>
                         </td>
-                        <td data-label="Status">
+                        <td data-label="Status" class="staff-col-status">
                             <div class="staff-stack-value staff-approval-status">
                                 <span class="staff-badge orange" data-approval-status>Pending</span>
-                            </div>
-                        </td>
-                        <td data-label="Actions">
-                            <div class="staff-stack-value">
-                                <div class="staff-action-group staff-approval-actions" data-approval-actions>
-                                    <a href="{{ route('staff.scholars.show', $request) }}" class="staff-btn staff-btn-sm staff-btn-view" title="View scholar registration">VIEW</a>
-                                    <form
-                                        method="POST"
-                                        action="{{ route('staff.scholars.approve', $request) }}"
-                                        data-ajax-approval="approve"
-                                        data-no-loading="true"
-                                    >
-                                        @csrf
-                                        <button type="submit" class="staff-btn staff-btn-sm staff-btn-success" title="Approve scholar account">APPROVE</button>
-                                    </form>
-                                    <form
-                                        method="POST"
-                                        action="{{ route('staff.scholars.reject', $request) }}"
-                                        data-confirm="Reject and permanently delete this account?"
-                                        data-confirm-title="Reject this account?"
-                                        data-confirm-name="{{ $request->full_name }}"
-                                        data-confirm-note="This cannot be undone. The scholar account and related records will be permanently removed from the database."
-                                        data-confirm-yes="Reject & Delete"
-                                        data-confirm-no="Cancel"
-                                        data-confirm-variant="danger"
-                                        data-ajax-approval="reject"
-                                        data-no-loading="true"
-                                    >
-                                        @csrf
-                                        <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger" title="Reject and delete scholar account">REJECT</button>
-                                    </form>
-                                </div>
                             </div>
                         </td>
                     </tr>

@@ -1,15 +1,15 @@
 <div class="staff-confirm-modal" id="staff-confirm-modal" aria-hidden="true">
     <div class="staff-confirm-backdrop" data-confirm-close></div>
     <div class="staff-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="staff-confirm-title">
-        <div class="staff-confirm-icon" data-confirm-icon>!</div>
+        <div class="staff-confirm-icon" data-confirm-icon aria-hidden="true">?</div>
         <h3 id="staff-confirm-title" class="staff-confirm-title">Confirm action</h3>
         <p class="staff-confirm-name" id="staff-confirm-name" hidden></p>
         <p class="staff-confirm-message" id="staff-confirm-message"></p>
         <div class="staff-confirm-note" id="staff-confirm-note" hidden></div>
         <p class="staff-confirm-error" id="staff-confirm-error" hidden></p>
         <div class="staff-confirm-actions">
-            <button type="button" class="staff-btn staff-confirm-no" data-confirm-no>No</button>
-            <button type="button" class="staff-btn staff-btn-danger staff-confirm-yes" data-confirm-yes>Yes</button>
+            <button type="button" class="bssa-btn bssa-btn--ghost staff-btn staff-confirm-no" data-confirm-no>Cancel</button>
+            <button type="button" class="bssa-btn bssa-btn--primary staff-btn staff-confirm-yes" data-confirm-yes>Confirm</button>
         </div>
     </div>
 </div>
@@ -32,8 +32,15 @@ document.addEventListener('DOMContentLoaded', function () {
     var pendingForm = null;
     var busy = false;
     var defaultTitle = titleEl ? titleEl.textContent : 'Confirm action';
-    var defaultYes = yesBtn ? yesBtn.textContent : 'Yes';
-    var defaultNo = noBtn ? noBtn.textContent : 'No';
+    var defaultYes = yesBtn ? yesBtn.textContent : 'Confirm';
+    var defaultNo = noBtn ? noBtn.textContent : 'Cancel';
+    var defaultIcon = '?';
+
+    function setYesVariant(isDanger) {
+        yesBtn.classList.toggle('bssa-btn--danger', isDanger);
+        yesBtn.classList.toggle('staff-btn-danger', isDanger);
+        yesBtn.classList.toggle('bssa-btn--primary', !isDanger);
+    }
 
     function setError(message) {
         if (!errorEl) return;
@@ -74,11 +81,13 @@ document.addEventListener('DOMContentLoaded', function () {
         yesBtn.disabled = false;
         noBtn.disabled = false;
         yesBtn.classList.remove('is-loading');
+        var isDanger = form.getAttribute('data-confirm-variant') === 'danger';
         if (dialog) {
-            dialog.classList.toggle('is-danger', form.getAttribute('data-confirm-variant') === 'danger');
+            dialog.classList.toggle('is-danger', isDanger);
         }
+        setYesVariant(isDanger);
         if (iconEl) {
-            iconEl.textContent = form.getAttribute('data-confirm-icon') || '!';
+            iconEl.textContent = form.getAttribute('data-confirm-icon') || (isDanger ? '!' : defaultIcon);
         }
         if (nameEl) {
             var name = (form.getAttribute('data-confirm-name') || '').trim();
@@ -114,7 +123,8 @@ document.addEventListener('DOMContentLoaded', function () {
         noBtn.textContent = defaultNo;
         if (titleEl) titleEl.textContent = defaultTitle;
         if (dialog) dialog.classList.remove('is-danger');
-        if (iconEl) iconEl.textContent = '!';
+        setYesVariant(false);
+        if (iconEl) iconEl.textContent = defaultIcon;
         if (nameEl) {
             nameEl.hidden = true;
             nameEl.textContent = '';
@@ -133,15 +143,25 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function showFlash(type, message) {
-        var main = document.querySelector('.staff-main');
-        if (!main || !message) return;
+        if (!message) return;
+        if (window.BssaNotify && typeof window.BssaNotify.showInlineFlash === 'function') {
+            window.BssaNotify.showInlineFlash(type === 'error' ? 'error' : 'success', message, {
+                replaceAttendance: true,
+                autoDismiss: type === 'error' ? false : 5000,
+            });
+            return;
+        }
+        var main = document.querySelector('.staff-main') || document.querySelector('.main .inner');
+        if (!main) return;
         main.querySelectorAll('.flash-alert[data-attendance-flash]').forEach(function (el) {
             el.remove();
         });
         var alert = document.createElement('div');
-        alert.className = 'alert ' + (type === 'error' ? 'error' : 'success') + ' flash-alert';
+        alert.className = 'bssa-alert bssa-alert--' + (type === 'error' ? 'error' : 'success') + ' flash-alert';
+        alert.setAttribute('role', type === 'error' ? 'alert' : 'status');
         alert.setAttribute('data-attendance-flash', 'true');
-        alert.textContent = message;
+        alert.innerHTML = '<div class="bssa-alert__body"><p class="bssa-alert__message"></p></div>';
+        alert.querySelector('.bssa-alert__message').textContent = message;
         var confirm = document.getElementById('staff-confirm-modal');
         if (confirm && confirm.parentNode === main) {
             main.insertBefore(alert, confirm.nextSibling);

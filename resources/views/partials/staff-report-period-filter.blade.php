@@ -1,24 +1,13 @@
+@php
+    $configuredPeriod = $academicPeriod ?? null;
+    $periodYear = $reportFilter['academic_year'] ?? ($configuredPeriod ? 'AY '.$configuredPeriod->year_start.'–'.$configuredPeriod->year_end : '');
+    $periodSemester = $reportFilter['semester_label'] ?? ($configuredPeriod->semester ?? '');
+@endphp
 <div class="staff-card staff-report-period">
     <div class="staff-card-header">
-        <h2>Academic Year Setup</h2>
+        <h2>Report Filters</h2>
     </div>
     <form method="GET" class="staff-report-period-form">
-        <div class="staff-report-period-field">
-            <label for="report-year">Academic Year</label>
-            <select id="report-year" name="year" class="staff-select" onchange="this.form.submit()">
-                @foreach($reportYearOptions as $year => $label)
-                    <option value="{{ $year }}" @selected((int) $reportFilter['year_start'] === (int) $year)>AY {{ $label }}</option>
-                @endforeach
-            </select>
-        </div>
-        <div class="staff-report-period-field">
-            <label for="report-semester">Semester</label>
-            <select id="report-semester" name="semester" class="staff-select" onchange="this.form.submit()">
-                @foreach($reportSemesterOptions as $value => $label)
-                    <option value="{{ $value }}" @selected($reportFilter['semester'] === $value)>{{ $label }}</option>
-                @endforeach
-            </select>
-        </div>
         <div class="staff-report-period-field">
             <label for="report-school">School/University</label>
             <select id="report-school" name="school" class="staff-select" onchange="this.form.submit()">
@@ -29,6 +18,7 @@
         </div>
     </form>
     <p class="staff-report-period-banner">
-        Showing <strong>{{ $staff->scholarshipClubLabel() }}</strong> · <strong>{{ $reportFilter['academic_year'] }}</strong> · <strong>{{ $reportFilter['semester_label'] }}</strong> · <strong>{{ $selectedSchoolLabel }}</strong>
+        Showing <strong>{{ $staff->scholarshipClubLabel() }}</strong> · <strong>{{ $periodYear }}</strong> · <strong>{{ $periodSemester }}</strong> · <strong>{{ $selectedSchoolLabel }}</strong>
+        <span class="staff-muted"> · Set in Settings → General Settings</span>
     </p>
 </div>

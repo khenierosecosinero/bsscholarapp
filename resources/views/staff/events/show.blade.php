@@ -52,7 +52,7 @@
 <div class="staff-card" style="margin-top:20px">
     <div class="staff-card-header"><h2>Registered Scholars</h2></div>
     <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table">
+        <table class="staff-table staff-stack-table staff-manage-table">
             <thead>
                 <tr>
                     <th>Scholar Information</th>
@@ -60,8 +60,8 @@
                     <th>Check Out</th>
                     <th>Hours</th>
                     <th>Photo</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th class="staff-col-status">Status</th>
+                    <th class="staff-col-actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -89,7 +89,7 @@
                                 ])
                             </div>
                         </td>
-                        <td data-label="Status">
+                        <td data-label="Status" class="staff-col-status">
                             <div class="staff-stack-value">
                                 @php
                                     $statusClass = match($participant['status']) {
@@ -101,7 +101,7 @@
                                 <span class="staff-badge {{ $statusClass }}">{{ $participant['status_label'] }}</span>
                             </div>
                         </td>
-                        <td data-label="Actions">
+                        <td data-label="Actions" class="staff-col-actions">
                             <div class="staff-stack-value">
                                 @if($participant['attendance'] && $participant['status'] !== 'failed_to_check_in')
                                     @include('partials.staff-attendance-actions', ['attendance' => $participant['attendance']])

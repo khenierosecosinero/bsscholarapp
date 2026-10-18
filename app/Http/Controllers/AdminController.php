@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AcademicSetting;
+use App\Models\AdminBackupEmail;
 use App\Models\Attendance;
 use App\Models\Document;
 use App\Models\Event;
@@ -10,15 +11,17 @@ use App\Models\ScholarshipClub;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
 use App\Services\AcademicSettingsService;
+use App\Services\AccountAccessService;
 use App\Services\AccountService;
+use App\Services\AdminBackupEmailService;
 use App\Services\AdminDashboardService;
 use App\Services\DocumentStorageService;
 use App\Services\ScholarService;
 use App\Services\StaffDashboardService;
-use App\Support\PhilippineIslandGroup;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -33,8 +36,10 @@ class AdminController extends Controller
         private StaffDashboardService $staff,
         private ScholarService $scholar,
         private AccountService $accounts,
+        private AccountAccessService $accountAccess,
         private DocumentStorageService $files,
         private AcademicSettingsService $academic,
+        private AdminBackupEmailService $backupEmails,
     ) {}
 
     private function syncLocation(Request $request): string
@@ -91,28 +96,16 @@ class AdminController extends Controller
     {
         abort_unless($staffMember->isScholarStaff(), 404);
 
-        $scope = $this->scope($request);
-        $locationKey = $scope['locationKey'];
+        $locationKey = $request->has('location') ? $this->syncLocation($request) : null;
         $clubId = $request->integer('club') ?: null;
-        $region = (string) $request->get('region', '');
 
-        if ($locationKey !== 'all' && $locationKey !== '' && $locationKey !== null) {
+        if ($locationKey !== null && $locationKey !== 'all' && $locationKey !== '') {
             $ids = array_map('intval', $this->admin->resolveGeographicProgramIds($locationKey));
             abort_unless(
                 $staffMember->scholarship_program_id
                     && in_array((int) $staffMember->scholarship_program_id, $ids, true),
                 403,
                 'This scholar staff account is outside the selected location.'
-            );
-        }
-
-        if (PhilippineIslandGroup::isValid($region)) {
-            $ids = array_map('intval', $this->admin->programIdsForIsland($region));
-            abort_unless(
-                $staffMember->scholarship_program_id
-                    && in_array((int) $staffMember->scholarship_program_id, $ids, true),
-                403,
-                'This scholar staff account is outside the selected region.'
             );
         }
 
@@ -134,22 +127,10 @@ class AdminController extends Controller
 
         $locationKey = $this->syncLocation($request);
         $clubId = $request->integer('club') ?: null;
-        $region = (string) $request->get('region', '');
-
-        if (! PhilippineIslandGroup::isValid($region)) {
-            $region = '';
-        }
 
         if ($locationKey !== 'all' && $locationKey !== '' && $locationKey !== null) {
             abort_unless(
                 in_array($programId, array_map('intval', $this->admin->resolveGeographicProgramIds($locationKey)), true),
-                404
-            );
-        }
-
-        if ($region !== '') {
-            abort_unless(
-                in_array($programId, array_map('intval', $this->admin->programIdsForIsland($region)), true),
                 404
             );
         }
@@ -179,22 +160,10 @@ class AdminController extends Controller
         $programId = (int) $event->scholarship_program_id;
         $locationKey = $this->syncLocation($request);
         $clubId = $request->integer('club') ?: null;
-        $region = (string) $request->get('region', '');
-
-        if (! PhilippineIslandGroup::isValid($region)) {
-            $region = '';
-        }
 
         if ($locationKey !== 'all' && $locationKey !== '' && $locationKey !== null) {
             abort_unless(
                 in_array($programId, array_map('intval', $this->admin->resolveGeographicProgramIds($locationKey)), true),
-                404
-            );
-        }
-
-        if ($region !== '') {
-            abort_unless(
-                in_array($programId, array_map('intval', $this->admin->programIdsForIsland($region)), true),
                 404
             );
         }
@@ -217,6 +186,9 @@ class AdminController extends Controller
             'breadcrumb' => $title,
             'locationLabel' => $this->locationLabelForScope($scope),
             'adminSidebarBadges' => $this->admin->adminSidebarBadges($scope['programIds']),
+            'academicPeriod' => $this->academic->selectedPeriod(),
+            'academicYearOptions' => $this->academic->yearOptions(),
+            'adminAcademicYearFilter' => $this->academic->adminYearFilter(),
         ]);
     }
 
@@ -263,6 +235,8 @@ class AdminController extends Controller
             'locationLabel' => $this->dashboardLocationLabel($scope),
             'stats' => $this->admin->dashboardStats($programIds, null, $clubs->count()),
             'programGroups' => $this->admin->locationOptionGroups($scope['locationKey'], $scope['programType']),
+            'academicPeriod' => $this->academic->selectedPeriod(),
+            'academicYearOptions' => $this->academic->yearOptions(),
         ]));
     }
 
@@ -322,18 +296,12 @@ class AdminController extends Controller
         $scope = $this->scope($request);
         $search = trim((string) $request->get('search', ''));
         $clubId = $request->integer('club') ?: null;
-        $region = (string) $request->get('region', '');
-
-        if (! PhilippineIslandGroup::isValid($region)) {
-            $region = '';
-        }
 
         $clubId = ScholarshipClub::selectableId($clubId);
 
         $directory = fn () => $this->admin->staffDirectoryQuery(
             $scope['locationKey'],
-            $clubId,
-            $region !== '' ? $region : null
+            $clubId
         )->when($search !== '', function ($q) use ($search) {
             $q->where(function ($scoped) use ($search) {
                 $scoped->where('full_name', 'like', "%{$search}%")
@@ -363,7 +331,6 @@ class AdminController extends Controller
                 'pendingStaff' => $pendingStaff,
                 'search' => $search,
                 'selectedClubId' => $clubId,
-                'selectedRegion' => $region,
                 'scholarshipClubs' => $this->admin->scholarshipClubFilterOptions(),
                 'staffStats' => [
                     'total' => $approvedCount,
@@ -382,9 +349,76 @@ class AdminController extends Controller
         $staffMember->load(['scholarshipProgram', 'scholarshipClub']);
 
         return view('admin.staff-show', array_merge(
-            $this->layoutData($request, 'staff', $staffMember->full_name, 'View-only information from Scholar Staff registration.'),
-            ['member' => $staffMember]
+            $this->layoutData($request, 'staff', $staffMember->full_name, 'Scholar Staff account details and Started Year.'),
+            [
+                'member' => $staffMember,
+                'staffStartedYearOptions' => $this->staffStartedYearOptions($staffMember),
+            ]
         ));
+    }
+
+    public function updateStaffStartedYear(Request $request, User $staffMember)
+    {
+        abort_unless($staffMember->isScholarStaff(), 404);
+        $this->assertStaffInDirectoryScope($request, $staffMember);
+
+        $options = $this->staffStartedYearOptions($staffMember);
+        $request->merge([
+            'staff_started_year' => $request->filled('staff_started_year')
+                ? $request->integer('staff_started_year')
+                : null,
+        ]);
+
+        $validated = $request->validate([
+            'staff_started_year' => ['nullable', 'integer', Rule::in(array_map('intval', array_keys($options)))],
+        ], [
+            'staff_started_year.in' => 'Choose a Started Year configured by the Administrator.',
+        ]);
+
+        $year = $validated['staff_started_year'] !== null
+            ? (int) $validated['staff_started_year']
+            : null;
+
+        $staffMember->forceFill(['staff_started_year' => $year])->save();
+
+        $this->scholar->logActivity(
+            $staffMember,
+            'account',
+            $year
+                ? 'Scholar staff Started Year set to AY '.$year.'–'.($year + 1).' by administrator'
+                : 'Scholar staff Started Year cleared by administrator'
+        );
+
+        return redirect()
+            ->route('admin.staff.show', array_merge(
+                ['staffMember' => $staffMember],
+                array_filter([
+                    'location' => $request->get('location'),
+                    'club' => $request->get('club'),
+                    'search' => $request->get('search'),
+                ], fn ($value) => $value !== null && $value !== '')
+            ))
+            ->with('success', $year
+                ? "{$staffMember->full_name}'s Started Year was updated to AY {$year}–".($year + 1).'.'
+                : "{$staffMember->full_name}'s Started Year was cleared.");
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function staffStartedYearOptions(?User $staffMember = null): array
+    {
+        $options = $this->academic->yearOptions();
+
+        if ($staffMember?->staff_started_year) {
+            $year = (int) $staffMember->staff_started_year;
+            if (! isset($options[$year])) {
+                $options[$year] = $year.'–'.($year + 1);
+                ksort($options);
+            }
+        }
+
+        return $options;
     }
 
     public function approveStaff(Request $request, User $staffMember)
@@ -479,6 +513,55 @@ class AdminController extends Controller
             ->with('success', "{$staffMember->full_name}'s scholar staff account has been deactivated.");
     }
 
+    public function blockStaff(Request $request, User $staffMember)
+    {
+        return $this->restrictStaff($request, $staffMember, User::STATUS_BLOCKED);
+    }
+
+    public function suspendStaff(Request $request, User $staffMember)
+    {
+        return $this->restrictStaff($request, $staffMember, User::STATUS_SUSPENDED);
+    }
+
+    public function reactivateStaff(Request $request, User $staffMember)
+    {
+        abort_unless(Auth::user()?->canRestrictAccount($staffMember), 403);
+        abort_unless($staffMember->isScholarStaff(), 404);
+
+        if (! $staffMember->isAccessRestricted()) {
+            return $this->staffListRedirect($request)
+                ->with('error', 'Only blocked or suspended scholar staff accounts can be reactivated.');
+        }
+
+        $this->accountAccess->reactivate($staffMember, Auth::user());
+
+        return $this->staffListRedirect($request)
+            ->with('success', "{$staffMember->full_name}'s account has been reactivated.");
+    }
+
+    private function restrictStaff(Request $request, User $staffMember, string $status)
+    {
+        abort_unless(Auth::user()?->canRestrictAccount($staffMember), 403);
+        abort_unless($staffMember->isScholarStaff(), 404);
+
+        if (! $staffMember->canBeRestricted()) {
+            return $this->staffListRedirect($request)
+                ->with('error', 'Only active scholar staff accounts can be blocked or suspended.');
+        }
+
+        if ($staffMember->status === $status) {
+            return $this->staffListRedirect($request)
+                ->with('error', "{$staffMember->full_name}'s account is already {$staffMember->accountStatusLabel()}.");
+        }
+
+        $this->accountAccess->restrict($staffMember, $status, Auth::user());
+
+        $verb = $status === User::STATUS_BLOCKED ? 'blocked' : 'suspended';
+
+        return $this->staffListRedirect($request)
+            ->with('success', "{$staffMember->full_name}'s account has been {$verb}.");
+    }
+
     public function deleteStaff(Request $request, User $staffMember)
     {
         abort_unless(Auth::user()?->isAdmin(), 403);
@@ -505,7 +588,6 @@ class AdminController extends Controller
     private function staffListRedirect(Request $request)
     {
         return redirect()->route('admin.staff', array_filter([
-            'region' => $request->get('region') ?: null,
             'location' => $request->get('location', 'all'),
             'club' => $request->get('club') ?: null,
             'search' => $request->get('search') ?: null,
@@ -521,18 +603,12 @@ class AdminController extends Controller
         $scope = $this->scope($request);
         $search = trim((string) $request->get('search', ''));
         $clubId = $request->integer('club') ?: null;
-        $region = (string) $request->get('region', '');
-
-        if (! PhilippineIslandGroup::isValid($region)) {
-            $region = '';
-        }
 
         $clubId = ScholarshipClub::selectableId($clubId);
 
         $events = $this->admin->eventsDirectoryQuery(
             $scope['locationKey'],
-            $clubId,
-            $region !== '' ? $region : null
+            $clubId
         )
             ->when($search !== '', fn ($q) => $q->where('title', 'like', "%{$search}%"))
             ->orderByDesc('starts_at')
@@ -547,7 +623,6 @@ class AdminController extends Controller
                 'events' => $events,
                 'search' => $search,
                 'selectedClubId' => $clubId,
-                'selectedRegion' => $region,
                 'scholarshipClubs' => $this->admin->scholarshipClubFilterOptions(),
             ]
         ));
@@ -637,20 +712,17 @@ class AdminController extends Controller
         $scope = $this->scope($request);
         $search = trim((string) $request->get('search', ''));
         $clubId = $request->integer('club') ?: null;
-        $region = (string) $request->get('region', '');
-
-        if (! PhilippineIslandGroup::isValid($region)) {
-            $region = '';
-        }
 
         $clubId = ScholarshipClub::selectableId($clubId);
 
-        $programIds = $this->admin->directoryProgramIds(
-            $scope['locationKey'],
-            $region !== '' ? $region : null
-        );
+        $programIds = $this->admin->directoryProgramIds($scope['locationKey']);
         $clubIds = $clubId ? [$clubId] : null;
-        $report = $this->staff->serviceHoursReport($programIds, null, null, $clubIds);
+        $report = $this->staff->serviceHoursReport(
+            $programIds,
+            $this->academic->adminYearFilter(),
+            null,
+            $clubIds
+        );
         $report = $this->filterServiceHoursReport($report, $search);
 
         return view('admin.service-hours', array_merge(
@@ -659,7 +731,6 @@ class AdminController extends Controller
                 'report' => $report,
                 'search' => $search,
                 'selectedClubId' => $clubId,
-                'selectedRegion' => $region,
                 'scholarshipClubs' => $this->admin->scholarshipClubFilterOptions(),
                 'locationLabel' => $this->dashboardLocationLabel($scope),
             ]
@@ -704,18 +775,12 @@ class AdminController extends Controller
         $scope = $this->scope($request);
         $search = trim((string) $request->get('search', ''));
         $clubId = $request->integer('club') ?: null;
-        $region = (string) $request->get('region', '');
-
-        if (! PhilippineIslandGroup::isValid($region)) {
-            $region = '';
-        }
 
         $clubId = ScholarshipClub::selectableId($clubId);
 
         $documentsQuery = $this->admin->documentsDirectoryQuery(
             $scope['locationKey'],
-            $clubId,
-            $region !== '' ? $region : null
+            $clubId
         )->when($search !== '', function ($q) use ($search) {
             $q->where(function ($scoped) use ($search) {
                 $scoped->whereHas('user', function ($user) use ($search) {
@@ -733,10 +798,7 @@ class AdminController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        $programIds = $this->admin->directoryProgramIds(
-            $scope['locationKey'],
-            $region !== '' ? $region : null
-        );
+        $programIds = $this->admin->directoryProgramIds($scope['locationKey']);
 
         return view('admin.documents', array_merge(
             $this->layoutData($request, 'documents', 'Documents', 'Monitor scholar document submissions across all locations.'),
@@ -744,7 +806,6 @@ class AdminController extends Controller
                 'documents' => $documents,
                 'search' => $search,
                 'selectedClubId' => $clubId,
-                'selectedRegion' => $region,
                 'scholarshipClubs' => $this->admin->scholarshipClubFilterOptions(),
                 'documentTypesCount' => $this->admin->documentTypesCount($programIds),
                 'documentOverview' => $this->admin->documentOverviewFromQuery($documentsQuery),
@@ -759,9 +820,12 @@ class AdminController extends Controller
 
         $scholar->load(['scholarshipProgram', 'scholarshipClub']);
 
-        $documents = Document::query()
+        $documentsQuery = Document::query()
             ->with('documentType')
-            ->where('user_id', $scholar->id)
+            ->where('user_id', $scholar->id);
+        $this->academic->scopeDocumentsForReport($documentsQuery, $this->academic->adminYearFilter());
+
+        $documents = $documentsQuery
             ->orderByRaw("CASE WHEN (file_path IS NULL OR file_path = '') AND (google_drive_file_id IS NULL OR google_drive_file_id = '') THEN 1 ELSE 0 END")
             ->orderByDesc('uploaded_at')
             ->orderBy('id')
@@ -796,7 +860,7 @@ class AdminController extends Controller
         $reportContext = $this->admin->reportContext($request);
 
         return view('admin.reports', array_merge(
-            $this->layoutData($request, 'reports', 'Reports', 'Regional reports for Luzon, Visayas, and Mindanao.'),
+            $this->layoutData($request, 'reports', 'Reports', 'Reports for Surigao del Norte and Surigao del Sur.'),
             $reportContext,
             [
                 'reportRegions' => $this->admin->regionalReports($reportContext['reportFilter']),
@@ -813,10 +877,14 @@ class AdminController extends Controller
 
         $academicYears = $this->academic->managedYears();
 
+        $adminUser = Auth::user();
+
         return view('admin.settings', array_merge(
             $this->layoutData($request, 'settings', 'Admin Settings', 'Manage your administrator account, academic year, and security settings.'),
             [
                 'admins' => User::query()->where('is_admin', true)->orWhere('role', User::ROLE_ADMIN)->orderBy('full_name')->get(),
+                'backupEmails' => $this->backupEmails->listFor($adminUser),
+                'defaultBackupEmail' => User::PERMANENT_ADMIN_BACKUP_EMAIL,
                 'academicYears' => $academicYears,
                 'activeAcademicYear' => $this->academic->current(),
                 'editingAcademicYear' => $editingAcademicYear,
@@ -858,6 +926,81 @@ class AdminController extends Controller
         $request->session()->regenerate();
 
         return back()->with('success', 'Password changed successfully.');
+    }
+
+    public function storeBackupEmail(Request $request)
+    {
+        $validated = $request->validate([
+            'backup_email' => ['required', 'email', 'max:255'],
+        ]);
+
+        $this->backupEmails->add(Auth::user(), $validated['backup_email']);
+
+        return redirect()
+            ->route('admin.settings')
+            ->with('success', 'Backup email added. A verification link was sent — recovery stays disabled for that address until it is verified.');
+    }
+
+    public function updateBackupEmail(Request $request, AdminBackupEmail $backupEmail)
+    {
+        abort_unless((int) $backupEmail->user_id === (int) Auth::id(), 403);
+
+        $validated = $request->validate([
+            'backup_email' => ['required', 'email', 'max:255'],
+        ]);
+
+        $this->backupEmails->update(Auth::user(), $backupEmail, $validated['backup_email']);
+
+        return redirect()
+            ->route('admin.settings')
+            ->with('success', 'Backup email saved. If the address changed, a new verification link was sent.');
+    }
+
+    public function resendBackupEmailVerification(Request $request, AdminBackupEmail $backupEmail)
+    {
+        abort_unless((int) $backupEmail->user_id === (int) Auth::id(), 403);
+
+        $this->backupEmails->resendVerification(Auth::user(), $backupEmail);
+
+        return redirect()
+            ->route('admin.settings')
+            ->with('success', 'A new verification link was sent to that backup email.');
+    }
+
+    public function destroyBackupEmail(Request $request, AdminBackupEmail $backupEmail)
+    {
+        abort_unless((int) $backupEmail->user_id === (int) Auth::id(), 403);
+
+        $this->backupEmails->remove(Auth::user(), $backupEmail);
+
+        return redirect()
+            ->route('admin.settings')
+            ->with('success', 'Backup email removed.');
+    }
+
+    public function verifyBackupEmail(Request $request, AdminBackupEmail $backupEmail)
+    {
+        try {
+            $verified = $this->backupEmails->verifyFromSignedLink(
+                $backupEmail,
+                (string) $request->query('token', '')
+            );
+        } catch (ValidationException $e) {
+            $message = $e->errors()['backup_email'][0]
+                ?? 'This backup email verification link is invalid or has expired.';
+
+            return redirect()
+                ->route('login')
+                ->with('error', $message);
+        }
+
+        $destination = Auth::check() && Auth::id() === (int) $verified->user_id
+            ? route('admin.settings')
+            : route('login');
+
+        return redirect()
+            ->to($destination)
+            ->with('success', 'Backup recovery email verified. You can use it with Forgot Password if you need to reset the administrator password.');
     }
 
     public function storeAcademicYear(Request $request)

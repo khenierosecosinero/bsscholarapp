@@ -31,24 +31,26 @@ class AttendanceDriveStorageTest extends TestCase
         $this->mockConnectedDrive(function (MockInterface $drive) use ($attendance, $uploaded) {
             $drive->shouldReceive('getOrCreateAttendanceEventFolder')
                 ->once()
-                ->withArgs(function (string $year, string $code, string $name, int $eventId, string $title) use ($attendance) {
-                    return $year === '2026–2027'
+                ->withArgs(function (string $year, string $code, string $name, int $eventId, string $title, $scholar) use ($attendance) {
+                    return $year === 'AY 2026–2027'
                         && $code === 'BSSA-2026-001'
                         && $name === 'Juan Dela Cruz'
                         && $eventId === $attendance->event_id
-                        && $title === 'Community Clean-Up Drive';
+                        && $title === 'Community Clean-Up Drive'
+                        && $scholar instanceof User
+                        && (int) $scholar->id === (int) $attendance->user_id;
                 })
                 ->andReturn('event-folder-1');
             $drive->shouldReceive('findChildFile')
                 ->once()
-                ->with('BSSA-2026-001 - Juan Dela Cruz - Community Clean-Up Drive.jpg', 'event-folder-1')
+                ->with('photo.jpg', 'event-folder-1')
                 ->andReturn(null);
             $drive->shouldReceive('uploadRaw')
                 ->once()
                 ->withArgs(function (string $contents, string $folderId, string $name) {
                     return $contents === 'verified-photo'
                         && $folderId === 'event-folder-1'
-                        && $name === 'BSSA-2026-001 - Juan Dela Cruz - Community Clean-Up Drive.jpg';
+                        && $name === 'photo.jpg';
                 })
                 ->andReturn($uploaded);
             $drive->shouldReceive('getOrCreateRootFolder')->never();
@@ -182,12 +184,10 @@ class AttendanceDriveStorageTest extends TestCase
 
         $this->mock(GoogleDriveService::class, function (MockInterface $drive) use (&$synced) {
             $drive->shouldReceive('isConnected')->andReturn(true);
-            $drive->shouldReceive('getOrCreateAttendanceRootFolder')->andReturn('attendance-root');
-            $drive->shouldReceive('getOrCreateAttendanceYearFolder')
-                ->andReturnUsing(function (string $year) use (&$synced) {
-                    $synced[] = $year;
-
-                    return 'year-'.$year;
+            $drive->shouldReceive('ensureOrganizationFolders')
+                ->once()
+                ->andReturnUsing(function () use (&$synced) {
+                    $synced[] = 'organization';
                 });
             $drive->shouldReceive('getOrCreateRootFolder')->never();
             $drive->shouldReceive('getOrCreateAcademicYearFolder')->never();
@@ -195,8 +195,8 @@ class AttendanceDriveStorageTest extends TestCase
 
         $academic->createYear('2027–2028', $admin);
 
-        $this->assertContains($current->periodLabel(), $synced);
-        $this->assertContains('2027–2028', $synced);
+        $this->assertContains('organization', $synced);
+        $this->assertNotNull($current);
     }
 
     public function test_connected_drive_page_creates_bssa_attendance_folders(): void
@@ -215,15 +215,15 @@ class AttendanceDriveStorageTest extends TestCase
 
         $this->mock(GoogleDriveService::class, function (MockInterface $drive) {
             $drive->shouldReceive('isConnected')->andReturn(true);
-            $drive->shouldReceive('getOrCreateAttendanceRootFolder')->once()->andReturn('attendance-root');
-            $drive->shouldReceive('getOrCreateAttendanceYearFolder')->atLeast()->once()->andReturn('year-folder');
+            $drive->shouldReceive('ensureOrganizationFolders')->once();
         });
 
         $this->actingAs($admin)
             ->get(route('google.drive.test'))
             ->assertOk()
-            ->assertSee('BSSA Attendance')
-            ->assertSee('BSSA Scholar Documents');
+            ->assertSee('ATTENDANCE')
+            ->assertSee('DOCUMENTS')
+            ->assertSee('BSSA');
     }
 
     /**
@@ -313,6 +313,9 @@ class AttendanceDriveStorageTest extends TestCase
     {
         $this->mock(GoogleDriveService::class, function (MockInterface $drive) use ($configure) {
             $drive->shouldReceive('isConnected')->andReturn(true);
+            $drive->shouldReceive('driveYearFolderName')->andReturnUsing(function (int $start, ?int $end = null): string {
+                return 'AY '.$start.'–'.($end ?? $start + 1);
+            });
             $drive->shouldReceive('sanitizeDriveName')->andReturnUsing(function (string $name): string {
                 $clean = preg_replace('/[\\\\\/:*?"<>|]+/', ' ', $name) ?? $name;
                 $clean = trim(preg_replace('/\s+/', ' ', $clean) ?? $clean);

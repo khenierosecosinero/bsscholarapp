@@ -17,7 +17,17 @@
     </div>
     <div class="staff-doc-type-actions" style="padding:0;border:0">
         <a href="{{ route('staff.documents.edit', $documentType) }}" class="staff-btn staff-btn-sm">Edit type</a>
-        <form method="POST" action="{{ route('staff.documents.destroy', $documentType) }}" onsubmit="return confirm('Remove {{ addslashes($documentType->name) }}? Scholar files for this type will also be deleted.')">
+        <form
+            method="POST"
+            action="{{ route('staff.documents.destroy', $documentType) }}"
+            data-confirm="Scholar files for this type will also be deleted."
+            data-confirm-title="Remove {{ $documentType->name }}?"
+            data-confirm-name="{{ $documentType->name }}"
+            data-confirm-note="This cannot be undone."
+            data-confirm-yes="Remove"
+            data-confirm-no="Cancel"
+            data-confirm-variant="danger"
+        >
             @csrf
             @method('DELETE')
             <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger">Delete type</button>
@@ -42,8 +52,8 @@
 </form>
 
 <div class="staff-card">
-    <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table staff-documents-table">
+    <div class="staff-table-wrap staff-data-table-wrap">
+        <table class="staff-table staff-manage-table staff-documents-table staff-data-table">
             <colgroup>
                 <col class="staff-documents-col-scholar">
                 <col class="staff-documents-col-file">
@@ -57,7 +67,7 @@
                     <th>File</th>
                     <th>Date Submitted</th>
                     <th class="staff-col-status">Status</th>
-                    <th>Actions</th>
+                    <th class="staff-col-actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -94,14 +104,21 @@
                                 @endif
                             </div>
                         </td>
-                        <td data-label="Actions">
+                        <td data-label="Actions" class="staff-col-actions">
                             @if($document->hasFile())
                                 <div class="staff-stack-value staff-doc-review-actions">
                                     <a href="{{ route('staff.documents.view', $document) }}" class="staff-btn staff-btn-sm" target="_blank" rel="noopener">Review</a>
                                     <a href="{{ route('staff.documents.download', $document) }}" class="staff-btn staff-btn-sm">Download</a>
 
                                     @if($document->reviewStatus() !== 'approved')
-                                        <form method="POST" action="{{ route('staff.documents.status', $document) }}">
+                                        <form
+                                            method="POST"
+                                            action="{{ route('staff.documents.status', $document) }}"
+                                            data-confirm="This document will be marked as approved."
+                                            data-confirm-title="Approve this {{ $documentType->name }}?"
+                                            data-confirm-yes="Approve"
+                                            data-confirm-no="Cancel"
+                                        >
                                             @csrf
                                             @method('PATCH')
                                             <input type="hidden" name="status" value="approved">
@@ -110,7 +127,16 @@
                                     @endif
 
                                     @if($document->reviewStatus() !== 'rejected')
-                                        <form method="POST" action="{{ route('staff.documents.status', $document) }}" class="staff-reject-form" data-confirm="Reject this {{ $documentType->name }}?">
+                                        <form
+                                            method="POST"
+                                            action="{{ route('staff.documents.status', $document) }}"
+                                            class="staff-reject-form"
+                                            data-confirm="The scholar can upload a replacement after rejection."
+                                            data-confirm-title="Reject this {{ $documentType->name }}?"
+                                            data-confirm-yes="Reject"
+                                            data-confirm-no="Cancel"
+                                            data-confirm-variant="danger"
+                                        >
                                             @csrf
                                             @method('PATCH')
                                             <input type="hidden" name="status" value="rejected">

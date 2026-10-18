@@ -6,8 +6,9 @@
         <p class="staff-confirm-name" id="admin-staff-more-name" hidden></p>
         <p class="staff-confirm-message">Choose an action for this Scholar Staff account.</p>
         <div class="staff-more-actions">
+            <button type="button" class="staff-btn staff-btn-danger" data-staff-more-block hidden>Block</button>
+            <button type="button" class="staff-btn staff-btn-warning" data-staff-more-suspend hidden>Suspend</button>
             <button type="button" class="staff-btn staff-btn-success" data-staff-more-activate>Activate</button>
-            <button type="button" class="staff-btn staff-btn-warning" data-staff-more-deactivate>Deactivate</button>
             <button type="button" class="staff-btn staff-btn-danger" data-staff-more-delete>Delete</button>
         </div>
         <div class="staff-confirm-actions">
@@ -16,21 +17,35 @@
     </div>
 </div>
 
-<form id="admin-staff-activate-form" method="POST" hidden data-no-loading="true">
+<form
+    id="admin-staff-block-form"
+    method="POST"
+    hidden
+    data-no-loading="true"
+    data-confirm="The account will be blocked and will not be able to log in or use the system until it is reactivated."
+    data-confirm-title="Block this scholar staff account?"
+    data-confirm-yes="Block"
+    data-confirm-no="Cancel"
+    data-confirm-variant="danger"
+>
     @csrf
     @include('partials.admin-staff-return-fields')
 </form>
 <form
-    id="admin-staff-deactivate-form"
+    id="admin-staff-suspend-form"
     method="POST"
     hidden
     data-no-loading="true"
-    data-confirm="The account will be deactivated and will not be able to log in. The staff record stays in the system."
-    data-confirm-title="Deactivate this scholar staff account?"
-    data-confirm-yes="Deactivate"
+    data-confirm="The account will be suspended and will not be able to log in or use the system until it is reactivated."
+    data-confirm-title="Suspend this scholar staff account?"
+    data-confirm-yes="Suspend"
     data-confirm-no="Cancel"
     data-confirm-variant="danger"
 >
+    @csrf
+    @include('partials.admin-staff-return-fields')
+</form>
+<form id="admin-staff-activate-form" method="POST" hidden data-no-loading="true">
     @csrf
     @include('partials.admin-staff-return-fields')
 </form>
@@ -57,17 +72,22 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!modal) return;
 
     var nameEl = document.getElementById('admin-staff-more-name');
+    var blockForm = document.getElementById('admin-staff-block-form');
+    var suspendForm = document.getElementById('admin-staff-suspend-form');
     var activateForm = document.getElementById('admin-staff-activate-form');
-    var deactivateForm = document.getElementById('admin-staff-deactivate-form');
     var deleteForm = document.getElementById('admin-staff-delete-form');
+    var blockBtn = modal.querySelector('[data-staff-more-block]');
+    var suspendBtn = modal.querySelector('[data-staff-more-suspend]');
+    var activateBtn = modal.querySelector('[data-staff-more-activate]');
 
     function openMore(button) {
         var name = (button.getAttribute('data-staff-name') || '').trim();
+        var status = button.getAttribute('data-account-status') || '';
         if (nameEl) {
             nameEl.hidden = !name;
             nameEl.textContent = name;
         }
-        [activateForm, deactivateForm, deleteForm].forEach(function (form) {
+        [blockForm, suspendForm, activateForm, deleteForm].forEach(function (form) {
             if (!form) return;
             if (name) form.setAttribute('data-confirm-name', name);
         });
@@ -79,9 +99,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 form.removeAttribute('action');
             }
         }
+        function showButton(buttonEl, visible) {
+            if (buttonEl) buttonEl.hidden = !visible;
+        }
+        setFormAction(blockForm, button.getAttribute('data-block-url') || '');
+        setFormAction(suspendForm, button.getAttribute('data-suspend-url') || '');
         setFormAction(activateForm, button.getAttribute('data-activate-url') || '');
-        setFormAction(deactivateForm, button.getAttribute('data-deactivate-url') || '');
         setFormAction(deleteForm, button.getAttribute('data-delete-url') || '');
+        showButton(blockBtn, status === 'approved' || status === 'suspended');
+        showButton(suspendBtn, status === 'approved' || status === 'blocked');
+        showButton(activateBtn, status !== 'approved' && status !== 'blocked' && status !== 'suspended');
         modal.classList.add('is-open');
         modal.setAttribute('aria-hidden', 'false');
     }
@@ -101,24 +128,32 @@ document.addEventListener('DOMContentLoaded', function () {
         trigger.addEventListener('click', closeMore);
     });
 
-    var activateBtn = modal.querySelector('[data-staff-more-activate]');
+    function confirmForm(form) {
+        if (!form || !form.getAttribute('action')) return;
+        closeMore();
+        if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+        } else {
+            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+    }
+
+    if (blockBtn) {
+        blockBtn.addEventListener('click', function () {
+            confirmForm(blockForm);
+        });
+    }
+
+    if (suspendBtn) {
+        suspendBtn.addEventListener('click', function () {
+            confirmForm(suspendForm);
+        });
+    }
+
     if (activateBtn) {
         activateBtn.addEventListener('click', function () {
             if (!activateForm || !activateForm.getAttribute('action')) return;
             activateForm.submit();
-        });
-    }
-
-    var deactivateBtn = modal.querySelector('[data-staff-more-deactivate]');
-    if (deactivateBtn) {
-        deactivateBtn.addEventListener('click', function () {
-            if (!deactivateForm || !deactivateForm.getAttribute('action')) return;
-            closeMore();
-            if (typeof deactivateForm.requestSubmit === 'function') {
-                deactivateForm.requestSubmit();
-            } else {
-                deactivateForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-            }
         });
     }
 

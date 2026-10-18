@@ -3,17 +3,20 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use App\Support\LocationAddress;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
@@ -24,7 +27,9 @@ class User extends Authenticatable
 
     public const ROLE_ADMIN = 'admin';
 
-    public const PERMANENT_ADMIN_EMAIL = 'bssa_admin@gmail.com';
+    public const PERMANENT_ADMIN_EMAIL = 'batangsurigaononscholarsapp@gmail.com';
+
+    public const PERMANENT_ADMIN_BACKUP_EMAIL = 'kcosinero1@ssct.edu.ph';
 
     public const PERMANENT_ADMIN_SCHOLAR_ID = 'ADMIN-001';
 
@@ -35,6 +40,10 @@ class User extends Authenticatable
     public const STATUS_REJECTED = 'rejected';
 
     public const STATUS_INACTIVE = 'inactive';
+
+    public const STATUS_BLOCKED = 'blocked';
+
+    public const STATUS_SUSPENDED = 'suspended';
 
     public const PRESENCE_SECONDS = 90;
 
@@ -51,6 +60,7 @@ class User extends Authenticatable
         'cellphone_number',
         'city',
         'province',
+        'street',
         'date_of_birth',
         'guardian_name',
         'guardian_relationship',
@@ -79,6 +89,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'date_of_birth' => 'date',
             'password' => 'hashed',
+            'program_start_year' => 'integer',
+            'staff_started_year' => 'integer',
             'notification_preferences' => 'array',
             'is_admin' => 'boolean',
             'is_permanent' => 'boolean',
@@ -101,6 +113,34 @@ class User extends Authenticatable
 
         return strcasecmp((string) $this->email, self::PERMANENT_ADMIN_EMAIL) === 0
             || strcasecmp((string) $this->scholar_id, self::PERMANENT_ADMIN_SCHOLAR_ID) === 0;
+    }
+
+    public function backupEmails(): HasMany
+    {
+        return $this->hasMany(AdminBackupEmail::class);
+    }
+
+    public function verifiedBackupEmails(): HasMany
+    {
+        return $this->backupEmails()->whereNotNull('verified_at');
+    }
+
+    public function hasVerifiedBackupEmail(): bool
+    {
+        return $this->verifiedBackupEmails()->exists();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function verifiedBackupEmailAddresses(): array
+    {
+        return $this->verifiedBackupEmails()
+            ->pluck('email')
+            ->map(fn ($email) => strtolower(trim((string) $email)))
+            ->filter()
+            ->values()
+            ->all();
     }
 
     protected static function booted(): void
@@ -167,10 +207,70 @@ class User extends Authenticatable
         return $this->isScholarStaff() && $this->status === self::STATUS_INACTIVE;
     }
 
-    public function staffStatusLabel(): string
+    public function isBlocked(): bool
+    {
+        return $this->status === self::STATUS_BLOCKED;
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->status === self::STATUS_SUSPENDED;
+    }
+
+    public function isAccessRestricted(): bool
+    {
+        if ($this->isAdmin()) {
+            return false;
+        }
+
+        return $this->isBlocked() || $this->isSuspended();
+    }
+
+    public function canBeRestricted(): bool
+    {
+        return in_array($this->status, [
+            self::STATUS_APPROVED,
+            self::STATUS_BLOCKED,
+            self::STATUS_SUSPENDED,
+        ], true);
+    }
+
+    public function accessRestrictedMessage(): string
+    {
+        if ($this->isScholar() && $this->isSuspended()) {
+            $suspension = $this->openSuspension();
+
+            if ($suspension?->ends_at) {
+                $ends = $suspension->ends_at->timezone(config('app.timezone'))->format('M j, Y g:i A');
+
+                return "Your scholar account is suspended until {$ends}. {$suspension->remainingLabel()} You cannot log in or use the system until the suspension ends.";
+            }
+        }
+
+        $state = $this->isSuspended() ? 'suspended' : 'blocked';
+
+        if ($this->isScholarStaff()) {
+            return "Your scholar staff account has been {$state}. You cannot log in or use the system until an administrator reactivates your account.";
+        }
+
+        return "Your scholar account has been {$state}. You cannot log in or use the system until Scholar Staff reactivates your account.";
+    }
+
+    public function openSuspension(): ?ScholarSuspension
+    {
+        if ($this->relationLoaded('activeSuspension')) {
+            return $this->activeSuspension;
+        }
+
+        return $this->activeSuspension()->first();
+    }
+
+    public function accountStatusLabel(): string
     {
         return match ($this->status) {
-            self::STATUS_APPROVED => 'Approved',
+            self::STATUS_APPROVED => 'Active',
+            self::STATUS_BLOCKED => 'Blocked',
+            self::STATUS_SUSPENDED => 'Suspended',
             self::STATUS_PENDING => 'Pending',
             self::STATUS_REJECTED => 'Rejected',
             self::STATUS_INACTIVE => 'Inactive',
@@ -178,15 +278,37 @@ class User extends Authenticatable
         };
     }
 
+    public function staffStatusLabel(): string
+    {
+        return $this->accountStatusLabel();
+    }
+
     public function staffStatusBadgeClass(): string
     {
         return match ($this->status) {
             self::STATUS_APPROVED => 'green',
-            self::STATUS_PENDING => 'orange',
-            self::STATUS_REJECTED => 'red',
+            self::STATUS_BLOCKED, self::STATUS_REJECTED => 'red',
+            self::STATUS_SUSPENDED, self::STATUS_PENDING => 'orange',
             self::STATUS_INACTIVE => 'gray',
             default => 'gray',
         };
+    }
+
+    public function canRestrictAccount(User $target): bool
+    {
+        if ($target->isAdmin() || $target->isPermanentAdmin() || $target->is($this)) {
+            return false;
+        }
+
+        if ($this->isScholarStaff() && $this->hasStaffPortalAccess()) {
+            return $target->isScholar() && $this->canManageScholar($target);
+        }
+
+        if ($this->isAdmin()) {
+            return $target->isScholarStaff();
+        }
+
+        return false;
     }
 
     public function hasScholarPortalAccess(): bool
@@ -264,6 +386,10 @@ class User extends Authenticatable
             return true;
         }
 
+        if ($this->isAccessRestricted()) {
+            return false;
+        }
+
         if ($this->isScholarStaff()) {
             return $this->status === self::STATUS_APPROVED;
         }
@@ -307,6 +433,18 @@ class User extends Authenticatable
     public function presenceLabel(): string
     {
         return $this->isPresentNow() ? 'Active Now' : 'Offline';
+    }
+
+    public function streetName(): ?string
+    {
+        $street = LocationAddress::normalizeStreet($this->street);
+
+        return $street;
+    }
+
+    public function homeAddress(): string
+    {
+        return LocationAddress::line($this->streetName(), $this->municipalityName(), $this->provinceName());
     }
 
     public function municipalityName(): ?string
@@ -364,6 +502,21 @@ class User extends Authenticatable
         return filled($this->cellphone_number) ? (string) $this->cellphone_number : '';
     }
 
+    public function staffStartedYearLabel(): ?string
+    {
+        $year = (int) ($this->staff_started_year ?? 0);
+        if ($year < 2000) {
+            return null;
+        }
+
+        return 'AY '.$year.'–'.($year + 1);
+    }
+
+    public function scholarshipClubStreet(): ?string
+    {
+        return LocationAddress::normalizeStreet($this->scholarshipClub?->street);
+    }
+
     public function scholarshipClubCity(): ?string
     {
         if (filled($this->scholarshipClub?->city)) {
@@ -388,14 +541,11 @@ class User extends Authenticatable
 
     public function scholarshipClubAddress(): string
     {
-        $city = $this->scholarshipClubCity();
-        $province = $this->scholarshipClubProvince();
-
-        if ($city && $province) {
-            return $city.', '.$province;
-        }
-
-        return $city ?: $province ?: '';
+        return LocationAddress::line(
+            $this->scholarshipClubStreet(),
+            $this->scholarshipClubCity(),
+            $this->scholarshipClubProvince()
+        );
     }
 
     public function scholarshipClubLabel(): string
@@ -554,6 +704,7 @@ class User extends Authenticatable
             'cellphone_number',
             'city',
             'province',
+            'street',
         ])->all());
 
         $user->email = strtolower(trim($attributes['email']));
@@ -575,6 +726,13 @@ class User extends Authenticatable
 
         $user->save();
 
+        if ($user->isScholarStaff() && isset($attributes['staff_started_year'])) {
+            $started = (int) $attributes['staff_started_year'];
+            $user->forceFill([
+                'staff_started_year' => $started >= 2000 ? $started : null,
+            ])->save();
+        }
+
         return $user->fresh(['scholarshipProgram', 'scholarshipClub']);
     }
 
@@ -595,6 +753,21 @@ class User extends Authenticatable
     public function attendances(): HasMany
     {
         return $this->hasMany(Attendance::class);
+    }
+
+    public function suspensions(): HasMany
+    {
+        return $this->hasMany(ScholarSuspension::class);
+    }
+
+    public function activeSuspension(): HasOne
+    {
+        return $this->hasOne(ScholarSuspension::class)->ofMany(
+            ['starts_at' => 'max'],
+            function ($query) {
+                $query->whereNull('lifted_at');
+            }
+        );
     }
 
     public function documents(): HasMany

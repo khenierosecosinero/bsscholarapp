@@ -7,13 +7,7 @@
             <h1>New Password</h1>
             <p class="lead">Create a new password for <strong>{{ $email }}</strong>. It must be at least 8 characters, and both fields must match.</p>
 
-            @if(session('success'))
-                <div class="alert success">{{ session('success') }}</div>
-            @endif
-
-            @if($errors->any())
-                <div class="errors">{{ $errors->first() }}</div>
-            @endif
+            @include('partials.flash-messages')
 
             <form method="POST" action="{{ route('password.update') }}" class="auth-form">
                 @csrf

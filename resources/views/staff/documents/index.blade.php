@@ -46,7 +46,17 @@
                 <div class="staff-doc-type-actions">
                     <a href="{{ route('staff.documents.show', $type) }}" class="staff-btn staff-btn-sm">View submissions</a>
                     <a href="{{ route('staff.documents.edit', $type) }}" class="staff-btn staff-btn-sm">Edit</a>
-                    <form method="POST" action="{{ route('staff.documents.destroy', $type) }}" onsubmit="return confirm('Remove {{ addslashes($type->name) }}? Scholar files for this type will also be deleted.')">
+                    <form
+                        method="POST"
+                        action="{{ route('staff.documents.destroy', $type) }}"
+                        data-confirm="Scholar files for this type will also be deleted."
+                        data-confirm-title="Remove {{ $type->name }}?"
+                        data-confirm-name="{{ $type->name }}"
+                        data-confirm-note="This cannot be undone."
+                        data-confirm-yes="Remove"
+                        data-confirm-no="Cancel"
+                        data-confirm-variant="danger"
+                    >
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger">Delete</button>

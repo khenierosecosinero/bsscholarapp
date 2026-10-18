@@ -39,11 +39,18 @@
         </form>
     </div>
 
+    @include('partials.admin-academic-year-selector', [
+        'title' => 'Viewing Academic Year',
+        'inputId' => 'admin-settings-view-year',
+    ])
+
     <div class="staff-card admin-academic-year-card">
         <div class="staff-card-header">
-            <h2>Academic Year</h2>
-            <span class="staff-badge green">Active: {{ $activeAcademicYear->periodLabel() }}</span>
+            <h2>Manage Academic Years</h2>
         </div>
+        <p class="staff-muted" style="margin:0 0 14px">
+            Add, edit, or delete academic years available across the Admin Portal. The viewing year above controls which year’s records appear on Dashboard, Scholars, Events, Service Hours, Documents, and Reports.
+        </p>
 
         <form
             method="POST"
@@ -83,101 +90,45 @@
         </form>
 
         <div class="staff-table-wrap" style="margin-top:16px">
-            <table class="staff-table staff-stack-table">
+            <table class="staff-table staff-stack-table staff-manage-table">
                 <thead>
                     <tr>
                         <th>Academic Year</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th class="staff-col-actions">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($academicYears as $year)
                         <tr>
                             <td data-label="Academic Year"><strong>{{ $year->periodLabel() }}</strong></td>
-                            <td data-label="Status">
-                                @if($year->is_active)
-                                    <span class="staff-badge green">Active</span>
-                                @else
-                                    <span class="staff-badge gray">Inactive</span>
-                                @endif
-                            </td>
-                            <td data-label="Actions">
+                            <td data-label="Actions" class="staff-col-actions">
                                 <div class="staff-action-group">
                                     <a href="{{ route('admin.settings', ['edit' => $year->id]) }}" class="staff-btn staff-btn-sm">Edit</a>
-                                    @if($year->is_active)
-                                        @if($academicYears->count() > 1)
-                                            <form
-                                                method="POST"
-                                                action="{{ route('admin.settings.academic-years.deactivate', $year) }}"
-                                                data-confirm="This will deactivate {{ $year->periodLabel() }}. The most recent remaining academic year will become active and will be used across scholars, events, attendance, service hours, documents, and reports."
-                                                data-confirm-title="Deactivate this academic year?"
-                                                data-confirm-yes="Deactivate"
-                                                data-confirm-no="Cancel"
-                                                data-confirm-variant="danger"
-                                                data-no-loading
-                                            >
-                                                @csrf
-                                                <button type="submit" class="staff-btn staff-btn-sm">Deactivate</button>
-                                            </form>
-                                        @endif
-                                    @else
-                                        <form
-                                            method="POST"
-                                            action="{{ route('admin.settings.academic-years.activate', $year) }}"
-                                            data-confirm="This will make {{ $year->periodLabel() }} the active academic year for scholars, events, attendance, service hours, documents, and reports. {{ $activeAcademicYear->periodLabel() }} will be deactivated."
-                                            data-confirm-title="Activate this academic year?"
-                                            data-confirm-yes="Activate"
-                                            data-confirm-no="Cancel"
-                                            data-no-loading
-                                        >
-                                            @csrf
-                                            <button type="submit" class="staff-btn staff-btn-sm staff-btn-primary">Activate</button>
-                                        </form>
-                                    @endif
                                     @php
                                         $yearUsage = $academicYearUsage[$year->id] ?? ['has_records' => false, 'warning' => ''];
                                         $yearLabel = $year->periodLabel();
                                     @endphp
-                                    @if($year->is_active)
-                                        <form
-                                            method="POST"
-                                            action="{{ route('admin.settings.academic-years.destroy', $year) }}"
-                                            data-confirm="{{ $yearLabel }} is the active academic year and cannot be deleted until another academic year is set as active."
-                                            data-confirm-title="Delete {{ $yearLabel }}?"
-                                            data-confirm-name="{{ $yearLabel }}"
-                                            data-confirm-yes="Delete"
-                                            data-confirm-no="Cancel"
-                                            data-confirm-variant="danger"
-                                            data-no-loading
-                                        >
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger">Delete</button>
-                                        </form>
-                                    @else
-                                        <form
-                                            method="POST"
-                                            action="{{ route('admin.settings.academic-years.destroy', $year) }}"
-                                            data-confirm="This will permanently delete {{ $yearLabel }} from Academic Year management."
-                                            data-confirm-title="Delete {{ $yearLabel }}?"
-                                            data-confirm-name="{{ $yearLabel }}"
-                                            data-confirm-note="{{ ($yearUsage['has_records'] ?? false) ? ($yearUsage['warning'].' This cannot be undone.') : 'This cannot be undone.' }}"
-                                            data-confirm-yes="Delete"
-                                            data-confirm-no="Cancel"
-                                            data-confirm-variant="danger"
-                                            data-no-loading
-                                        >
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger">Delete</button>
-                                        </form>
-                                    @endif
+                                    <form
+                                        method="POST"
+                                        action="{{ route('admin.settings.academic-years.destroy', $year) }}"
+                                        data-confirm="This will remove {{ $yearLabel }} from Academic Year management. Attendance and service-hour records already saved for this year stay in the system."
+                                        data-confirm-title="Delete {{ $yearLabel }}?"
+                                        data-confirm-name="{{ $yearLabel }}"
+                                        data-confirm-note="{{ ($yearUsage['has_records'] ?? false) ? ($yearUsage['warning'].' This cannot be undone.') : 'This cannot be undone.' }}"
+                                        data-confirm-yes="Delete"
+                                        data-confirm-no="Cancel"
+                                        data-confirm-variant="danger"
+                                        data-no-loading
+                                    >
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger">Delete</button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
                     @empty
-                        <tr class="staff-table-empty"><td colspan="3">No academic years found.</td></tr>
+                        <tr class="staff-table-empty"><td colspan="2">No academic years found.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -209,15 +160,161 @@
         </form>
     </div>
 
+    <div class="staff-card" data-backup-emails>
+        <div class="staff-card-header">
+            <h2>Backup Recovery Emails</h2>
+        </div>
+        <p class="staff-muted" style="margin:0 0 14px">
+            Add one or more backup emails for Forgot Password. Only verified addresses can receive recovery codes.
+            Editing an address clears verification until the new inbox confirms the change.
+        </p>
+
+        @error('backup_email')
+            <div class="staff-field-error" style="margin-bottom:10px">{{ $message }}</div>
+        @enderror
+
+        <div data-backup-list>
+            @forelse(($backupEmails ?? []) as $backup)
+                <div class="backup-email-row" style="border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin-bottom:12px">
+                    <form method="POST" action="{{ route('admin.settings.backup-emails.update', $backup) }}" class="staff-form-grid">
+                        @csrf
+                        @method('PUT')
+                        <div class="staff-form-group">
+                            <label for="backup_email_{{ $backup->id }}">Backup email</label>
+                            <input
+                                type="email"
+                                id="backup_email_{{ $backup->id }}"
+                                name="backup_email"
+                                value="{{ old('backup_email', $backup->email) }}"
+                                required
+                                autocomplete="off"
+                            >
+                            <small class="staff-muted">
+                                @if($backup->isVerified())
+                                    Status: <strong>Verified</strong> — usable for password recovery
+                                @else
+                                    Status: <strong>Pending verification</strong> — not usable for recovery yet
+                                @endif
+                            </small>
+                        </div>
+                        <div class="admin-form-actions" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                            <button type="submit" class="staff-btn staff-btn-primary">Save</button>
+                            @unless($backup->isVerified())
+                                <button
+                                    type="submit"
+                                    class="staff-btn"
+                                    form="backup-resend-{{ $backup->id }}"
+                                >Resend verification</button>
+                            @endunless
+                            <button
+                                type="submit"
+                                class="staff-btn"
+                                form="backup-remove-{{ $backup->id }}"
+                            >Remove</button>
+                        </div>
+                    </form>
+                    @unless($backup->isVerified())
+                        <form id="backup-resend-{{ $backup->id }}" method="POST" action="{{ route('admin.settings.backup-emails.resend', $backup) }}">
+                            @csrf
+                        </form>
+                    @endunless
+                    <form
+                        id="backup-remove-{{ $backup->id }}"
+                        method="POST"
+                        action="{{ route('admin.settings.backup-emails.destroy', $backup) }}"
+                        data-confirm="This backup email will no longer be usable for password recovery."
+                        data-confirm-title="Remove this backup recovery email?"
+                        data-confirm-name="{{ $backup->email }}"
+                        data-confirm-yes="Remove"
+                        data-confirm-no="Cancel"
+                        data-confirm-variant="danger"
+                    >
+                        @csrf
+                        @method('DELETE')
+                    </form>
+                </div>
+            @empty
+                <p class="staff-muted" data-backup-empty style="margin:0 0 12px">No backup recovery emails yet. Use + Backup Email to add one.</p>
+            @endforelse
+        </div>
+
+        <div data-backup-drafts></div>
+
+        <div class="admin-form-actions" style="margin-top:8px">
+            <button type="button" class="staff-btn staff-btn-primary" data-backup-add>+ Backup Email</button>
+        </div>
+
+        <template id="backup-email-draft-template">
+            <div class="backup-email-row backup-email-draft" style="border:1px dashed #9ca3af;border-radius:10px;padding:14px;margin-top:12px">
+                <form method="POST" action="{{ route('admin.settings.backup-emails.store') }}" class="staff-form-grid">
+                    @csrf
+                    <div class="staff-form-group">
+                        <label>New backup email</label>
+                        <input type="email" name="backup_email" required autocomplete="off" placeholder="name@example.com">
+                        <small class="staff-muted">Status: <strong>Not saved</strong> — save to send a verification link</small>
+                    </div>
+                    <div class="admin-form-actions" style="display:flex;flex-wrap:wrap;gap:8px">
+                        <button type="submit" class="staff-btn staff-btn-primary">Save &amp; verify</button>
+                        <button type="button" class="staff-btn" data-backup-draft-remove>Remove</button>
+                    </div>
+                </form>
+            </div>
+        </template>
+    </div>
+
+    <script>
+        (function () {
+            var root = document.querySelector('[data-backup-emails]');
+            if (!root) return;
+            var drafts = root.querySelector('[data-backup-drafts]');
+            var template = document.getElementById('backup-email-draft-template');
+            var addBtn = root.querySelector('[data-backup-add]');
+            var emptyNote = root.querySelector('[data-backup-empty]');
+            var storeUrl = @json(route('admin.settings.backup-emails.store'));
+            var defaultEmail = @json(($backupEmails ?? collect())->isEmpty() ? ($defaultBackupEmail ?? '') : '');
+
+            function addDraft(prefill) {
+                if (!drafts || !template) return;
+                var node = template.content.cloneNode(true);
+                var row = node.querySelector('.backup-email-draft');
+                var input = node.querySelector('input[type="email"]');
+                var form = node.querySelector('form');
+                if (form) form.action = storeUrl;
+                if (input && prefill) input.value = prefill;
+                var removeBtn = node.querySelector('[data-backup-draft-remove]');
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', function () {
+                        if (row && row.parentNode) row.parentNode.removeChild(row);
+                    });
+                }
+                drafts.appendChild(node);
+                if (emptyNote) emptyNote.hidden = true;
+                if (input) input.focus();
+            }
+
+            if (addBtn) {
+                addBtn.addEventListener('click', function () {
+                    addDraft('');
+                });
+            }
+
+            @if($errors->has('backup_email'))
+                addDraft(@json(old('backup_email', '')));
+            @elseif(($backupEmails ?? collect())->isEmpty() && $defaultBackupEmail)
+                addDraft(defaultEmail);
+            @endif
+        })();
+    </script>
+
     <div class="staff-card">
         <div class="staff-card-header"><h2>Authorized Admin Accounts</h2></div>
         <div class="staff-table-wrap">
-            <table class="staff-table staff-stack-table">
+            <table class="staff-table staff-stack-table staff-manage-table">
                 <thead>
                     <tr>
                         <th>Name</th>
                         <th>Email</th>
-                        <th>Status</th>
+                        <th class="staff-col-status">Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -225,7 +322,7 @@
                         <tr>
                             <td>{{ $account->full_name }}</td>
                             <td>{{ $account->email }}</td>
-                            <td>
+                            <td class="staff-col-status">
                                 @if($account->id === $admin->id)
                                     <span class="staff-badge green">Current account</span>
                                 @else

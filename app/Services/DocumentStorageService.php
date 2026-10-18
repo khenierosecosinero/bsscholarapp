@@ -14,25 +14,28 @@ use Throwable;
 
 class DocumentStorageService
 {
-    public function __construct(private GoogleDriveService $drive)
-    {
-    }
+    public function __construct(
+        private GoogleDriveService $drive,
+        private AcademicSettingsService $academic,
+    ) {}
 
     public function store(User $scholar, DocumentType $type, UploadedFile $file): Document
     {
         if (! $this->drive->isConnected()) {
-            throw new RuntimeException('Google Drive is not connected. Ask an administrator to connect Drive first.');
+            throw new RuntimeException('Google Drive is not connected. Ask an administrator or Scholar Staff to open Settings and connect Google Drive first.');
         }
 
-        $folderId = $this->drive->ensureScholarFolder($scholar);
         $existing = Document::query()
             ->where('user_id', $scholar->id)
             ->where('document_type_id', $type->id)
             ->first();
 
+        [$yearStart, $yearEnd, $yearLabel] = $this->resolveAcademicYear($scholar, $existing);
+        $folderId = $this->drive->ensureScholarFolder($scholar, $yearLabel);
+
         $oldDriveId = $existing?->google_drive_file_id;
         $oldPath = $existing?->file_path;
-        $driveName = $this->driveFileName($type, $file);
+        $driveName = $this->drive->originalUploadName($file);
 
         if ($oldDriveId) {
             try {
@@ -52,6 +55,8 @@ class DocumentStorageService
             $document = Document::updateOrCreate(
                 ['user_id' => $scholar->id, 'document_type_id' => $type->id],
                 [
+                    'academic_year_start' => $yearStart,
+                    'academic_year_end' => $yearEnd,
                     'file_path' => $path,
                     'google_drive_file_id' => $uploaded->getId(),
                     'google_drive_web_link' => $uploaded->getWebViewLink(),
@@ -146,11 +151,24 @@ class DocumentStorageService
         ]);
     }
 
-    private function driveFileName(DocumentType $type, UploadedFile $file): string
+    /**
+     * @return array{0: int, 1: int, 2: string}
+     */
+    private function resolveAcademicYear(User $scholar, ?Document $existing = null): array
     {
-        $extension = strtolower($file->getClientOriginalExtension() ?: $file->guessExtension() ?: 'bin');
-        $base = preg_replace('/[\\\\\/:*?"<>|]+/', '', $type->name) ?: 'Document';
+        $start = (int) ($existing?->academic_year_start ?? 0);
+        $end = (int) ($existing?->academic_year_end ?? 0);
 
-        return $base.'.'.$extension;
+        if ($start >= 2000) {
+            $end = $end === $start + 1 ? $end : $start + 1;
+
+            return [$start, $end, $this->drive->driveYearFolderName($start, $end)];
+        }
+
+        $period = $this->academic->forUser($scholar);
+        $start = (int) $period->year_start;
+        $end = (int) $period->year_end;
+
+        return [$start, $end, $this->drive->driveYearFolderName($start, $end)];
     }
 }

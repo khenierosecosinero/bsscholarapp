@@ -145,15 +145,61 @@
     color: #0f172a;
 }
 
+.page-documents .doc-table th,
+.page-documents .doc-table td {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.page-documents .doc-table tbody td {
+    height: 1px;
+}
+
+.page-documents .doc-table .table-event {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    max-width: 100%;
+    text-align: left;
+}
+
+.page-documents .doc-table td .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .page-documents .doc-actions {
-    display: flex;
+    display: inline-flex;
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
+    justify-content: center;
+    width: 100%;
 }
 
 .page-documents .doc-actions form {
     margin: 0;
+    display: inline-flex;
+}
+
+@media (max-width: 800px) {
+    .page-documents .doc-table th,
+    .page-documents .doc-table td {
+        text-align: left;
+        height: auto;
+    }
+
+    .page-documents .doc-table .table-event {
+        justify-content: flex-start;
+        display: flex;
+    }
+
+    .page-documents .doc-actions {
+        justify-content: flex-start;
+        width: auto;
+    }
 }
 
 .page-documents .btn.danger {

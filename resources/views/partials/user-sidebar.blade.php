@@ -136,33 +136,25 @@
 
             @endif
 
+            @if($key === 'profile' && !$accountPending && ! in_array($active, ['profile', 'notifications', 'documents'], true))
+
+                <div class="sidebar-nav-widgets">
+
+                    @include('partials.service-hours-overview-sidebar')
+
+                    @include('partials.upcoming-event-sidebar', ['upcomingEvent' => $upcomingEvent ?? null])
+
+                </div>
+
+            @endif
+
         @endforeach
 
     </nav>
 
 
 
-    @if($active === 'dashboard' && !$accountPending)
-
-        @include('partials.dashboard-sidebar-section')
-
-    @endif
-
-
-
     <div class="sidebar-widgets">
-
-        @if($active !== 'dashboard' && $active !== 'profile' && $active !== 'notifications' && $active !== 'documents' && !$accountPending)
-
-            @include('partials.service-hours-overview-sidebar')
-
-        @endif
-
-        @if($active === 'events')
-
-            @include('partials.upcoming-event-sidebar', ['upcomingEvent' => $upcomingEvent ?? null])
-
-        @endif
 
         @if($active === 'dashboard' && !$accountPending)
 

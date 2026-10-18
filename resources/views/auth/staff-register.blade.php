@@ -6,9 +6,7 @@
         <div class="auth-card">
             <h1>Scholarship Club Registration</h1>
 
-            @if($errors->any())
-                <div class="errors">{{ implode(' ', $errors->all()) }}</div>
-            @endif
+            @include('partials.flash-messages')
 
             <form method="POST" action="{{ route('register.staff.post') }}" class="auth-form">
                 @csrf

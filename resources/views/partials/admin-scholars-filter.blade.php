@@ -1,5 +1,5 @@
 @php
-    $preserve = request()->except(['location', 'program_type', 'page', 'club', 'search']);
+    $preserve = request()->except(['location', 'program_type', 'page', 'club', 'search', 'region']);
     $selectedClubId = (int) ($selectedClubId ?? 0);
     $scholarshipClubs = $scholarshipClubs ?? collect();
 @endphp

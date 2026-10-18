@@ -5,7 +5,7 @@
 <div class="staff-settings-grid">
     <div class="staff-card">
         @php
-            $staffProfileErrors = $errors->hasAny(['scholarship_club_name', 'scholarship_program_id', 'cellphone_number']);
+            $staffProfileErrors = $errors->hasAny(['scholarship_club_name', 'scholarship_program_id', 'cellphone_number', 'street']);
         @endphp
         <form method="POST" action="{{ route('staff.settings.club') }}" class="staff-form-grid" data-profile-edit-form data-start-editing="{{ $staffProfileErrors ? '1' : '0' }}">
             @csrf
@@ -27,9 +27,10 @@
                     'locationTree' => $locationTree ?? [],
                     'requireCity' => true,
                     'addressMode' => true,
+                    'street' => $staff->scholarshipClubStreet() ?: $staff->streetName(),
                     'selectedId' => old('scholarship_program_id', $staff->scholarshipClub?->scholarship_program_id ?? $staff->scholarship_program_id),
                 ])
-                <p class="staff-muted" style="margin:6px 0 0">Province and Municipality/City are the official address of this Scholarship Club.</p>
+                <p class="staff-muted" style="margin:6px 0 0">No./Street, Province, and Municipality/City are the official address of this Scholarship Club.</p>
                 @error('scholarship_program_id')
                     <p class="staff-field-error">{{ $message }}</p>
                 @enderror
@@ -56,6 +57,41 @@
                 <button type="submit" class="staff-btn staff-btn-primary" data-profile-save hidden disabled>Save Changes</button>
             </div>
         </form>
+
+        @php
+            $viewPeriod = $academicPeriod ?? null;
+            $selectedYearStart = (int) old('year_start', $viewPeriod->year_start ?? 0);
+            $selectedSemester = (string) old('semester', $viewPeriod->semester ?? '2nd Semester');
+        @endphp
+        @if(!empty($academicYearOptions) && $viewPeriod)
+            <div class="staff-academic-period" style="margin-top:20px;padding-top:20px;border-top:1px solid var(--staff-border,#e5e7eb)">
+                <h3 style="margin:0 0 8px;font-size:15px">Academic Year and Semester</h3>
+                <p class="staff-muted" style="margin:0 0 14px">Choose the academic year and semester used across the Scholar Staff dashboard, attendance, service hours, and reports. This filters displayed records and does not change saved attendance or the administrator's academic years.</p>
+                <form method="POST" action="{{ route('academic.period.update') }}" class="staff-form-grid">
+                    @csrf
+                    @method('PUT')
+                    <div class="staff-form-group">
+                        <label for="staff_year_start">Academic Year</label>
+                        <select id="staff_year_start" name="year_start" class="staff-select" required>
+                            @foreach($academicYearOptions as $year => $label)
+                                <option value="{{ $year }}" @selected($selectedYearStart === (int) $year)>AY {{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="staff-form-group">
+                        <label for="staff_semester">Semester</label>
+                        <select id="staff_semester" name="semester" class="staff-select" required>
+                            @foreach($semesterOptions ?? ['1st Semester', '2nd Semester'] as $option)
+                                <option value="{{ $option }}" @selected($selectedSemester === $option)>{{ $option }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="staff-form-group" style="grid-column:1/-1;margin:0">
+                        <button type="submit" class="staff-btn staff-btn-primary">Apply View</button>
+                    </div>
+                </form>
+            </div>
+        @endif
     </div>
 
     <div class="staff-card">
@@ -90,26 +126,6 @@
                 @endforeach
             </div>
         @endif
-    </div>
-
-    <div class="staff-card">
-        <div class="staff-card-header">
-            <h2>🔔 Notification Settings</h2>
-        </div>
-        <div class="staff-toggle-row">
-            <div>
-                <strong>Email Notifications</strong>
-                <div class="staff-muted">Receive email alerts for new registrations and submissions.</div>
-            </div>
-            <div class="staff-toggle" aria-hidden="true"></div>
-        </div>
-        <div class="staff-toggle-row">
-            <div>
-                <strong>System Alerts</strong>
-                <div class="staff-muted">Show in-app notifications for pending approvals.</div>
-            </div>
-            <div class="staff-toggle" aria-hidden="true"></div>
-        </div>
     </div>
 
     <div class="staff-card">
@@ -207,9 +223,12 @@
 .staff-school-row:last-child{border-bottom:none;padding-bottom:0}
 .staff-school-actions{display:flex;align-items:center;gap:8px}
 .staff-settings-grid .location-cascade{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.staff-settings-grid .location-cascade [data-location-street-wrap]{grid-column:1/-1}
 .staff-settings-grid .location-cascade-label{display:block;font-size:13px;font-weight:600;color:#374151;margin:0 0 6px}
-.staff-settings-grid .location-cascade select.form-input{width:100%;padding:10px 12px;border:1px solid var(--staff-border,#e5e7eb);border-radius:8px;background:#fff;font:inherit;box-sizing:border-box}
-.staff-settings-grid .location-cascade select:disabled{color:#9ca3af;cursor:not-allowed;background:#f3f4f6}
+.staff-settings-grid .location-cascade select.form-input,
+.staff-settings-grid .location-cascade input.form-input{width:100%;padding:10px 12px;border:1px solid var(--staff-border,#e5e7eb);border-radius:8px;background:#fff;font:inherit;box-sizing:border-box}
+.staff-settings-grid .location-cascade select:disabled,
+.staff-settings-grid .location-cascade input[readonly]{color:#9ca3af;cursor:not-allowed;background:#f3f4f6}
 @media (max-width:720px){.staff-settings-grid .location-cascade{grid-template-columns:1fr}}
 .staff-change-password-btn{border-color:#1890ff;color:#1890ff}
 .staff-password-dialog{

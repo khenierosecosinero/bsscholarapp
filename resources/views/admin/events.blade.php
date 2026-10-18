@@ -2,9 +2,10 @@
 
 @section('page-content')
 
+@include('partials.admin-academic-year-selector', ['inputId' => 'admin-events-year', 'compact' => true])
+
 @php
     $eventsListQuery = array_filter([
-        'region' => $selectedRegion ?: null,
         'location' => $locationKey ?? 'all',
         'club' => $selectedClubId ?: null,
         'search' => filled($search ?? '') ? $search : null,
@@ -14,15 +15,15 @@
 @include('partials.admin-events-filter')
 
 <div class="staff-card">
-    <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table">
+    <div class="staff-table-wrap admin-data-table-wrap">
+        <table class="staff-table staff-manage-table admin-data-table admin-events-table">
             <thead>
                 <tr>
                     <th>Event</th>
                     <th>Scholarship Club</th>
                     <th>Participants</th>
                     <th>Schedule</th>
-                    <th>Status</th>
+                    <th class="staff-col-status">Status</th>
                     <th>Service Hours</th>
                 </tr>
             </thead>
@@ -33,7 +34,7 @@
                         <td data-label="Scholarship Club">{{ $event->directoryClubLabel($selectedClubId ?? null) }}</td>
                         <td data-label="Participants">{{ $event->verifiedParticipantCount() }}</td>
                         <td data-label="Schedule">{{ $event->starts_at?->format('M j, Y g:i A') ?? '—' }}</td>
-                        <td data-label="Status"><span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span></td>
+                        <td data-label="Status" class="staff-col-status"><span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span></td>
                         <td data-label="Service Hours">{{ $event->service_hours ?? 0 }}</td>
                     </tr>
                 @empty

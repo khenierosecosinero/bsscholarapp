@@ -28,16 +28,16 @@
 </form>
 
 <div class="staff-card">
-    <div class="staff-table-wrap">
-        <table class="staff-table staff-stack-table">
+    <div class="staff-table-wrap staff-data-table-wrap">
+        <table class="staff-table staff-manage-table staff-data-table staff-events-table">
             <thead>
                 <tr>
                     <th>Event Information</th>
                     <th>Date &amp; Time</th>
                     <th>Service Hours</th>
-                    <th>Status</th>
-                    <th>Attendance</th>
-                    <th>Actions</th>
+                    <th class="staff-col-status">Status</th>
+                    <th class="staff-col-status">Attendance</th>
+                    <th class="staff-col-actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -69,14 +69,14 @@
                             <div class="staff-muted">{{ $event->starts_at?->format('g:i A') }}@if($event->ends_at) – {{ $event->ends_at->format('g:i A') }}@endif</div>
                         </td>
                         <td data-label="Service Hours">{{ number_format((float) $event->service_hours, 1) }} hrs</td>
-                        <td data-label="Status"><span class="staff-badge {{ $statusClass }}">{{ ucfirst(str_replace('_', ' ', $event->status ?? 'upcoming')) }}</span></td>
-                        <td data-label="Attendance"><span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}">{{ $event->attendanceStatusLabel() }}</span></td>
-                        <td data-label="Actions">
+                        <td data-label="Status" class="staff-col-status"><span class="staff-badge {{ $statusClass }}">{{ ucfirst(str_replace('_', ' ', $event->status ?? 'upcoming')) }}</span></td>
+                        <td data-label="Attendance" class="staff-col-status"><span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}">{{ $event->attendanceStatusLabel() }}</span></td>
+                        <td data-label="Actions" class="staff-col-actions">
                             <a href="{{ route('staff.events.show', $event) }}" class="staff-action-btn" title="View">👁</a>
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">No events found.</td></tr>
+                    <tr class="staff-table-empty"><td colspan="6">No events found.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -85,12 +85,3 @@
 </div>
 
 @endsection
-
-@push('styles')
-<style>
-.staff-muted{color:#6b7280;font-size:13px}
-.staff-event-cell{display:flex;align-items:center;gap:12px}
-.staff-event-thumb{width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0}
-.staff-stat-icon.red{background:#fee2e2}
-</style>
-@endpush

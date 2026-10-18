@@ -844,6 +844,19 @@ body:has(.staff-shell) {
     word-break: break-word;
 }
 
+.staff-scholars-table .staff-scholar-name-row {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.staff-scholars-table .staff-scholar-name-link {
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-wrap: normal;
+    word-break: keep-all;
+}
+
 .staff-scholar-name-link:hover,
 .staff-scholar-name-link:focus-visible {
     color: #096dd9;
@@ -904,9 +917,10 @@ body:has(.staff-shell) {
     word-break: break-word;
 }
 
-.staff-approval-table th,
-.staff-approval-table td {
+.staff-table.staff-approval-table th,
+.staff-table.staff-approval-table td {
     vertical-align: middle;
+    text-align: center;
     overflow-wrap: break-word;
     word-break: normal;
 }
@@ -917,14 +931,14 @@ body:has(.staff-shell) {
 }
 
 .staff-approval-table .staff-account-details {
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    overflow-wrap: break-word;
+    word-break: normal;
 }
 
 .staff-approval-status {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
 }
 
 .staff-approval-table .staff-badge {
@@ -940,33 +954,38 @@ body:has(.staff-shell) {
 }
 
 .staff-action-group.staff-approval-actions {
-    display: flex;
-    flex-direction: column;
+    display: inline-flex;
+    flex-direction: row;
     flex-wrap: nowrap;
-    align-items: stretch;
-    justify-content: flex-start;
-    gap: 8px;
-    width: 100%;
-    max-width: 140px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: auto;
+    max-width: none;
+    margin: 0 auto;
+    white-space: nowrap;
 }
 
 .staff-approval-actions form {
-    display: block;
-    width: 100%;
+    display: inline-flex;
+    width: auto;
     margin: 0;
+    flex: 0 0 auto;
 }
 
 .staff-approval-actions .staff-btn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
+    width: auto;
+    min-width: 78px;
     min-height: 32px;
     padding: 6px 12px;
     box-sizing: border-box;
     white-space: nowrap;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
+    flex: 0 0 auto;
 }
 
 .staff-approval-actions .staff-btn-success:hover {
@@ -988,26 +1007,30 @@ body:has(.staff-shell) {
 }
 
 @media (min-width: 801px) {
+    .staff-approval-card .staff-table-wrap {
+        overflow-x: auto;
+    }
     .staff-approval-table {
         table-layout: fixed;
-        min-width: 1240px;
+        width: 100%;
+        min-width: 1080px;
     }
     .staff-approval-table th:nth-child(1),
-    .staff-approval-table td:nth-child(1) { width: 17%; }
+    .staff-approval-table td:nth-child(1) { min-width: 200px; }
     .staff-approval-table th:nth-child(2),
-    .staff-approval-table td:nth-child(2) { width: 17%; }
+    .staff-approval-table td:nth-child(2) { min-width: 180px; }
     .staff-approval-table th:nth-child(3),
-    .staff-approval-table td:nth-child(3) { width: 12%; }
+    .staff-approval-table td:nth-child(3) { min-width: 120px; }
     .staff-approval-table th:nth-child(4),
-    .staff-approval-table td:nth-child(4) { width: 12%; }
+    .staff-approval-table td:nth-child(4) { min-width: 140px; }
     .staff-approval-table th:nth-child(5),
-    .staff-approval-table td:nth-child(5) { width: 13%; white-space: nowrap; }
+    .staff-approval-table td:nth-child(5) { min-width: 130px; }
     .staff-approval-table th:nth-child(6),
-    .staff-approval-table td:nth-child(6) { width: 9%; white-space: nowrap; }
+    .staff-approval-table td:nth-child(6) { min-width: 160px; white-space: nowrap; }
     .staff-approval-table th:nth-child(7),
     .staff-approval-table td:nth-child(7) {
-        width: 20%;
-        min-width: 268px;
+        width: 120px;
+        min-width: 120px;
         white-space: nowrap;
     }
 }
@@ -1121,6 +1144,12 @@ body:has(.staff-shell) {
     line-height: 1.45;
 }
 
+.academic-period-filter{display:flex;align-items:flex-end;gap:8px;margin-right:12px;flex-wrap:wrap}
+.academic-period-filter label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;color:var(--staff-muted,#6b7280)}
+.academic-period-filter select{height:36px;border:1px solid var(--staff-border,#e5e7eb);border-radius:8px;padding:0 10px;background:#fff;font-size:13px}
+.staff-year-group td{background:#f8fafc;font-weight:700;color:#1e3a5f}
+.staff-topbar-right{gap:12px}
+
 .staff-hours-years {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1162,6 +1191,20 @@ body:has(.staff-shell) {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+}
+
+.staff-hours-current-year {
+    gap: 16px;
+}
+
+.staff-hours-current-year .staff-hours-semester-card {
+    padding: 14px 16px;
+}
+
+@media (max-width: 800px) {
+    .staff-hours-current-year {
+        grid-template-columns: 1fr;
+    }
 }
 
 .staff-hours-semester-card {
@@ -1930,7 +1973,6 @@ body:has(.staff-shell) {
     }
     .staff-scholars-table .staff-scholar-meta strong,
     .staff-stack-table .staff-scholar-meta strong,
-    .staff-scholars-table .staff-scholar-name-link,
     .staff-stack-table .staff-scholar-name-link,
     .staff-scholars-table .staff-scholar-meta small,
     .staff-stack-table .staff-scholar-meta small {
@@ -1938,9 +1980,20 @@ body:has(.staff-shell) {
         overflow: visible;
         text-overflow: unset;
     }
+    .staff-scholars-table .staff-scholar-name-link {
+        white-space: nowrap;
+        overflow-wrap: normal;
+        word-wrap: normal;
+        word-break: keep-all;
+        overflow: visible;
+        text-overflow: unset;
+    }
     .staff-scholars-table .staff-scholar-name-row,
     .staff-stack-table .staff-scholar-name-row {
         width: 100%;
+    }
+    .staff-scholars-table .staff-scholar-name-row {
+        flex-wrap: nowrap;
     }
     .staff-scholars-table .staff-presence,
     .staff-stack-table .staff-presence {
@@ -1959,6 +2012,21 @@ body:has(.staff-shell) {
         justify-content: flex-start;
         width: 100%;
     }
+    .staff-scholars-table td.staff-col-actions .staff-action-group,
+    .staff-scholars-table td[data-label="Actions"] .staff-action-group {
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        max-width: 160px;
+        gap: 8px;
+    }
+    .staff-scholars-table td.staff-col-actions .staff-action-group form,
+    .staff-scholars-table td.staff-col-actions .staff-action-group .staff-btn,
+    .staff-scholars-table td[data-label="Actions"] .staff-action-group form,
+    .staff-scholars-table td[data-label="Actions"] .staff-action-group .staff-btn {
+        width: 100%;
+        flex: 0 0 auto;
+    }
     .staff-action-group .staff-btn-view,
     .staff-action-group .staff-btn-more {
         width: auto;
@@ -1969,18 +2037,19 @@ body:has(.staff-shell) {
         align-items: flex-start;
     }
     .staff-action-group.staff-approval-actions {
-        width: 100%;
-        max-width: 180px;
-        flex-direction: column;
+        width: auto;
+        max-width: none;
+        flex-direction: row;
         flex-wrap: nowrap;
-        white-space: normal;
-        gap: 8px;
+        align-items: center;
+        white-space: nowrap;
+        gap: 6px;
     }
     .staff-approval-actions .staff-btn,
     .staff-approval-actions form {
         flex: 0 0 auto;
-        min-width: 0;
-        width: 100%;
+        min-width: 78px;
+        width: auto;
     }
     .staff-doc-review-actions {
         width: 100%;
@@ -2204,11 +2273,12 @@ body:has(.staff-shell) {
     overflow-wrap: break-word;
     word-break: normal;
     vertical-align: middle;
+    text-align: center;
 }
 
 .staff-documents-table .staff-col-file .staff-stack-value {
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    overflow-wrap: break-word;
+    word-break: normal;
 }
 
 .staff-documents-table .staff-col-date,
@@ -2250,11 +2320,13 @@ body:has(.staff-shell) {
     margin: 0;
     white-space: normal;
     text-align: center;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    word-break: normal;
 }
 
 .staff-documents-table .staff-doc-review-actions {
     min-width: 0;
+    justify-content: center;
 }
 
 .staff-doc-review-actions {
@@ -2262,6 +2334,7 @@ body:has(.staff-shell) {
     flex-wrap: wrap;
     gap: 6px;
     align-items: center;
+    justify-content: center;
 }
 
 .staff-doc-review-actions form {
@@ -2494,8 +2567,8 @@ body:has(.staff-shell) {
     height: 52px;
     margin: 0 auto 14px;
     border-radius: 50%;
-    background: #fee2e2;
-    color: #b91c1c;
+    background: #e7f6ea;
+    color: #1E6E1E;
     font-size: 28px;
     font-weight: 800;
     line-height: 52px;
@@ -2971,6 +3044,20 @@ body:has(.staff-shell) {
     word-wrap: break-word;
 }
 
+.staff-table.staff-approval-table th,
+.staff-table.staff-approval-table td {
+    overflow-wrap: normal;
+    word-break: normal;
+    vertical-align: middle;
+}
+
+.staff-table.staff-approval-table th:nth-child(6),
+.staff-table.staff-approval-table td:nth-child(6),
+.staff-table.staff-approval-table th:nth-child(7),
+.staff-table.staff-approval-table td:nth-child(7) {
+    white-space: nowrap;
+}
+
 .staff-event-cell {
     display: flex;
     align-items: flex-start;
@@ -3221,4 +3308,585 @@ body:has(.staff-shell) {
     }
 }
 
+.staff-manage-table th,
+.staff-manage-table td {
+    vertical-align: middle;
+}
+
+.staff-manage-table th.staff-col-status,
+.staff-manage-table td.staff-col-status,
+.staff-manage-table th.staff-col-actions,
+.staff-manage-table td.staff-col-actions {
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
+.staff-manage-table th.staff-col-status,
+.staff-manage-table td.staff-col-status {
+    width: 148px;
+    min-width: 148px;
+}
+
+.staff-manage-table .staff-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 26px;
+    padding: 4px 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: keep-all;
+    flex-shrink: 0;
+}
+
+.staff-manage-table td.staff-col-status .staff-stack-value {
+    display: flex;
+    align-items: center;
+    width: auto;
+    max-width: none;
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
+.staff-manage-table th.staff-col-actions,
+.staff-manage-table td.staff-col-actions {
+    width: 1%;
+    min-width: max-content;
+}
+
+.staff-manage-table td.staff-col-actions .staff-stack-value:not(.staff-doc-review-actions) {
+    display: inline-flex;
+    align-items: center;
+    width: auto;
+    max-width: none;
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
+.staff-manage-table td.staff-col-actions .staff-action-group {
+    display: inline-flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    width: max-content;
+    max-width: none;
+    white-space: nowrap;
+}
+
+.staff-manage-table td.staff-col-actions .staff-action-group form {
+    display: inline-flex;
+    margin: 0;
+    flex: 0 0 auto;
+    width: auto;
+}
+
+.staff-manage-table td.staff-col-actions .staff-action-group .staff-btn {
+    min-width: 104px;
+    min-height: 32px;
+    padding: 6px 14px;
+    box-sizing: border-box;
+    white-space: nowrap;
+    flex: 0 0 auto;
+    width: auto;
+}
+
+.staff-table.staff-scholars-table.staff-manage-table thead th,
+.staff-table.staff-scholars-table.staff-manage-table tbody td {
+    vertical-align: middle;
+    text-align: center;
+}
+
+.staff-table.staff-scholars-table.staff-manage-table tbody td {
+    height: 1px;
+}
+
+.staff-table.staff-scholars-table.staff-manage-table tbody td > .staff-stack-value {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.staff-table.staff-scholars-table.staff-manage-table .staff-scholar-cell {
+    justify-content: center;
+    text-align: center;
+}
+
+.staff-table.staff-scholars-table.staff-manage-table .staff-scholar-meta {
+    text-align: center;
+}
+
+.staff-table.staff-scholars-table.staff-manage-table .staff-scholar-name-row {
+    justify-content: center;
+}
+
+.staff-table.staff-scholars-table.staff-manage-table td.staff-col-status .staff-stack-value {
+    align-items: center;
+    justify-content: center;
+}
+
+.staff-table.staff-scholars-table.staff-manage-table td.staff-col-actions .staff-stack-value,
+.staff-table.staff-scholars-table.staff-manage-table td.staff-col-actions .staff-stack-value:not(.staff-doc-review-actions) {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+}
+
+.staff-table.staff-scholars-table.staff-manage-table td.staff-col-actions .staff-action-group {
+    display: flex;
+    flex-direction: column;
+    flex-flow: column nowrap;
+    align-items: stretch;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 120px;
+    margin-inline: auto;
+    white-space: normal;
+}
+
+.staff-table.staff-scholars-table.staff-manage-table td.staff-col-actions .staff-action-group form {
+    display: flex;
+    width: 100%;
+    margin: 0;
+    flex: 0 0 auto;
+    justify-content: center;
+}
+
+.staff-table.staff-scholars-table.staff-manage-table td.staff-col-actions .staff-action-group .staff-btn {
+    width: 100%;
+    min-width: 104px;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+@media (min-width: 801px) {
+    .staff-card:has(.staff-scholars-table) .staff-table-wrap,
+    .staff-card:has(.staff-manage-table) .staff-table-wrap {
+        overflow-x: auto;
+    }
+
+    .staff-table.staff-scholars-table.staff-manage-table {
+        width: 100%;
+        min-width: 1280px;
+        table-layout: auto;
+    }
+
+    .staff-table.staff-scholars-table.staff-manage-table thead th,
+    .staff-table.staff-scholars-table.staff-manage-table tbody td {
+        vertical-align: middle;
+        text-align: center;
+    }
+
+    .staff-table.staff-scholars-table.staff-manage-table th:nth-child(1),
+    .staff-table.staff-scholars-table.staff-manage-table td:nth-child(1) { min-width: 280px; }
+    .staff-table.staff-scholars-table.staff-manage-table th:nth-child(2),
+    .staff-table.staff-scholars-table.staff-manage-table td:nth-child(2) { min-width: 124px; white-space: nowrap; }
+    .staff-table.staff-scholars-table.staff-manage-table th:nth-child(3),
+    .staff-table.staff-scholars-table.staff-manage-table td:nth-child(3) { min-width: 110px; }
+    .staff-table.staff-scholars-table.staff-manage-table th:nth-child(4),
+    .staff-table.staff-scholars-table.staff-manage-table td:nth-child(4) { min-width: 150px; }
+    .staff-table.staff-scholars-table.staff-manage-table th:nth-child(5),
+    .staff-table.staff-scholars-table.staff-manage-table td:nth-child(5) { min-width: 150px; white-space: nowrap; }
+    .staff-table.staff-scholars-table.staff-manage-table th:nth-child(6),
+    .staff-table.staff-scholars-table.staff-manage-table td:nth-child(6) { min-width: 170px; }
+
+    .staff-table.staff-scholars-table.staff-manage-table th.staff-col-status,
+    .staff-table.staff-scholars-table.staff-manage-table td.staff-col-status {
+        width: 148px;
+        min-width: 148px;
+        white-space: nowrap;
+        vertical-align: middle;
+        text-align: center;
+    }
+
+    .staff-table.staff-scholars-table.staff-manage-table th.staff-col-actions,
+    .staff-table.staff-scholars-table.staff-manage-table td.staff-col-actions {
+        width: 128px;
+        min-width: 128px;
+        white-space: normal;
+        vertical-align: middle;
+        text-align: center;
+    }
+}
+
+@media (max-width: 800px) {
+    .staff-manage-table th.staff-col-status,
+    .staff-manage-table td.staff-col-status,
+    .staff-manage-table th.staff-col-actions,
+    .staff-manage-table td.staff-col-actions {
+        width: 100%;
+        min-width: 0;
+        white-space: normal;
+    }
+
+    .staff-manage-table td.staff-col-status .staff-badge {
+        white-space: nowrap;
+    }
+
+    .staff-manage-table td.staff-col-actions .staff-stack-value:not(.staff-doc-review-actions) {
+        width: auto;
+        max-width: 100%;
+        align-items: flex-start;
+    }
+
+    .staff-manage-table td.staff-col-actions .staff-action-group {
+        flex-wrap: wrap;
+        width: auto;
+        max-width: 100%;
+        justify-content: flex-start;
+        white-space: normal;
+    }
+
+    .staff-manage-table td.staff-col-actions .staff-action-group .staff-btn,
+    .staff-manage-table td.staff-col-actions .staff-action-group form {
+        width: auto;
+        flex: 0 0 auto;
+    }
+
+    .staff-table.staff-scholars-table.staff-manage-table thead th,
+    .staff-table.staff-scholars-table.staff-manage-table tbody td {
+        text-align: left;
+    }
+
+    .staff-table.staff-scholars-table.staff-manage-table tbody td {
+        height: auto;
+    }
+
+    .staff-table.staff-scholars-table.staff-manage-table tbody td > .staff-stack-value,
+    .staff-table.staff-scholars-table.staff-manage-table td.staff-col-actions .staff-stack-value,
+    .staff-table.staff-scholars-table.staff-manage-table td.staff-col-actions .staff-stack-value:not(.staff-doc-review-actions) {
+        height: auto;
+        min-height: 0;
+        align-items: flex-start;
+        justify-content: flex-start;
+        text-align: left;
+    }
+
+    .staff-table.staff-scholars-table.staff-manage-table .staff-scholar-cell {
+        justify-content: flex-start;
+    }
+
+    .staff-table.staff-scholars-table.staff-manage-table td.staff-col-actions .staff-action-group,
+    .staff-table.staff-scholars-table.staff-manage-table td[data-label="Actions"] .staff-action-group {
+        flex-direction: column;
+        flex-flow: column nowrap;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        width: 100%;
+        max-width: 160px;
+        margin-inline: 0;
+        gap: 8px;
+    }
+
+    .staff-table.staff-scholars-table.staff-manage-table td.staff-col-actions .staff-action-group form,
+    .staff-table.staff-scholars-table.staff-manage-table td.staff-col-actions .staff-action-group .staff-btn {
+        width: 100%;
+        flex: 0 0 auto;
+    }
+}
+
+.staff-suspension-details {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    margin-top: 6px;
+    max-width: 220px;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    font-size: 12px;
+    line-height: 1.35;
+    font-weight: 600;
+    color: var(--staff-muted);
+}
+
+.staff-badge-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.staff-suspension-form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    min-width: min(100%, 260px);
+}
+
+.staff-suspension-reason {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--staff-muted);
+}
+
+.staff-suspension-reason textarea {
+    width: 100%;
+    min-height: 64px;
+    padding: 8px 10px;
+    border: 1px solid var(--staff-border);
+    border-radius: 8px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--staff-text);
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+/* Shared Scholar Staff list tables: centered headers/cells, readable text, horizontal scroll */
+.staff-data-table-wrap {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.staff-data-table.staff-manage-table,
+.staff-data-table.staff-documents-table,
+.staff-data-table.staff-approval-table {
+    width: 100%;
+    margin: 0 auto;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+.staff-data-table thead th,
+.staff-data-table tbody td {
+    text-align: center;
+    vertical-align: middle;
+    padding: 14px 12px;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+}
+
+.staff-data-table tr.staff-table-empty td {
+    text-align: center;
+    vertical-align: middle;
+    padding: 28px 16px;
+    color: #6b7280;
+    font-weight: 600;
+}
+
+.staff-data-table .staff-stack-value {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: 100%;
+    min-width: 0;
+    text-align: center;
+    overflow-wrap: break-word;
+    word-break: normal;
+}
+
+.staff-data-table .staff-scholar-cell,
+.staff-data-table .staff-event-cell {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.staff-data-table .staff-scholar-meta,
+.staff-data-table .staff-event-cell > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 0 1 auto;
+    width: auto;
+    max-width: calc(100% - 52px);
+    min-width: 0;
+    text-align: center;
+}
+
+.staff-data-table .staff-scholar-meta strong,
+.staff-data-table .staff-scholar-meta small,
+.staff-data-table .staff-event-cell strong,
+.staff-data-table .staff-event-cell .staff-muted,
+.staff-data-table .staff-account-details span {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    line-height: 1.35;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+}
+
+.staff-data-table .staff-account-details {
+    align-items: center;
+    text-align: center;
+}
+
+.staff-data-table td.staff-col-status .staff-badge,
+.staff-data-table .staff-approval-status .staff-badge {
+    margin: 0 auto;
+}
+
+.staff-data-table th.staff-col-status,
+.staff-data-table td.staff-col-status {
+    width: 120px;
+    min-width: 120px;
+}
+
+.staff-data-table th.staff-col-actions,
+.staff-data-table td.staff-col-actions {
+    overflow: visible;
+}
+
+.staff-data-table .staff-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+}
+
+.staff-event-thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.staff-stat-icon.red {
+    background: #fee2e2;
+}
+
+/* Staff → Events */
+.staff-events-table.staff-data-table {
+    min-width: 980px;
+}
+
+.staff-events-table th:nth-child(1),
+.staff-events-table td:nth-child(1) { width: 28%; min-width: 220px; }
+.staff-events-table th:nth-child(2),
+.staff-events-table td:nth-child(2) { width: 16%; min-width: 140px; }
+.staff-events-table th:nth-child(3),
+.staff-events-table td:nth-child(3) { width: 12%; min-width: 110px; white-space: nowrap; }
+.staff-events-table th:nth-child(6),
+.staff-events-table td:nth-child(6) { width: 90px; min-width: 90px; }
+
+/* Staff → Documents */
+.staff-documents-table.staff-data-table {
+    min-width: 1040px;
+}
+
+.staff-documents-table.staff-data-table col.staff-documents-col-scholar { width: 22%; }
+.staff-documents-table.staff-data-table col.staff-documents-col-file { width: 18%; }
+.staff-documents-table.staff-data-table col.staff-documents-col-date { width: 16%; }
+.staff-documents-table.staff-data-table col.staff-documents-col-status { width: 110px; }
+.staff-documents-table.staff-data-table col.staff-documents-col-actions { width: 30%; }
+
+.staff-documents-table.staff-data-table th.staff-col-actions,
+.staff-documents-table.staff-data-table td.staff-col-actions {
+    width: 30%;
+    min-width: 260px;
+}
+
+/* Staff → Approval Requests */
+.staff-approval-table.staff-data-table {
+    min-width: 1080px;
+}
+
+.staff-approval-table.staff-data-table th:nth-child(1),
+.staff-approval-table.staff-data-table td:nth-child(1) { width: 20%; min-width: 200px; }
+.staff-approval-table.staff-data-table th:nth-child(2),
+.staff-approval-table.staff-data-table td:nth-child(2) { width: 18%; min-width: 180px; }
+.staff-approval-table.staff-data-table th:nth-child(3),
+.staff-approval-table.staff-data-table td:nth-child(3) { width: 12%; min-width: 120px; }
+.staff-approval-table.staff-data-table th:nth-child(4),
+.staff-approval-table.staff-data-table td:nth-child(4) { width: 14%; min-width: 140px; }
+.staff-approval-table.staff-data-table th:nth-child(5),
+.staff-approval-table.staff-data-table td:nth-child(5) { width: 12%; min-width: 130px; }
+.staff-approval-table.staff-data-table th:nth-child(6),
+.staff-approval-table.staff-data-table td:nth-child(6) { width: 14%; min-width: 160px; white-space: nowrap; }
+.staff-approval-table.staff-data-table th:nth-child(7),
+.staff-approval-table.staff-data-table td:nth-child(7),
+.staff-approval-table.staff-data-table th.staff-col-status,
+.staff-approval-table.staff-data-table td.staff-col-status {
+    width: 110px;
+    min-width: 110px;
+}
+
+.staff-approval-table.staff-data-table .staff-scholar-name-link {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    font-weight: 700;
+    line-height: 1.35;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+}
+
+@media (max-width: 800px) {
+    .staff-data-table-wrap {
+        overflow-x: auto;
+    }
+
+    .staff-card:has(.staff-data-table) {
+        padding: 16px;
+        background: #fff;
+        border: 1px solid var(--staff-border);
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    }
+
+    .staff-data-table.staff-approval-table .staff-approval-status,
+    .staff-data-table.staff-approval-table td.staff-col-actions .staff-stack-value,
+    .staff-data-table.staff-documents-table .staff-doc-review-actions {
+        align-items: center;
+        justify-content: center;
+    }
+
+    .staff-data-table .staff-action-group.staff-approval-actions {
+        justify-content: center;
+    }
+
+    .staff-data-table.staff-documents-table .staff-doc-review-actions .staff-btn,
+    .staff-data-table.staff-documents-table .staff-doc-review-actions form {
+        width: auto;
+    }
+}
 

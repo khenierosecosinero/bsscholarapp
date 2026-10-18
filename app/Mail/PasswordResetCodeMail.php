@@ -17,12 +17,13 @@ class PasswordResetCodeMail extends Mailable
     public function __construct(
         public User $user,
         public string $code,
+        public string $resetUrl = '',
     ) {}
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your BSSA password reset verification code',
+            subject: 'Your BSSA password reset link',
         );
     }
 
@@ -33,6 +34,7 @@ class PasswordResetCodeMail extends Mailable
             with: [
                 'name' => $this->user->full_name,
                 'code' => $this->code,
+                'resetUrl' => $this->resetUrl,
                 'minutes' => PasswordResetService::EXPIRE_MINUTES,
             ],
         );

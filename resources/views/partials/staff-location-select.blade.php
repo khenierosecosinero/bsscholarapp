@@ -10,6 +10,7 @@
     $selectedProvinceId = '';
     $selectedProvinceName = '';
     $selectedCityLabel = '';
+    $streetValue = old('street', $street ?? '');
 
     foreach ($tree as $province) {
         if ((string) ($province['id'] ?? '') === (string) $selectedId) {
@@ -95,6 +96,27 @@
         >
     @endif
 
+    @if($addressMode)
+        <div data-location-street-wrap>
+            <label class="location-cascade-label" for="{{ $fieldId }}_street">No./Street</label>
+            <input
+                type="text"
+                id="{{ $fieldId }}_street"
+                name="street"
+                class="form-input"
+                value="{{ $streetValue }}"
+                maxlength="255"
+                autocomplete="address-line1"
+                placeholder="House number and street name"
+                data-profile-editable
+                data-saved-value="{{ $street ?? '' }}"
+            >
+            @error('street')
+                <p class="staff-field-error">{{ $message }}</p>
+            @enderror
+        </div>
+    @endif
+
     <div>
         <label class="location-cascade-label" for="{{ $fieldId }}_province">Province</label>
         <select
@@ -116,7 +138,7 @@
                     data-province-name="{{ $province['name'] }}"
                     {{ (string) $selectedProvinceId === (string) $provinceValue ? 'selected' : '' }}
                 >
-                    {{ $province['name'] }}{{ $province['region'] ? ' — '.$province['region'] : '' }}
+                    {{ $province['name'] }}
                 </option>
             @endforeach
         </select>

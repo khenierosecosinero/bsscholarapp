@@ -55,8 +55,10 @@ class EventActionController extends Controller
             return back()->with('error', 'You must register for this event before checking in.');
         }
 
-        $period = $this->academic->forUser($user);
-        $stamp = $this->academic->attendanceStamp($period);
+        $existingAttendance = Attendance::where('user_id', $user->id)
+            ->where('event_id', $event->id)
+            ->first();
+        $stamp = $this->academic->preservedAttendanceStamp($existingAttendance);
 
         $attendance = Attendance::firstOrCreate(
             ['user_id' => $user->id, 'event_id' => $event->id],
@@ -110,8 +112,7 @@ class EventActionController extends Controller
         $checkOut = now();
         $hours = $this->scholar->eventHourValue($event);
 
-        $period = $this->academic->forUser($user);
-        $stamp = $this->academic->attendanceStamp($period);
+        $stamp = $this->academic->preservedAttendanceStamp($attendance);
 
         $attendance->update(array_merge([
             'check_out' => $checkOut,

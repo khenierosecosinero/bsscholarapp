@@ -183,6 +183,10 @@ class SidebarLayoutConsistencyTest extends TestCase
         $this->assertStringContainsString('System Administrator', $html);
         $this->assertStringContainsString('staff-logout-btn', $html);
         $this->assertStringContainsString('app-logout-icon', $html);
+        $this->assertStringContainsString('admin-academic-year-selector', $html);
+        $this->assertStringContainsString('admin-dashboard-year', $html);
+        $this->assertStringNotContainsString('class="academic-period-filter"', $html);
+        $this->assertStringNotContainsString('aria-label="Semester"', $html);
         $this->assertStringNotContainsString('>Locations</span>', $html);
 
         $this->assertLessThan(strpos($html, 'staff-user-chip'), strpos($html, 'staff-brand-logo'));

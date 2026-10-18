@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initProfileDropdown();
     initProfileTabs();
     initFileUpload();
-    initFlashDismiss();
     initAttendanceLive();
     initAvatarPreview();
     initScholarPresenceHeartbeat();
@@ -284,7 +283,16 @@ function updateEventAttendanceBadge(session) {
     if (message) {
         message.classList.toggle('attendance-open-box', !!session.is_open);
         message.classList.toggle('attendance-closed-box', !session.is_open);
-        message.innerHTML = `<strong>Attendance ${escapeHtml(session.status)}:</strong> ${escapeHtml(session.message)}`;
+        message.classList.toggle('bssa-alert--success', !!session.is_open);
+        message.classList.toggle('bssa-alert--info', !session.is_open);
+        const title = message.querySelector('.bssa-alert__title');
+        const body = message.querySelector('.bssa-alert__message');
+        if (title && body) {
+            title.textContent = `Attendance ${session.status || ''}`;
+            body.textContent = session.message || '';
+        } else {
+            message.innerHTML = `<strong>Attendance ${escapeHtml(session.status)}:</strong> ${escapeHtml(session.message)}`;
+        }
     }
 }
 
@@ -294,16 +302,6 @@ function escapeHtml(value) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
-}
-
-function initFlashDismiss() {
-    document.querySelectorAll('.flash-alert').forEach((el) => {
-        setTimeout(() => {
-            el.style.opacity = '0';
-            el.style.transition = 'opacity .4s';
-            setTimeout(() => el.remove(), 400);
-        }, 5000);
-    });
 }
 
 function initAvatarPreview() {

@@ -2,15 +2,10 @@
     $userName = $user->full_name ?? 'Scholar';
     $userRole = $user->scholarshipClubName() ?: 'Scholar';
     $isDashboard = ($active ?? '') === 'dashboard';
-    $city = $user->scholarshipClubCity();
-    $province = $user->scholarshipClubProvince();
+    $address = $user->scholarshipClubAddress();
     $clubName = $user->scholarshipClubName();
-    if ($city && $province) {
-        $welcomeContext = "Here's what's happening in {$city}, {$province} — {$clubName}.";
-    } elseif ($city) {
-        $welcomeContext = "Here's what's happening in {$city} — {$clubName}.";
-    } elseif ($province) {
-        $welcomeContext = "Here's what's happening in {$province} — {$clubName}.";
+    if ($address !== '') {
+        $welcomeContext = "Here's what's happening in {$address} — {$clubName}.";
     } else {
         $welcomeContext = "Here's what's happening in your Scholarship Club.";
     }
@@ -22,6 +17,9 @@
         <button class="hamburger" id="sidebar-toggle" type="button" aria-label="Toggle menu" aria-expanded="true">&#9776;</button>
         <h1>{{ $isDashboard ? 'Dashboard' : $pageTitle }}</h1>
     </div>
+    @if(($active ?? '') !== 'profile')
+        @include('partials.academic-period-filter')
+    @endif
     <div class="profile-card" id="profile-dropdown-wrap">
         <x-user-avatar :user="$user ?? auth()->user()" class="avatar" />
         <div class="profile-info">

@@ -22,30 +22,105 @@ class AcademicSettingsService
 
     public const SEMESTER_ALL = 'all';
 
-    public const CACHE_KEY = 'academic_settings.current';
+    public const CACHE_KEY = 'academic_settings.recording';
+
+    public const SESSION_KEY = 'academic_period_view';
 
     public function current(): AcademicSetting
     {
-        return Cache::remember(self::CACHE_KEY, 3600, function () {
-            $active = AcademicSetting::query()->active()->orderByDesc('year_start')->first();
-            if ($active) {
-                return $active;
+        $cached = Cache::get(self::CACHE_KEY);
+        if ($cached instanceof AcademicSetting) {
+            $fresh = AcademicSetting::query()->find($cached->getKey());
+            if ($fresh) {
+                return $fresh;
             }
 
-            $existing = AcademicSetting::query()->orderByDesc('year_start')->first();
-            if ($existing) {
-                $existing->forceFill(['is_active' => true])->save();
+            // Stale cache (e.g. after RefreshDatabase rollback or settings wipe).
+            Cache::forget(self::CACHE_KEY);
+        } elseif ($cached !== null) {
+            Cache::forget(self::CACHE_KEY);
+        }
 
+        return Cache::remember(self::CACHE_KEY, 3600, function () {
+            $match = AcademicSetting::query()
+                ->where('year_start', $this->calendarYearStart())
+                ->first();
+            if ($match) {
+                return $match;
+            }
+
+            $existing = AcademicSetting::query()->orderByDesc('year_start')->orderByDesc('id')->first();
+            if ($existing) {
                 return $existing;
             }
 
+            $year = $this->calendarYearStart();
+
             return AcademicSetting::create([
-                'year_start' => (int) now()->year,
-                'year_end' => (int) now()->year + 1,
-                'semester' => '2nd Semester',
-                'is_active' => true,
+                'year_start' => $year,
+                'year_end' => $year + 1,
+                'semester' => $this->calendarSemester(),
+                'is_active' => false,
             ]);
         });
+    }
+
+    /**
+     * Academic year and semester used only to filter what the signed-in user sees.
+     * It is stored in the session and does not change academic years or attendance.
+     */
+    public function selectedPeriod(): AcademicSetting
+    {
+        $stored = session(self::SESSION_KEY);
+        $year = is_array($stored) ? (int) ($stored['year_start'] ?? 0) : 0;
+        $semester = is_array($stored) ? (string) ($stored['semester'] ?? '') : '';
+        $options = $this->yearOptions();
+
+        if (! isset($options[$year]) || ! in_array($semester, self::SEMESTERS, true)) {
+            $current = $this->current();
+            $year = (int) $current->year_start;
+            $semester = in_array($current->semester, self::SEMESTERS, true)
+                ? $current->semester
+                : self::SEMESTERS[0];
+        }
+
+        return new AcademicSetting([
+            'year_start' => $year,
+            'year_end' => $year + 1,
+            'semester' => $semester,
+        ]);
+    }
+
+    public function rememberSelectedPeriod(int $yearStart, string $semester): AcademicSetting
+    {
+        if (! isset($this->yearOptions()[$yearStart]) || ! in_array($semester, self::SEMESTERS, true)) {
+            throw ValidationException::withMessages([
+                'year_start' => 'Choose an academic year configured by the Administrator.',
+            ]);
+        }
+
+        session([
+            self::SESSION_KEY => [
+                'year_start' => $yearStart,
+                'semester' => $semester,
+            ],
+        ]);
+
+        return $this->selectedPeriod();
+    }
+
+    public function calendarYearStart(?Carbon $at = null): int
+    {
+        $at ??= now();
+
+        return (int) $at->month >= 8 ? (int) $at->year : (int) $at->year - 1;
+    }
+
+    public function calendarSemester(?Carbon $at = null): string
+    {
+        $at ??= now();
+
+        return (int) $at->month >= 8 ? '1st Semester' : '2nd Semester';
     }
 
     public function managedYears()
@@ -63,18 +138,14 @@ class AcademicSettingsService
         Cache::forget(self::CACHE_KEY);
     }
 
+    /**
+     * Current academic period for service hours, dashboards, and new attendance.
+     * The administrator's active academic year is the system-wide reference.
+     * A scholar's saved year does not replace it, and historical attendance
+     * stamps are left on their original academic year.
+     */
     public function forUser(User $user): AcademicSetting
     {
-        if ($user->academic_year_start && $user->semester) {
-            $setting = new AcademicSetting([
-                'year_start' => $user->academic_year_start,
-                'year_end' => $user->academic_year_start + 1,
-                'semester' => $user->semester,
-            ]);
-
-            return $setting;
-        }
-
         return $this->current();
     }
 
@@ -113,7 +184,7 @@ class AcademicSettingsService
             'year_start' => $period['year_start'],
             'year_end' => $period['year_end'],
             'semester' => $semester,
-            'is_active' => ! $hasYears,
+            'is_active' => false,
             'updated_by' => $user->id,
         ]);
 
@@ -202,12 +273,6 @@ class AcademicSettingsService
 
     public function deleteYear(AcademicSetting $setting, User $user): void
     {
-        if ($setting->is_active) {
-            throw ValidationException::withMessages([
-                'academic_year' => 'Activate another academic year before deleting '.$setting->periodLabel().'.',
-            ]);
-        }
-
         if (AcademicSetting::query()->count() <= 1) {
             throw ValidationException::withMessages([
                 'academic_year' => 'Keep at least one academic year.',
@@ -497,6 +562,90 @@ class AcademicSettingsService
     }
 
     /**
+     * Filter documents to the selected academic year (and legacy unstamped rows by upload date).
+     *
+     * @param  array{year_start: int, semester?: string}  $filter
+     */
+    public function scopeDocumentsForReport(Builder|Relation $query, array $filter): Builder|Relation
+    {
+        $year = (int) $filter['year_start'];
+        [$start, $end] = $this->eventBoundsForReport([
+            'year_start' => $year,
+            'semester' => self::SEMESTER_ALL,
+        ]);
+
+        return $query->where(function ($scoped) use ($year, $start, $end) {
+            $scoped->where('academic_year_start', $year)
+                ->orWhere(function ($legacy) use ($start, $end) {
+                    $legacy->whereNull('academic_year_start')
+                        ->where(function ($dates) use ($start, $end) {
+                            $dates->whereBetween('uploaded_at', [$start, $end])
+                                ->orWhere(function ($created) use ($start, $end) {
+                                    $created->whereNull('uploaded_at')
+                                        ->whereBetween('created_at', [$start, $end]);
+                                });
+                        });
+                });
+        });
+    }
+
+    /**
+     * Filter events whose start falls inside the selected academic year / semester window.
+     *
+     * @param  array{year_start: int, semester?: string}  $filter
+     */
+    public function scopeEventsForReport(Builder|Relation $query, array $filter): Builder|Relation
+    {
+        [$start, $end] = $this->eventBoundsForReport($filter);
+
+        return $query->whereBetween('starts_at', [$start, $end]);
+    }
+
+    /**
+     * Report filter for the currently selected academic year.
+     * Pass $semester = null to keep the selected semester; pass SEMESTER_ALL for year-wide views.
+     *
+     * @return array{year_start: int, year_end: int, semester: string, semester_label: string, academic_year: string, label: string}
+     */
+    public function selectedReportFilter(?string $semester = null): array
+    {
+        $period = $this->selectedPeriod();
+
+        return $this->resolveReportFilter(
+            (int) $period->year_start,
+            $semester ?? $period->semester
+        );
+    }
+
+    /**
+     * Admin Portal views the whole academic year (both semesters).
+     *
+     * @return array{year_start: int, year_end: int, semester: string, semester_label: string, academic_year: string, label: string}
+     */
+    public function adminYearFilter(): array
+    {
+        return $this->selectedReportFilter(self::SEMESTER_ALL);
+    }
+
+    /**
+     * Scholars associated with a viewing academic year:
+     * pending accounts, unset start year, 4-year program window, or year-stamped activity.
+     */
+    public function scopeScholarsForAcademicYear(Builder|Relation $query, int $yearStart): Builder|Relation
+    {
+        return $query->where(function ($scoped) use ($yearStart) {
+            $scoped->where('status', User::STATUS_PENDING)
+                ->orWhereNull('program_start_year')
+                ->orWhere(function ($window) use ($yearStart) {
+                    $window->where('program_start_year', '<=', $yearStart)
+                        ->where('program_start_year', '>=', $yearStart - 3);
+                })
+                ->orWhereHas('attendances', fn ($attendance) => $attendance->where('academic_year_start', $yearStart))
+                ->orWhereHas('documents', fn ($document) => $document->where('academic_year_start', $yearStart));
+        });
+    }
+
+    /**
      * @return array{0: Carbon, 1: Carbon}
      */
     public function eventBoundsForReport(array $filter): array
@@ -568,6 +717,23 @@ class AcademicSettingsService
         ];
     }
 
+    /**
+     * Stamp a new attendance row with the administrator's current period.
+     * Rows that already have an academic year keep that stamp.
+     */
+    public function preservedAttendanceStamp(?Attendance $attendance = null): array
+    {
+        if ($attendance?->academic_year_start) {
+            return [
+                'academic_year_start' => (int) $attendance->academic_year_start,
+                'academic_year_end' => (int) ($attendance->academic_year_end ?: ((int) $attendance->academic_year_start + 1)),
+                'semester' => $attendance->semester,
+            ];
+        }
+
+        return $this->attendanceStamp($this->current());
+    }
+
     public function scopeAttendancesForPeriod(Builder|Relation $query, AcademicSetting $setting): Builder|Relation
     {
         return $query
@@ -588,7 +754,7 @@ class AcademicSettingsService
 
     public function infoForUser(User $user, array $hourStats): array
     {
-        $setting = $this->forUser($user);
+        $setting = $this->selectedPeriod();
 
         if ($hourStats['approved'] >= $hourStats['required']) {
             $status = 'Completed';
@@ -609,7 +775,7 @@ class AcademicSettingsService
             'semester' => $setting->semester,
             'status' => $status,
             'status_slug' => $statusSlug,
-            'is_global' => ! ($user->academic_year_start && $user->semester),
+            'is_global' => true,
         ];
     }
 }

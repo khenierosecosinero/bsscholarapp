@@ -1,5 +1,5 @@
 /* Batang Surigaonon Scholar's App — safe static-only service worker */
-const CACHE_VERSION = 'bssa-pwa-v5';
+const CACHE_VERSION = 'bssa-pwa-v6';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 
 const PRECACHE_URLS = [
@@ -25,6 +25,7 @@ function isPrivatePath(pathname) {
         pathname.startsWith('/admin') ||
         pathname.startsWith('/storage') ||
         pathname.startsWith('/livewire') ||
+        pathname.startsWith('/auth/') ||
         pathname.includes('/documents') ||
         pathname.includes('/attendances') ||
         pathname.includes('/notifications') ||
@@ -100,10 +101,20 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // Never intercept Google OAuth start/callback — query params (code/state) must reach Laravel intact.
+    if (url.pathname.startsWith('/auth/google')) {
+        return;
+    }
+
     const isNavigation = request.mode === 'navigate' ||
         (request.headers.get('accept') || '').includes('text/html');
 
     if (isNavigation) {
+        // Bypass the SW for navigations that carry OAuth query strings.
+        if (url.searchParams.has('code') || url.searchParams.has('state') || url.searchParams.has('error')) {
+            return;
+        }
+
         event.respondWith(
             fetch(request).catch(() => caches.match('/offline.html'))
         );

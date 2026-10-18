@@ -155,4 +155,78 @@ class ScholarshipClubSchoolTest extends TestCase
         $this->assertSame($school->id, $scholar->scholarship_club_school_id);
         $this->assertSame('Dapa National High School', $scholar->school_university);
     }
+
+    public function test_staff_scholars_list_filters_by_selected_school(): void
+    {
+        $program = $this->makeProgram();
+        $club = ScholarshipClub::create([
+            'name' => 'Dapa Scholars Club',
+            'city' => 'Dapa',
+            'province' => 'Surigao del Norte',
+            'scholarship_program_id' => $program->id,
+            'is_active' => true,
+        ]);
+        $staff = $this->makeStaff($program, $club);
+        $schoolA = ScholarshipClubSchool::createForClub('Dapa National High School', $club->id);
+        $schoolB = ScholarshipClubSchool::createForClub('Siargao National Science High School', $club->id);
+
+        $scholarA = User::register([
+            'full_name' => 'Scholar Alpha School',
+            'scholar_id' => 'SCH-SCHOOL-A',
+            'email' => 'scholar-a-school@example.com',
+            'password' => 'password123',
+            'role' => User::ROLE_SCHOLAR,
+            'status' => User::STATUS_APPROVED,
+            'scholarship_program_id' => $program->id,
+            'scholarship_club_id' => $club->id,
+            'scholarship_club_school_id' => $schoolA->id,
+            'school_university' => $schoolA->name,
+            'city' => 'Dapa',
+            'province' => 'Surigao del Norte',
+        ]);
+
+        $scholarB = User::register([
+            'full_name' => 'Scholar Beta School',
+            'scholar_id' => 'SCH-SCHOOL-B',
+            'email' => 'scholar-b-school@example.com',
+            'password' => 'password123',
+            'role' => User::ROLE_SCHOLAR,
+            'status' => User::STATUS_APPROVED,
+            'scholarship_program_id' => $program->id,
+            'scholarship_club_id' => $club->id,
+            'scholarship_club_school_id' => $schoolB->id,
+            'school_university' => $schoolB->name,
+            'city' => 'Dapa',
+            'province' => 'Surigao del Norte',
+        ]);
+
+        $this->actingAs($staff)
+            ->get(route('staff.scholars'))
+            ->assertOk()
+            ->assertSee('All Schools / Universities')
+            ->assertSee($scholarA->full_name)
+            ->assertSee($scholarB->full_name)
+            ->assertSee($schoolA->name)
+            ->assertSee($schoolB->name);
+
+        $this->actingAs($staff)
+            ->get(route('staff.scholars', ['school' => 'id:'.$schoolA->id]))
+            ->assertOk()
+            ->assertSee($scholarA->full_name)
+            ->assertDontSee($scholarB->full_name);
+
+        $this->actingAs($staff)
+            ->get(route('staff.scholars', [
+                'school' => 'id:'.$schoolB->id,
+                'search' => 'Beta',
+            ]))
+            ->assertOk()
+            ->assertSee($scholarB->full_name)
+            ->assertDontSee($scholarA->full_name);
+
+        $this->actingAs($staff)
+            ->get(route('staff.scholars.show', $scholarA))
+            ->assertOk()
+            ->assertSee($schoolA->name);
+    }
 }

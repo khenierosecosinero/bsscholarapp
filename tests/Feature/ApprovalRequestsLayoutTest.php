@@ -12,9 +12,11 @@ class ApprovalRequestsLayoutTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_approval_requests_table_shows_aligned_pending_badge_and_labeled_actions(): void
+    public function test_approval_requests_table_shows_centered_columns_and_scholar_profile_link(): void
     {
         [$staff] = $this->makeStaffWithPendingScholar();
+
+        $scholar = User::query()->where('email', 'pending-approval@example.com')->first();
 
         $html = $this->actingAs($staff)
             ->get(route('staff.approval-requests'))
@@ -22,23 +24,34 @@ class ApprovalRequestsLayoutTest extends TestCase
             ->getContent();
 
         $this->assertStringContainsString('staff-approval-table', $html);
+        $this->assertStringContainsString('staff-data-table', $html);
         $this->assertStringContainsString('Scholar Information', $html);
         $this->assertStringContainsString('Account Details', $html);
+        $this->assertStringContainsString('No./Street', $html);
         $this->assertStringContainsString('Municipality / City', $html);
         $this->assertStringContainsString('Province', $html);
         $this->assertStringContainsString('Date Registered', $html);
         $this->assertStringContainsString('>Pending<', $html);
         $this->assertStringContainsString('staff-approval-status', $html);
-        $this->assertStringContainsString('staff-approval-actions', $html);
-        $this->assertStringContainsString('>VIEW</a>', $html);
-        $this->assertStringContainsString('>APPROVE</button>', $html);
-        $this->assertStringContainsString('>REJECT</button>', $html);
-        $this->assertLessThan(strpos($html, '>APPROVE</button>'), strpos($html, '>VIEW</a>'));
-        $this->assertLessThan(strpos($html, '>REJECT</button>'), strpos($html, '>APPROVE</button>'));
-        $this->assertStringContainsString('data-ajax-approval="approve"', $html);
-        $this->assertStringContainsString('data-ajax-approval="reject"', $html);
-        $this->assertStringContainsString(route('staff.scholars.show', User::query()->where('email', 'pending-approval@example.com')->first()), $html);
+        $this->assertStringContainsString('staff-col-status', $html);
+        $this->assertStringContainsString(route('staff.scholars.show', $scholar), $html);
+        $this->assertStringContainsString('staff-scholar-name-link', $html);
+        $this->assertStringNotContainsString('staff-col-actions', $html);
+        $this->assertStringNotContainsString('>VIEW</a>', $html);
+        $this->assertStringNotContainsString('>APPROVE</button>', $html);
+        $this->assertStringNotContainsString('>REJECT</button>', $html);
         $this->assertStringNotContainsString('👁', $html);
+    }
+
+    public function test_approval_requests_empty_state_uses_seven_column_span(): void
+    {
+        [$staff] = $this->makeStaffOnly();
+
+        $this->actingAs($staff)
+            ->get(route('staff.approval-requests'))
+            ->assertOk()
+            ->assertSee('No approval requests found.', false)
+            ->assertSee('colspan="7"', false);
     }
 
     /**
@@ -46,30 +59,7 @@ class ApprovalRequestsLayoutTest extends TestCase
      */
     private function makeStaffWithPendingScholar(): array
     {
-        $program = ScholarshipProgram::create([
-            'location_name' => 'Surigao City',
-            'location_type' => 'city_municipality',
-            'name' => 'Surigao City Scholarship Program',
-            'display_name' => 'Surigao City',
-            'province_name' => 'Surigao del Norte',
-            'slug' => 'surigao-city-approval-layout',
-            'is_active' => true,
-        ]);
-
-        $club = ScholarshipClub::createForProgram('Keneli Scholarship', $program->id);
-
-        $staff = User::register([
-            'full_name' => 'Approval Staff',
-            'scholar_id' => 'STAFF-APPROVAL-001',
-            'email' => 'approval-staff@example.com',
-            'password' => 'password123',
-            'role' => User::ROLE_SCHOLAR_STAFF,
-            'status' => User::STATUS_APPROVED,
-            'scholarship_program_id' => $program->id,
-            'scholarship_club_id' => $club->id,
-            'city' => 'Surigao City',
-            'province' => 'Surigao del Norte',
-        ]);
+        [$staff, $program, $club] = $this->makeStaffOnly(true);
 
         $scholar = User::register([
             'full_name' => 'Pending Scholar',
@@ -85,5 +75,38 @@ class ApprovalRequestsLayoutTest extends TestCase
         ]);
 
         return [$staff, $scholar];
+    }
+
+    /**
+     * @return array{0: User}|array{0: User, 1: ScholarshipProgram, 2: ScholarshipClub}
+     */
+    private function makeStaffOnly(bool $withProgram = false): array
+    {
+        $program = ScholarshipProgram::create([
+            'location_name' => 'Surigao City',
+            'location_type' => 'city_municipality',
+            'name' => 'Surigao City Scholarship Program',
+            'display_name' => 'Surigao City',
+            'province_name' => 'Surigao del Norte',
+            'slug' => 'surigao-city-approval-layout'.($withProgram ? '-full' : '-empty'),
+            'is_active' => true,
+        ]);
+
+        $club = ScholarshipClub::createForProgram('Keneli Scholarship', $program->id);
+
+        $staff = User::register([
+            'full_name' => 'Approval Staff',
+            'scholar_id' => 'STAFF-APPROVAL-001',
+            'email' => 'approval-staff'.($withProgram ? '-full' : '-empty').'@example.com',
+            'password' => 'password123',
+            'role' => User::ROLE_SCHOLAR_STAFF,
+            'status' => User::STATUS_APPROVED,
+            'scholarship_program_id' => $program->id,
+            'scholarship_club_id' => $club->id,
+            'city' => 'Surigao City',
+            'province' => 'Surigao del Norte',
+        ]);
+
+        return $withProgram ? [$staff, $program, $club] : [$staff];
     }
 }

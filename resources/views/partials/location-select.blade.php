@@ -52,8 +52,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             options.forEach(function (option) {
                 var label = (option.getAttribute('data-label') || option.textContent || '').toLowerCase();
-                var region = (option.getAttribute('data-region') || '').toLowerCase();
-                var matches = normalized === '' || label.indexOf(normalized) !== -1 || region.indexOf(normalized) !== -1;
+                var matches = normalized === '' || label.indexOf(normalized) !== -1;
                 option.hidden = !matches;
                 if (matches) {
                     visibleCount++;

@@ -2,8 +2,8 @@
     $regions = $reportRegions ?? [];
 @endphp
 
-<div class="admin-regional-reports" aria-label="Luzon, Visayas, and Mindanao reports">
-    @foreach(['luzon', 'visayas', 'mindanao'] as $regionKey)
+<div class="admin-regional-reports" aria-label="Surigao del Norte and Surigao del Sur reports">
+    @foreach(['surigao_del_norte', 'surigao_del_sur'] as $regionKey)
         @php $region = $regions[$regionKey] ?? []; @endphp
         <section class="admin-region-section" aria-label="{{ strtoupper($region['label'] ?? $regionKey) }}">
             <header class="admin-region-header">
@@ -32,7 +32,7 @@
                         <div class="staff-stat-body">
                             <h3>Scholarship Clubs</h3>
                             <div class="value">{{ number_format((int) $clubs['total']) }}</div>
-                            <div class="sub">Registered clubs in this region</div>
+                            <div class="sub">Registered clubs in this province</div>
                         </div>
                     </div>
                     @include('partials.admin-report-pie-chart', ['regionLabel' => $region['label'] ?? $regionKey, 'chart' => $clubs['chart']])

@@ -86,6 +86,7 @@ class UserController extends Controller
                 ? $this->scholar->currentSemesterInfo($user, $hourStats)
                 : [],
             'globalAcademicSettings' => $this->academic->current(),
+            'academicPeriod' => $this->academic->selectedPeriod(),
             'academicYearOptions' => $this->academic->yearOptions(),
             'semesterOptions' => AcademicSettingsService::SEMESTERS,
             'sidebarCalendarEvents' => $needsCalendar
@@ -98,6 +99,9 @@ class UserController extends Controller
             'documentTypes' => $documentTypes,
             'documentOverview' => $documentOverview,
             'unreadNotificationsCount' => $user->unreadNotificationCount(),
+            'upcomingEvent' => $hasPortalAccess && ! in_array($active, ['profile', 'notifications', 'documents'], true)
+                ? $this->scholar->nextUpcomingEvent($user)
+                : null,
         ];
     }
 
@@ -122,7 +126,7 @@ class UserController extends Controller
             'announcementStats' => $this->announcements->statsForUser($user),
             'pendingAttendances' => $this->academic->scopeAttendancesForPeriod(
                 $user->attendances()->with('event')->where('status', 'pending')->whereNotNull('check_in'),
-                $this->academic->forUser($user)
+                $this->academic->selectedPeriod()
             )->get(),
             'dashboardDocuments' => $layout['documents'],
             'calendarEvents' => $this->scholar->calendarEvents($user, now()->year, now()->month),
@@ -159,7 +163,6 @@ class UserController extends Controller
         ), [
             'events' => $events,
             'selected' => $selected,
-            'upcomingEvent' => $this->scholar->nextUpcomingEvent($user),
             'attendanceSessions' => $this->attendanceSessions->sessionsForUser($user),
         ]));
     }
@@ -196,7 +199,7 @@ class UserController extends Controller
     {
         $user = Auth::user();
         $status = $request->get('tab', 'all');
-        $period = $this->academic->forUser($user);
+        $period = $this->academic->selectedPeriod();
 
         $query = $this->academic->scopeAttendancesForPeriod(
             $user->attendances()->with('event')->latest('created_at'),
@@ -209,10 +212,11 @@ class UserController extends Controller
         return view('user.service-hours', array_merge($this->layoutData(
             'service-hours',
             'Service Hours',
-            'Track your service hours progress for the selected semester.'
+            'Track your service hours for the academic year set by the Administrator.'
         ), [
             'records' => $query->get(),
             'activeTab' => $status,
+            'hourTracking' => $this->scholar->programHourTracking($user),
             'semesterSummary' => $this->scholar->semesterSummaryChart($user),
             'semesterHoursChart' => $this->scholar->semesterHoursComparison($user),
         ]));
@@ -332,14 +336,28 @@ class UserController extends Controller
 
         $user->loadMissing('scholarshipClub.schools');
 
+        $selectedProvince = old('province', $user->provinceName());
+        $canonicalProvince = ScholarshipProgram::canonicalPickerProvince(is_string($selectedProvince) ? $selectedProvince : null);
+        if ($canonicalProvince !== null) {
+            $selectedProvince = $canonicalProvince;
+        }
+
+        $municipalitiesByProvince = ScholarshipProgram::municipalitiesByProvince(
+            $user->provinceName(),
+            $user->municipalityName()
+        );
+
         return view('user.profile', array_merge($layout, [
-            'municipalityOptions' => ScholarshipProgram::municipalityOptions(
-                $user->provinceName(),
-                $user->municipalityName()
-            ),
+            'provinceOptions' => ScholarshipProgram::provinceOptions($user->provinceName()),
+            'selectedProvince' => $selectedProvince,
+            'municipalitiesByProvince' => $municipalitiesByProvince,
+            'municipalityOptions' => filled($selectedProvince)
+                ? ($municipalitiesByProvince[$selectedProvince] ?? [])
+                : [],
             'clubSchools' => $user->scholarshipClub?->schools ?? collect(),
             'yearLevels' => CourseCatalog::yearLevels(),
             'activeProfileTab' => $activeProfileTab,
+            'programStartYearOptions' => $this->scholar->programStartYearOptions($user),
         ]));
     }
 

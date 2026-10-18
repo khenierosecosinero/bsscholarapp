@@ -41,6 +41,9 @@ class StaffDashboardService
             'pageSubtitle' => $subtitle ?: ($staff->scholarshipClubName() !== 'Unassigned' ? 'Managing '.$staff->scholarshipClubLabel().'.' : 'Manage your assigned Scholarship Club.'),
             'breadcrumb' => $breadcrumb ?? $title,
             'pendingApprovalsCount' => $this->pendingApprovalsCount($programIds, $staff),
+            'academicPeriod' => $this->academic->selectedPeriod(),
+            'academicYearOptions' => $this->academic->yearOptions(),
+            'semesterOptions' => AcademicSettingsService::SEMESTERS,
         ];
     }
 
@@ -72,19 +75,22 @@ class StaffDashboardService
     public function scholarPageStats(array $programIds, ?User $staff = null, ?array $clubIds = null): array
     {
         $statusCounts = $this->scholarStatusCounts($programIds, $staff, $clubIds);
+        $periodFilter = $this->defaultReportFilter();
+
+        $pendingDocuments = Document::query()
+            ->where('status', 'pending')
+            ->whereHas('user', function ($q) use ($programIds, $staff, $clubIds) {
+                $q->where('role', User::ROLE_SCHOLAR)
+                    ->whereIn('scholarship_program_id', $programIds ?: [0]);
+                $this->constrainClubs($q, $staff, $clubIds);
+            });
+        $this->academic->scopeDocumentsForReport($pendingDocuments, $periodFilter);
 
         return [
             'total_scholars' => array_sum($statusCounts),
             'active_scholars' => $statusCounts['approved'] ?? 0,
             'pending_scholars' => $statusCounts['pending'] ?? 0,
-            'pending_documents' => Document::query()
-                ->where('status', 'pending')
-                ->whereHas('user', function ($q) use ($programIds, $staff, $clubIds) {
-                    $q->where('role', User::ROLE_SCHOLAR)
-                        ->whereIn('scholarship_program_id', $programIds ?: [0]);
-                    $this->constrainClubs($q, $staff, $clubIds);
-                })
-                ->count(),
+            'pending_documents' => $pendingDocuments->count(),
         ];
     }
 
@@ -103,33 +109,34 @@ class StaffDashboardService
             ->where('status', User::STATUS_APPROVED);
     }
 
-    public function dashboardStats(array $programIds, ?User $staff = null, ?array $clubIds = null): array
+    public function dashboardStats(array $programIds, ?User $staff = null, ?array $clubIds = null, ?array $periodFilter = null): array
     {
         $statusCounts = $this->scholarStatusCounts($programIds, $staff, $clubIds);
         $totalScholars = array_sum($statusCounts);
+        $periodFilter ??= $this->defaultReportFilter();
 
         $events = Event::query()
             ->whereIn('scholarship_program_id', $programIds ?: [0])
             ->visibleToStaff($staff);
+        $this->academic->scopeEventsForReport($events, $periodFilter);
 
-        $pendingAttendances = Attendance::query()
+        $pendingAttendances = $this->attendanceQuery($programIds, $periodFilter, $staff, $clubIds)
             ->where('status', Attendance::STATUS_PENDING)
             ->whereNotNull('check_in')
-            ->whereHas('user', fn ($q) => $q->where('role', User::ROLE_SCHOLAR)
-                ->whereIn('scholarship_program_id', $programIds ?: [0]))
             ->count();
 
         $pendingDocuments = Document::query()
             ->where('status', 'pending')
-            ->whereHas('user', fn ($q) => $q->where('role', User::ROLE_SCHOLAR)
-                ->whereIn('scholarship_program_id', $programIds ?: [0]))
-            ->count();
+            ->whereHas('user', function ($q) use ($programIds, $staff, $clubIds) {
+                $q->where('role', User::ROLE_SCHOLAR)
+                    ->whereIn('scholarship_program_id', $programIds ?: [0]);
+                $this->constrainClubs($q, $staff, $clubIds);
+            });
+        $this->academic->scopeDocumentsForReport($pendingDocuments, $periodFilter);
 
-        $totalServiceHours = Attendance::query()
+        $totalServiceHours = $this->attendanceQuery($programIds, $periodFilter, $staff, $clubIds)
             ->where('status', Attendance::STATUS_APPROVED)
             ->whereNotNull('check_in')
-            ->whereHas('user', fn ($q) => $q->where('role', User::ROLE_SCHOLAR)
-                ->whereIn('scholarship_program_id', $programIds ?: [0]))
             ->sum('hours_earned');
 
         return [
@@ -140,8 +147,9 @@ class StaffDashboardService
             'total_events' => (clone $events)->count(),
             'upcoming_events' => (clone $events)->where('starts_at', '>=', now())->count(),
             'pending_attendances' => $pendingAttendances,
-            'pending_documents' => $pendingDocuments,
+            'pending_documents' => $pendingDocuments->count(),
             'total_service_hours' => number_format((float) $totalServiceHours, 2),
+            'period' => $periodFilter,
         ];
     }
 
@@ -174,12 +182,17 @@ class StaffDashboardService
             ->get();
     }
 
-    public function upcomingEvents(array $programIds, int $limit = 3, ?User $staff = null): Collection
+    public function upcomingEvents(array $programIds, int $limit = 3, ?User $staff = null, ?array $periodFilter = null): Collection
     {
-        return Event::query()
+        $periodFilter ??= $this->defaultReportFilter();
+
+        $query = Event::query()
             ->whereIn('scholarship_program_id', $programIds ?: [0])
             ->visibleToStaff($staff)
-            ->where('starts_at', '>=', now())
+            ->where('starts_at', '>=', now());
+        $this->academic->scopeEventsForReport($query, $periodFilter);
+
+        return $query
             ->orderBy('starts_at')
             ->limit($limit)
             ->get();
@@ -212,12 +225,8 @@ class StaffDashboardService
      */
     public function reportContext(Request $request, array $programIds, ?User $staff = null): array
     {
-        $yearRaw = $request->query('year', session('staff_report_year'));
-        $semesterRaw = $request->query('semester', session('staff_report_semester', AcademicSettingsService::SEMESTER_ALL));
-        $year = is_numeric($yearRaw) ? (int) $yearRaw : null;
-        $semester = is_string($semesterRaw) ? $semesterRaw : AcademicSettingsService::SEMESTER_ALL;
-
-        $filter = $this->academic->resolveReportFilter($year, $semester);
+        $selected = $this->academic->selectedPeriod();
+        $filter = $this->academic->resolveReportFilter((int) $selected->year_start, $selected->semester);
         $school = $this->resolveSchoolFilter($request, $programIds, $staff);
         session([
             'staff_report_year' => $filter['year_start'],
@@ -238,7 +247,11 @@ class StaffDashboardService
 
     public function hoursOverview(array $programIds): array
     {
-        $base = $this->attendanceQuery($programIds);
+        $period = $this->academic->selectedPeriod();
+        $base = $this->attendanceQuery($programIds, $this->academic->resolveReportFilter(
+            (int) $period->year_start,
+            $period->semester
+        ));
 
         $approvedHours = (float) (clone $base)->where('status', Attendance::STATUS_APPROVED)->whereNotNull('check_in')->sum('hours_earned');
         $pendingHours = (float) (clone $base)->where('status', Attendance::STATUS_PENDING)->whereNotNull('check_in')->sum('hours_earned');
@@ -424,13 +437,17 @@ class StaffDashboardService
         ]);
     }
 
-    public function completionCounts(array $programIds, ?array $clubIds = null): array
+    public function completionCounts(array $programIds, ?array $clubIds = null, ?array $filter = null): array
     {
-        $period = $this->academic->current();
-        $required = ScholarService::REQUIRED_HOURS;
+        $filter ??= $this->defaultReportFilter();
+        $requiredEach = ScholarService::REQUIRED_HOURS;
+        $semesters = (($filter['semester'] ?? AcademicSettingsService::SEMESTER_ALL) === AcademicSettingsService::SEMESTER_ALL)
+            ? AcademicSettingsService::SEMESTERS
+            : [(string) $filter['semester']];
+        $required = $requiredEach * count($semesters);
         $total = $this->scholarsQuery($programIds, null, $clubIds)->count();
 
-        $hourRows = $this->attendanceQuery($programIds)
+        $hourRows = $this->attendanceQuery($programIds, $filter)
             ->whereNotNull('check_in')
             ->whereIn('status', [Attendance::STATUS_APPROVED, Attendance::STATUS_PENDING])
             ->get(['user_id', 'academic_year_start', 'semester', 'status', 'hours_earned'])
@@ -441,14 +458,14 @@ class StaffDashboardService
         $approvedHours = 0.0;
 
         foreach ($hourRows as $records) {
-            $stats = $this->scholar->serviceHourStatsFromRecords($records, $period);
+            $stats = $this->scholar->periodHourStatsFromRecords($records, $filter);
             $approved = (float) $stats['approved'];
             $pending = (float) $stats['pending'];
             $approvedHours += $approved;
 
             if ($approved >= $required) {
                 $completed++;
-            } elseif ($approved > 0 || $pending > 0 || (float) ($stats['carried_in'] ?? 0) > 0) {
+            } elseif ($approved > 0 || $pending > 0) {
                 $inProgress++;
             }
         }
@@ -456,7 +473,7 @@ class StaffDashboardService
         $notStarted = max(0, $total - $completed - $inProgress);
 
         return [
-            'period' => $period,
+            'period' => $filter,
             'required' => $required,
             'completed' => $completed,
             'in_progress' => $inProgress,
@@ -515,7 +532,7 @@ class StaffDashboardService
 
     private function defaultReportFilter(): array
     {
-        $current = $this->academic->current();
+        $current = $this->academic->selectedPeriod();
 
         return $this->academic->resolveReportFilter((int) $current->year_start, $current->semester);
     }
@@ -581,13 +598,32 @@ class StaffDashboardService
     }
 
     /**
+     * School / University filter for Scholar Staff → Scholars (query param only).
+     *
      * @return array{key: string, type: string, value: mixed, label: string, options: list<array{key: string, label: string}>}
      */
-    private function resolveSchoolFilter(Request $request, array $programIds, ?User $staff): array
+    public function scholarsSchoolFilter(Request $request, array $programIds, ?User $staff): array
+    {
+        return $this->resolveSchoolFilter($request, $programIds, $staff, false);
+    }
+
+    /**
+     * Apply an existing school filter array to a users query.
+     */
+    public function applySchoolFilter($query, ?array $schoolFilter): void
+    {
+        $this->constrainSchool($query, $schoolFilter);
+    }
+
+    /**
+     * @return array{key: string, type: string, value: mixed, label: string, options: list<array{key: string, label: string}>}
+     */
+    private function resolveSchoolFilter(Request $request, array $programIds, ?User $staff, bool $useReportSession = true): array
     {
         $options = $this->reportSchoolOptions($programIds, $staff);
         $allowed = collect($options)->pluck('key')->all();
-        $raw = (string) $request->query('school', session('staff_report_school', 'all'));
+        $default = $useReportSession ? session('staff_report_school', 'all') : 'all';
+        $raw = (string) $request->query('school', $default);
         $key = in_array($raw, $allowed, true) ? $raw : 'all';
         $selected = collect($options)->firstWhere('key', $key) ?? $options[0];
 
@@ -605,7 +641,7 @@ class StaffDashboardService
      */
     private function reportSchoolOptions(array $programIds, ?User $staff): array
     {
-        $options = [['key' => 'all', 'label' => 'All Schools/Universities']];
+        $options = [['key' => 'all', 'label' => 'All Schools / Universities']];
         $seen = [];
 
         if ($staff?->scholarship_club_id) {

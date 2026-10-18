@@ -77,7 +77,10 @@ class ScholarshipClubRegistrationTest extends TestCase
             ->assertDontSee('Scholar Staff Number')
             ->assertDontSee('name="scholar_id"', false)
             ->assertSee('placeholder="Contact Number"', false)
-            ->assertSee('name="cellphone_number"', false);
+            ->assertSee('name="cellphone_number"', false)
+            ->assertDontSee('name="staff_started_year"', false)
+            ->assertDontSee('Started Year')
+            ->assertDontSee('Select Started Year');
     }
 
     public function test_staff_registration_saves_typed_club_name_and_address(): void

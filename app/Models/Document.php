@@ -8,7 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Document extends Model
 {
     protected $fillable = [
-        'user_id', 'document_type_id', 'file_path',
+        'user_id', 'document_type_id',
+        'academic_year_start', 'academic_year_end',
+        'file_path',
         'google_drive_file_id', 'google_drive_web_link',
         'original_name', 'status', 'uploaded_at',
         'review_notes', 'reviewed_at', 'reviewed_by',

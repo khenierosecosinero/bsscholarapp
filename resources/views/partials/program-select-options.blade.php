@@ -11,7 +11,6 @@
             <option
                 value="{{ $program->id }}"
                 data-label="{{ $program->programLabel() }}"
-                data-region="{{ $program->region_name }}"
                 data-program-type="city_municipality"
                 {{ (string) $selectedId === (string) $program->id ? 'selected' : '' }}
             >
@@ -27,7 +26,6 @@
             <option
                 value="{{ $program->id }}"
                 data-label="{{ $program->programLabel() }}"
-                data-region="{{ $program->region_name }}"
                 data-program-type="province"
                 {{ (string) $selectedId === (string) $program->id ? 'selected' : '' }}
             >

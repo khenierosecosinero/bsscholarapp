@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\AccountAccessGuard;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -11,6 +12,10 @@ class EnsureScholarStaff
 {
     public function handle(Request $request, Closure $next): Response
     {
+        if ($redirect = AccountAccessGuard::redirectIfRestricted($request)) {
+            return $redirect;
+        }
+
         $user = $request->user();
 
         if ($user && $user->isAdmin()) {

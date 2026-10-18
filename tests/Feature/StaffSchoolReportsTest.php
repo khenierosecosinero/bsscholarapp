@@ -10,7 +10,6 @@ use App\Models\ScholarshipClub;
 use App\Models\ScholarshipClubSchool;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
-use App\Services\AcademicSettingsService;
 use App\Support\PercentShare;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -37,17 +36,17 @@ class StaffSchoolReportsTest extends TestCase
         $this->makeApprovedHours($snsuScholar, 30, 2025, '1st Semester');
 
         $pages = [
-            route('staff.reports.service-hours', ['year' => 2026, 'semester' => '1st Semester']),
-            route('staff.reports.attendance', ['year' => 2026, 'semester' => '1st Semester']),
-            route('staff.reports.participation', ['year' => 2026, 'semester' => '1st Semester']),
-            route('staff.reports.completion', ['year' => 2026, 'semester' => '1st Semester']),
+            route('staff.reports.service-hours'),
+            route('staff.reports.attendance'),
+            route('staff.reports.participation'),
+            route('staff.reports.completion'),
         ];
 
         foreach ($pages as $url) {
             $html = $this->actingAs($staff)
                 ->get($url)
                 ->assertOk()
-                ->assertSee('All Schools/Universities')
+                ->assertSee('All Schools / Universities')
                 ->assertSee('School/University Reports')
                 ->assertSee('STI — 50%')
                 ->assertSee('Surigao del Norte State University — 50%')
@@ -55,6 +54,9 @@ class StaffSchoolReportsTest extends TestCase
                 ->assertDontSee('Latest Attendance Records')
                 ->assertDontSee('Scholar Completion')
                 ->assertSee('name="school"', false)
+                ->assertDontSee('id="report-year"', false)
+                ->assertDontSee('id="report-semester"', false)
+                ->assertSee('Set in Settings → General Settings')
                 ->getContent();
 
             $this->assertStringContainsString('>'.$sti->name.'</option>', $html);
@@ -62,22 +64,20 @@ class StaffSchoolReportsTest extends TestCase
         }
 
         $this->actingAs($staff)
-            ->get(route('staff.reports.service-hours', ['year' => 2026, 'semester' => '1st Semester']))
+            ->get(route('staff.reports.service-hours'))
             ->assertOk()
             ->assertSee('Completed:')
             ->assertSee('In Progress:')
             ->assertSee('Not Started:');
 
         $this->actingAs($staff)
-            ->get(route('staff.reports.completion', ['year' => 2026, 'semester' => '1st Semester']))
+            ->get(route('staff.reports.completion'))
             ->assertOk()
             ->assertSee('STI — 50%')
             ->assertSee('Surigao del Norte State University — 50%');
 
         $this->actingAs($staff)
             ->get(route('staff.reports.completion', [
-                'year' => 2026,
-                'semester' => '1st Semester',
                 'school' => 'id:'.$sti->id,
             ]))
             ->assertOk()
@@ -92,7 +92,7 @@ class StaffSchoolReportsTest extends TestCase
         [$staff, $sti, $snsu, $stiScholar] = $this->makeClubWithSchools();
 
         $this->actingAs($staff)
-            ->get(route('staff.reports.completion', ['year' => 2026, 'semester' => AcademicSettingsService::SEMESTER_ALL]))
+            ->get(route('staff.reports.completion'))
             ->assertOk()
             ->assertSee('STI — 50%')
             ->assertSee('Surigao del Norte State University — 50%');
@@ -103,8 +103,6 @@ class StaffSchoolReportsTest extends TestCase
 
         $this->actingAs($staff)
             ->get(route('staff.reports.completion', [
-                'year' => 2026,
-                'semester' => AcademicSettingsService::SEMESTER_ALL,
                 'school' => 'id:'.$snsu->id,
             ]))
             ->assertOk()
@@ -112,8 +110,6 @@ class StaffSchoolReportsTest extends TestCase
 
         $this->actingAs($staff)
             ->get(route('staff.reports.completion', [
-                'year' => 2026,
-                'semester' => AcademicSettingsService::SEMESTER_ALL,
                 'school' => 'id:'.$sti->id,
             ]))
             ->assertOk()
@@ -127,7 +123,7 @@ class StaffSchoolReportsTest extends TestCase
         $this->makeApprovedHours($snsuScholar, 12, 2026, '1st Semester');
 
         $html = $this->actingAs($staff)
-            ->get(route('staff.reports.service-hours', ['year' => 2026, 'semester' => '1st Semester']))
+            ->get(route('staff.reports.service-hours'))
             ->assertOk()
             ->getContent();
 

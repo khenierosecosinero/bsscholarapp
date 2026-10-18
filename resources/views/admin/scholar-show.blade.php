@@ -17,7 +17,7 @@
             <div class="staff-scholar-meta">
                 <strong>{{ $scholar->full_name }}</strong>
                 <small>{{ $scholar->scholar_id }}</small>
-                <span class="staff-badge {{ $scholar->status === 'approved' ? 'green' : ($scholar->status === 'pending' ? 'orange' : 'red') }}">{{ ucfirst($scholar->status) }}</span>
+                <span class="staff-badge {{ $scholar->staffStatusBadgeClass() }}">{{ $scholar->accountStatusLabel() }}</span>
             </div>
         </div>
         <p class="staff-muted admin-scholar-profile-note">View-only personal information from registration and profile setup.</p>
@@ -47,6 +47,10 @@
                     <span>Date of Birth</span>
                     <strong>{{ $scholar->date_of_birth?->format('F j, Y') ?? '—' }}</strong>
                 </div>
+                <div class="admin-scholar-field admin-scholar-field-wide">
+                    <span>No./Street</span>
+                    <strong>{{ $value($scholar->streetName()) }}</strong>
+                </div>
                 <div class="admin-scholar-field">
                     <span>Municipality / City</span>
                     <strong>{{ $value($scholar->municipalityName()) }}</strong>
@@ -64,6 +68,10 @@
                 <div class="admin-scholar-field admin-scholar-field-wide">
                     <span>Scholarship Club</span>
                     <strong>{{ $value($scholar->scholarshipClubName()) }}</strong>
+                </div>
+                <div class="admin-scholar-field admin-scholar-field-wide">
+                    <span>Scholarship Club No./Street</span>
+                    <strong>{{ $value($scholar->scholarshipClubStreet()) }}</strong>
                 </div>
                 <div class="admin-scholar-field">
                     <span>Scholarship Club Municipality / City</span>

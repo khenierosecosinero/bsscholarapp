@@ -4,13 +4,18 @@ namespace App\Providers;
 
 use App\Console\Commands\ServeCommand;
 use App\Models\User;
+use App\Services\AcademicSettingsService;
+use App\Services\MailConfigService;
 use App\Support\NetworkAwareVite;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Foundation\Console\ServeCommand as FrameworkServeCommand;
 use Illuminate\Foundation\Vite;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -31,6 +36,21 @@ class AppServiceProvider extends ServiceProvider
     {
         // Prevent "Specified key was too long" on older MySQL versions
         Schema::defaultStringLength(191);
+
+        // Signed verification links expire after auth.verification.expire minutes (default 60).
+        VerifyEmail::createUrlUsing(function ($notifiable) {
+            return URL::temporarySignedRoute(
+                'verification.verify',
+                Carbon::now()->addMinutes((int) config('auth.verification.expire', 60)),
+                [
+                    'id' => $notifiable->getKey(),
+                    'hash' => sha1($notifiable->getEmailForVerification()),
+                ]
+            );
+        });
+
+        // Recover from stale config:cache that baked blank MAIL_USERNAME/PASSWORD.
+        $this->app->make(MailConfigService::class)->syncRuntimeCredentials();
 
         $this->useRequestHostForLocalUrls();
 
@@ -61,6 +81,24 @@ class AppServiceProvider extends ServiceProvider
                 ->whereKey($value)
                 ->where('role', User::ROLE_SCHOLAR)
                 ->firstOrFail();
+        });
+
+        View::composer([
+            'layouts.admin',
+            'layouts.staff',
+            'layouts.user',
+            'admin.*',
+            'partials.admin-*',
+        ], function ($view) {
+            if (! Schema::hasTable('academic_settings')) {
+                return;
+            }
+
+            $academic = app(AcademicSettingsService::class);
+            $view->with('academicPeriod', $academic->selectedPeriod());
+            $view->with('academicYearOptions', $academic->yearOptions());
+            $view->with('semesterOptions', AcademicSettingsService::SEMESTERS);
+            $view->with('adminAcademicYearFilter', $academic->adminYearFilter());
         });
     }
 

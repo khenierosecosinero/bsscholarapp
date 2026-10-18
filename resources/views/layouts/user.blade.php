@@ -20,6 +20,7 @@
                 'active' => $active ?? 'dashboard',
             ])
             @include('partials.flash-messages')
+            @include('partials.staff-confirm-modal')
             @if(auth()->user()?->isScholar() && auth()->user()->canLogin())
                 <div
                     hidden
