@@ -13,17 +13,8 @@
             <img src="{{ $event->image_url }}" alt="{{ $event->title }}" style="width:100%;max-height:220px;object-fit:cover;border-radius:10px;margin-bottom:16px">
         @endif
 
-        @php
-            $statusClass = match($event->status ?? 'upcoming') {
-                'confirmed', 'completed' => 'green',
-                'pending' => 'orange',
-                'ongoing' => 'blue',
-                default => 'gray',
-            };
-        @endphp
-
         <h3 style="margin:0 0 8px">{{ $event->title }}</h3>
-        <span class="staff-badge {{ $statusClass }}">{{ ucfirst(str_replace('_', ' ', $event->status ?? 'upcoming')) }}</span>
+        <span class="staff-badge {{ $event->statusBadgeClass() }}">{{ $event->statusLabel() }}</span>
         <span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}">Attendance {{ $event->attendanceStatusLabel() }}</span>
 
         @if($event->description)

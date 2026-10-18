@@ -2,10 +2,6 @@
 
 @section('page-content')
 
-<div class="staff-date-banner">
-    <span>{{ now()->format('M j, Y') }} | {{ now()->format('l') }}</span>
-</div>
-
 <section class="staff-stat-grid">
     <div class="staff-stat-card">
         <div class="staff-stat-icon blue">👥</div>
@@ -188,5 +184,5 @@
 @endsection
 
 @push('styles')
-<style>.staff-date-banner{margin-bottom:16px;font-size:13px;color:#6b7280;text-align:right}.staff-muted{color:#6b7280;font-size:13px}</style>
+<style>.staff-muted{color:#6b7280;font-size:13px}</style>
 @endpush

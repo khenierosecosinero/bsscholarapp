@@ -22,6 +22,25 @@ class EventActionController extends Controller
         $user = Auth::user();
         $this->scholar->assertEventVisibleToUser($event, $user);
 
+        if ($event->isPendingApproval()) {
+            return back()->with(
+                'error',
+                'Registration is unavailable because this event is pending approval. Please wait until the event is confirmed.'
+            );
+        }
+
+        if ($event->isCancelled()) {
+            return back()->with('error', 'This event has been cancelled and is no longer open for registration.');
+        }
+
+        if ($event->status === Event::STATUS_COMPLETED) {
+            return back()->with('error', 'This event is completed and is no longer open for registration.');
+        }
+
+        if (! $event->allowsScholarRegistration()) {
+            return back()->with('error', 'This event is not open for registration.');
+        }
+
         if ($event->hasEnded() && ! $event->isAttendanceOpen()) {
             return back()->with('error', 'This event has already ended.');
         }
@@ -41,6 +60,10 @@ class EventActionController extends Controller
     {
         $user = Auth::user();
         $this->scholar->assertEventVisibleToUser($event, $user);
+
+        if ($response = $this->rejectIfAttendanceBlocked($event)) {
+            return $response;
+        }
 
         if (! $event->isAttendanceOpen()) {
             return back()->with('error', 'Attendance is currently CLOSED. You can no longer submit or modify your attendance until Scholar Staff opens it.');
@@ -92,6 +115,10 @@ class EventActionController extends Controller
     {
         $user = Auth::user();
         $this->scholar->assertEventVisibleToUser($event, $user);
+
+        if ($response = $this->rejectIfAttendanceBlocked($event)) {
+            return $response;
+        }
 
         if (! $event->isAttendanceOpen()) {
             return back()->with('error', 'Attendance is currently CLOSED. You can no longer submit or modify your attendance.');
@@ -146,6 +173,10 @@ class EventActionController extends Controller
 
         $user = Auth::user();
         $this->scholar->assertEventVisibleToUser($event, $user);
+
+        if ($response = $this->rejectIfAttendanceBlocked($event)) {
+            return $response;
+        }
 
         if (! $event->isAttendanceOpen()) {
             return back()->with('error', 'Attendance is currently CLOSED. You can no longer submit or modify your attendance.');
@@ -217,5 +248,29 @@ class EventActionController extends Controller
         }
 
         return back()->with('success', 'Participation confirmed successfully.');
+    }
+
+    private function rejectIfAttendanceBlocked(Event $event)
+    {
+        if ($event->isPendingApproval()) {
+            return back()->with(
+                'error',
+                'Registration is unavailable because this event is pending approval. Please wait until the event is confirmed.'
+            );
+        }
+
+        if ($event->isCancelled()) {
+            return back()->with('error', 'This event has been cancelled and is no longer available for registration or attendance.');
+        }
+
+        if ($event->status === Event::STATUS_COMPLETED) {
+            return back()->with('error', 'This event is completed and is no longer open for registration or attendance.');
+        }
+
+        if (! in_array($event->status, [Event::STATUS_CONFIRMED, Event::STATUS_ONGOING], true)) {
+            return back()->with('error', 'Attendance actions are not available for this event.');
+        }
+
+        return null;
     }
 }

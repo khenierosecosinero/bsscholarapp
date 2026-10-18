@@ -33,7 +33,14 @@
                                 $eventsByDay->put($dayKey, $bucket->push($ev));
                             }
                         }
-                        $colorMap = ['participated' => 'blue', 'confirmed' => 'green', 'pending' => 'orange', 'not_joined' => 'purple', 'failed_to_check_in' => 'red'];
+                        $lifecycleColorMap = [
+                            'pending' => 'orange',
+                            'confirmed' => 'green',
+                            'ongoing' => 'green',
+                            'cancelled' => 'red',
+                            'completed' => 'gray',
+                        ];
+                        $participationColorMap = ['participated' => 'blue', 'confirmed' => 'green', 'pending' => 'orange', 'not_joined' => 'purple', 'failed_to_check_in' => 'red'];
                     @endphp
                     @while($start->lte($end))
                         <div class="fc-row">
@@ -45,9 +52,13 @@
                                 <div class="fc-cell {{ !$inMonth ? 'other-month' : '' }} {{ $start->isToday() ? 'today' : '' }}">
                                     <span class="fc-day-num">{{ $start->day }}</span>
                     @foreach($dayEvents as $ev)
-                                        <a href="{{ route('user.calendar', ['year' => $monthDate->year, 'month' => $monthDate->month, 'event' => $ev['id']]) }}" class="fc-event {{ $colorMap[$ev['calendar_status']] ?? 'blue' }}" title="{{ $ev['title'] }} — {{ $ev['status_label'] }}">
+                                        @php
+                                            $eventColor = $lifecycleColorMap[$ev['event_status'] ?? '']
+                                                ?? ($participationColorMap[$ev['calendar_status']] ?? 'blue');
+                                        @endphp
+                                        <a href="{{ route('user.calendar', ['year' => $monthDate->year, 'month' => $monthDate->month, 'event' => $ev['id']]) }}" class="fc-event {{ $eventColor }}" title="{{ $ev['title'] }} — {{ $ev['status_label'] }}">
                                             <span class="fc-event-title">{{ $ev['title'] }}</span>
-                                            <span class="fc-event-meta">{{ $ev['starts_at']->format('g:i A') }} · {{ $ev['hours'] }} hrs</span>
+                                            <span class="fc-event-meta">{{ $ev['starts_at']->format('g:i A') }} · {{ $ev['status_label'] }}</span>
                                         </a>
                                     @endforeach
                                 </div>
@@ -59,10 +70,11 @@
             </div>
             <div class="cal-footer">
                 <div class="cal-legend full">
-                    <span><span class="legend-dot green"></span> Confirmed</span>
-                    <span><span class="legend-dot blue"></span> Participated</span>
                     <span><span class="legend-dot orange"></span> Pending</span>
-                    <span><span class="legend-dot red"></span> Failed to Check In</span>
+                    <span><span class="legend-dot green"></span> Confirmed</span>
+                    <span><span class="legend-dot red"></span> Cancelled</span>
+                    <span><span class="legend-dot gray"></span> Completed</span>
+                    <span><span class="legend-dot blue"></span> Participated</span>
                     <span><span class="legend-dot purple"></span> Not Joined</span>
                 </div>
             </div>
@@ -78,12 +90,18 @@
             <div class="card event-detail-card">
                     @if($selected['image_url'])<img src="{{ $selected['image_url'] }}" alt="">@endif
                     @include('partials.event-status-badge', ['statusClass' => $selected['status_class'], 'statusLabel' => $selected['status_label']])
-                    <span class="badge {{ !empty($selected['attendance_open']) ? 'attendance-open' : 'attendance-closed' }}">{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
+                    @if(empty($selected['is_cancelled']))
+                        <span class="badge {{ $selected['participation_class'] ?? '' }}">{{ $selected['participation_label'] ?? '' }}</span>
+                        <span class="badge {{ !empty($selected['attendance_open']) ? 'attendance-open' : 'attendance-closed' }}">{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
+                    @endif
                     <h3>{{ $selected['title'] }}</h3>
+                    @if(!empty($selected['is_cancelled']))
+                        <p class="muted" style="margin:0 0 10px">This event has been cancelled and is no longer available for registration or attendance.</p>
+                    @endif
                     @if(!empty($selected['attendance_message']))
                         <p class="muted" style="margin:0 0 10px">{{ $selected['attendance_message'] }}</p>
                     @endif
-                    <div class="info-row"><span class="info-icon">&#128197;</span> {{ $selected['starts_at']->format('M d, Y') }}</div>
+                    <div class="info-row"><span class="info-icon">&#128197;</span> {{ $selected['starts_at']->format('M d Y') }}</div>
                     <div class="info-row"><span class="info-icon">&#128336;</span> {{ $selected['time'] }}</div>
                     <div class="info-row"><span class="info-icon">&#128205;</span> {{ $selected['location'] }}</div>
                     <div class="info-row"><span class="info-icon">&#9201;</span> Service Hours: {{ $selected['hours'] }}</div>

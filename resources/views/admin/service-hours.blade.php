@@ -2,8 +2,6 @@
 
 @section('page-content')
 
-@include('partials.admin-academic-year-selector', ['inputId' => 'admin-hours-year', 'compact' => true])
-
 @include('partials.admin-hours-filter')
 
 @php

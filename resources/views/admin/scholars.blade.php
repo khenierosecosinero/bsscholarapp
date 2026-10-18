@@ -2,8 +2,6 @@
 
 @section('page-content')
 
-@include('partials.admin-academic-year-selector', ['inputId' => 'admin-scholars-year', 'compact' => true])
-
 @include('partials.admin-scholars-filter')
 
 <div class="staff-card">

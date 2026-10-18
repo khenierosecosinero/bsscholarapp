@@ -2,8 +2,6 @@
 
 @section('page-content')
 
-@include('partials.admin-academic-year-selector', ['inputId' => 'admin-documents-year', 'compact' => true])
-
 @php
     $documentsListQuery = array_filter([
         'location' => $locationKey ?? 'all',

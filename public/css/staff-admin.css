@@ -1354,6 +1354,162 @@ body:has(.staff-shell) {
     box-sizing: border-box;
 }
 
+.staff-event-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    position: relative;
+}
+
+.staff-event-actions-stack {
+    display: flex;
+    flex-direction: column;
+    flex-flow: column nowrap;
+    align-items: stretch;
+    justify-content: center;
+    gap: 6px;
+    width: 118px;
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+.staff-event-actions-stack > form {
+    display: block;
+    width: 100%;
+    margin: 0;
+}
+
+.staff-event-actions-stack .staff-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    min-height: 32px;
+    padding: 6px 10px;
+    box-sizing: border-box;
+    white-space: nowrap;
+}
+
+.staff-event-status-form {
+    display: block;
+    width: 100%;
+    margin: 0;
+}
+
+.staff-event-status-select {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 32px;
+    padding: 6px 28px 6px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.staff-event-status-select:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.staff-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.staff-event-actions-stack .staff-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.staff-event-actions-stack .staff-action-menu {
+    position: relative;
+    display: block;
+    width: 100%;
+}
+
+.staff-event-actions-stack .staff-action-menu-dropdown {
+    position: absolute;
+    top: auto;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    z-index: 40;
+    min-width: 160px;
+    padding: 6px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.staff-event-actions-stack .staff-action-menu-dropdown form {
+    margin: 0;
+}
+
+.staff-event-actions-stack .staff-action-menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #0f172a;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.staff-event-actions-stack .staff-action-menu-item:hover:not(:disabled):not(.is-disabled) {
+    background: #f8fafc;
+}
+
+.staff-event-actions-stack .staff-action-menu-item-danger {
+    color: #b91c1c;
+}
+
+.staff-event-actions-stack .staff-action-menu-item-danger:hover {
+    background: #fef2f2;
+}
+
+.staff-event-actions-stack .staff-action-menu-item.is-disabled,
+.staff-event-actions-stack .staff-action-menu-item:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    color: #64748b;
+}
+
+.staff-action-btn-view:hover {
+    background: #f1f5f9;
+}
+
+.staff-data-table td.staff-col-actions .staff-event-actions {
+    margin: 0 auto;
+}
+
+.staff-data-table.staff-events-table th.staff-col-actions,
+.staff-data-table.staff-events-table td.staff-col-actions {
+    width: 132px;
+    min-width: 132px;
+    max-width: 148px;
+}
+
 .staff-list-item {
     display: flex;
     gap: 12px;
@@ -3887,6 +4043,23 @@ body:has(.staff-shell) {
     .staff-data-table.staff-documents-table .staff-doc-review-actions .staff-btn,
     .staff-data-table.staff-documents-table .staff-doc-review-actions form {
         width: auto;
+    }
+
+    .staff-data-table.staff-events-table th.staff-col-actions,
+    .staff-data-table.staff-events-table td.staff-col-actions {
+        width: auto;
+        min-width: 0;
+        max-width: none;
+    }
+
+    .staff-event-actions-stack {
+        width: min(100%, 160px);
+        max-width: 100%;
+    }
+
+    .staff-event-status-select {
+        font-size: 13px;
+        min-height: 36px;
     }
 }
 

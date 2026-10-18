@@ -2,13 +2,7 @@
 
 @section('page-content')
 
-@include('partials.admin-academic-year-selector', ['inputId' => 'admin-dashboard-year', 'compact' => true])
-
 @include('partials.admin-dashboard-scope-select')
-
-<div class="staff-date-banner">
-    <span>{{ now()->format('M j, Y') }} | {{ now()->format('l') }}</span>
-</div>
 
 <section class="staff-stat-grid">
     <div class="staff-stat-card">

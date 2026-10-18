@@ -2,31 +2,10 @@
     $requiredFallback = \App\Services\ScholarService::REQUIRED_HOURS;
     $hs = $hourStats ?? ['approved' => 0, 'pending' => 0, 'required' => $requiredFallback, 'remaining' => $requiredFallback];
     $pct = $hs['required'] > 0 ? min(100, (int) round(($hs['approved'] / $hs['required']) * 100)) : 0;
-    $selectedYear = $academicPeriod->year_start ?? $globalAcademicSettings->year_start ?? now()->year;
-    $selectedSemester = $academicPeriod->semester ?? $globalAcademicSettings->semester ?? '2nd Semester';
 @endphp
 
 <div class="card hours-overview service-hours-sidebar-card">
     <div class="card-header">SERVICE HOURS OVERVIEW</div>
-
-    <form method="POST" action="{{ route('academic.period.update') }}" class="sh-sidebar-filters">
-        @csrf
-        @method('PUT')
-        <div class="sh-filter-field">
-            <select name="year_start" class="sh-filter-select" aria-label="Academic year" onchange="this.form.submit()">
-                @foreach($academicYearOptions ?? [] as $year => $label)
-                    <option value="{{ $year }}" {{ (int) $selectedYear === (int) $year ? 'selected' : '' }}>AY {{ $year }} - {{ $year + 1 }}</option>
-                @endforeach
-            </select>
-        </div>
-        <div class="sh-filter-field">
-            <select name="semester" class="sh-filter-select" aria-label="Semester" onchange="this.form.submit()">
-                @foreach($semesterOptions ?? ['1st Semester', '2nd Semester'] as $option)
-                    <option value="{{ $option }}" {{ $selectedSemester === $option ? 'selected' : '' }}>{{ $option }}</option>
-                @endforeach
-            </select>
-        </div>
-    </form>
 
     <div class="progress-wrap compact sh-sidebar-progress">
         <div class="progress-circle sh-donut">

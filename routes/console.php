@@ -11,3 +11,8 @@ Artisan::command('inspire', function () {
 Schedule::call(function () {
     app(\App\Services\AccountAccessService::class)->releaseExpiredSuspensions();
 })->everyFifteenMinutes()->name('release-expired-scholar-suspensions');
+
+Schedule::command('events:complete-expired')
+    ->everyMinute()
+    ->name('complete-expired-confirmed-events')
+    ->withoutOverlapping();

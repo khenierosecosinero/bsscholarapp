@@ -107,9 +107,11 @@ class ProfileSecurityShortcutsTest extends TestCase
         $this->actingAs($user)
             ->get(route('user.service-hours'))
             ->assertOk()
-            ->assertSee('AY 2026–2027')
             ->assertSee('2nd Semester')
-            ->assertSee('27.00');
+            ->assertSee('27.00')
+            ->assertDontSee('class="academic-period-filter"', false)
+            ->assertDontSee('sh-sidebar-filters', false)
+            ->assertDontSee('current-semester-card', false);
     }
 
     private function makeApprovedScholar(): User

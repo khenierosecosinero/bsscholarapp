@@ -120,7 +120,7 @@ body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica
 
 .service-hours-sidebar-card{padding:16px 18px}
 .service-hours-sidebar-card .card-header{margin-bottom:12px}
-.sh-sidebar-filters{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.sh-sidebar-filters{display:none}
 .sh-filter-select{
     width:100%;
     padding:10px 12px;
@@ -619,8 +619,11 @@ body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica
 .badge.confirmed{background:#e6f7ee;color:var(--green)}
 .badge.participated{background:#dbeafe;color:#2563eb}
 .badge.failed-to-check-in{background:#fee2e2;color:#b91c1c}
+.badge.cancelled{background:#fee2e2;color:#b91c1c}
+.badge.completed{background:#e5e7eb;color:#4b5563}
 .badge.attendance-open{background:#dcfce7;color:#166534}
 .badge.attendance-closed{background:#fee2e2;color:#dc2626}
+.event-action-stack{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 
 /* Buttons extended */
 .btn.outline{background:transparent;border:1px solid var(--green);color:var(--green)}
@@ -665,6 +668,7 @@ body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica
 .legend-dot.orange{background:#f59e0b}
 .legend-dot.purple{background:#7c3aed}
 .legend-dot.red{background:#dc2626}
+.legend-dot.gray{background:#9ca3af}
 
 /* Table event */
 .table-event{display:flex;align-items:center;gap:10px;font-weight:600}
@@ -995,6 +999,7 @@ body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica
 .fc-event.blue{background:#dbeafe;color:#1e40af}
 .fc-event.red{background:#fee2e2;color:#991b1b}
 .fc-event.purple{background:#f3e8ff;color:#6b21a8}
+.fc-event.gray{background:#e5e7eb;color:#374151}
 .cal-footer{display:flex;justify-content:space-between;align-items:center;padding:12px 0;flex-wrap:wrap;gap:12px}
 
 .schedule-summary-section{margin-top:16px}

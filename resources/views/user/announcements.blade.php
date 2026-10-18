@@ -30,7 +30,7 @@
                             @endif
                         </div>
                         <p>{{ Str::limit($ann->body, 140) }}</p>
-                        <span class="announcement-date">{{ $ann->published_at?->format('M d, Y') ?? $ann->created_at->format('M d, Y') }}</span>
+                        <span class="announcement-date">{{ $ann->published_at?->format('M d Y') ?? $ann->created_at->format('M d Y') }}</span>
                     </div>
                     <span class="announcement-arrow" aria-hidden="true">&#9654;</span>
                 </a>

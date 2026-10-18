@@ -7,20 +7,17 @@ use App\Models\ScholarshipClubSchool;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
 use App\Services\AccountService;
-use App\Services\MailConfigService;
 use App\Services\ScholarshipProgramAssignmentService;
 use App\Support\CourseCatalog;
 use App\Support\LocationAddress;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
-use Throwable;
 
 class AuthController extends Controller
 {
@@ -116,12 +113,6 @@ class AuthController extends Controller
             return redirect()->intended(route('staff.dashboard'));
         }
 
-        if ($user->isScholar() && ! $user->hasVerifiedEmail()) {
-            return redirect()
-                ->route('verification.notice')
-                ->with('warning', 'Please verify your email address. Check your inbox for the verification link we sent.');
-        }
-
         if ($user->isPendingApproval()) {
             $request->session()->put('show_pending_approval_modal', true);
         }
@@ -214,21 +205,12 @@ class AuthController extends Controller
             return $user;
         });
 
-        // Send verification once via SMTP (do not also fire Registered → default listener,
-        // which would duplicate the email when the framework registers that listener).
-        $verificationSent = $this->sendScholarVerificationEmail($user);
-
         RateLimiter::hit($this->registerThrottleKey($request), 60);
 
-        $message = 'Scholar account created successfully. Your account is permanent — you may log in at any time, including after a long period of inactivity, while Scholar Staff reviews your registration.';
-
-        if ($verificationSent) {
-            $message .= ' A verification link was sent to your email address.';
-        } else {
-            $message .= ' We could not send the verification email yet — after login, use Resend verification email.';
-        }
-
-        return redirect()->route('login')->with('success', $message);
+        return redirect()->route('login')->with(
+            'success',
+            'Scholar account created successfully. Your account is permanent — you may log in at any time, including after a long period of inactivity, while Scholar Staff reviews your registration.'
+        );
     }
 
     public function registerStaff(Request $request)
@@ -379,42 +361,4 @@ class AuthController extends Controller
         }
     }
 
-    private function sendScholarVerificationEmail(User $user): bool
-    {
-        if (! $user->isScholar() || $user->hasVerifiedEmail()) {
-            return false;
-        }
-
-        $mailConfig = app(MailConfigService::class);
-        $mailConfig->syncRuntimeCredentials();
-
-        if (! $mailConfig->isReady()) {
-            Log::warning('Scholar verification email skipped: SMTP is not configured.', [
-                'user_id' => $user->id,
-                'issues' => $mailConfig->status()['issues'],
-            ]);
-
-            return false;
-        }
-
-        try {
-            $user->sendEmailVerificationNotification();
-
-            Log::info('Scholar verification email sent via SMTP.', [
-                'user_id' => $user->id,
-                'recipient_domain' => substr((string) strrchr((string) $user->email, '@'), 1),
-                'mailer' => config('mail.default'),
-                'username_preview' => $mailConfig->status()['username_preview'] ?? null,
-            ]);
-
-            return true;
-        } catch (Throwable $e) {
-            Log::warning('Scholar verification email failed at SMTP transport.', [
-                'user_id' => $user->id,
-                'exception' => $e::class,
-            ]);
-
-            return false;
-        }
-    }
 }

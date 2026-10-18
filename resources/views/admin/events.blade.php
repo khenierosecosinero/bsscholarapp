@@ -2,8 +2,6 @@
 
 @section('page-content')
 
-@include('partials.admin-academic-year-selector', ['inputId' => 'admin-events-year', 'compact' => true])
-
 @php
     $eventsListQuery = array_filter([
         'location' => $locationKey ?? 'all',

@@ -41,17 +41,19 @@ class GoogleDriveFolderStructureTest extends TestCase
         $this->assertSame('AY 2025–2026', $drive->normalizeYearFolderLabel('2025–2026'));
     }
 
-    public function test_documents_page_shows_disconnected_warning_only_when_drive_has_no_token(): void
+    public function test_documents_page_omits_student_information_card_and_drive_disconnected_banner(): void
     {
         $scholar = $this->makeScholar();
 
         $this->actingAs($scholar)
             ->get(route('user.documents'))
             ->assertOk()
-            ->assertSee('Google Drive is not connected yet');
+            ->assertDontSee('STUDENT INFORMATION')
+            ->assertDontSee('Uploads unavailable')
+            ->assertDontSee('Google Drive is not connected yet');
     }
 
-    public function test_documents_page_hides_disconnected_warning_when_org_token_exists(): void
+    public function test_documents_page_still_loads_when_org_token_exists(): void
     {
         $scholar = $this->makeScholar();
 
@@ -68,6 +70,7 @@ class GoogleDriveFolderStructureTest extends TestCase
         $this->actingAs($scholar)
             ->get(route('user.documents'))
             ->assertOk()
+            ->assertDontSee('STUDENT INFORMATION')
             ->assertDontSee('Google Drive is not connected yet');
     }
 

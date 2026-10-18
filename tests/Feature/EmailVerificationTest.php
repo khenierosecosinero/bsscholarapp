@@ -2,114 +2,110 @@
 
 namespace Tests\Feature;
 
+use App\Models\ScholarshipClub;
+use App\Models\ScholarshipClubSchool;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
-use App\Services\MailConfigService;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class EmailVerificationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_new_scholar_receives_verification_notification_when_smtp_ready(): void
+    public function test_scholar_email_verification_routes_are_removed(): void
     {
-        Notification::fake();
-        $this->fakeReadyMail();
+        $this->assertFalse(Route::has('verification.notice'));
+        $this->assertFalse(Route::has('verification.verify'));
+        $this->assertFalse(Route::has('verification.send'));
 
-        $user = $this->makeUnverifiedScholar();
-
-        $this->assertTrue(app(MailConfigService::class)->isReady());
-        $user->sendEmailVerificationNotification();
-
-        Notification::assertSentTo($user, VerifyEmail::class);
+        $this->get('/email/verify')->assertNotFound();
+        $this->post('/email/verification-notification')->assertNotFound();
     }
 
-    public function test_signed_verification_link_marks_email_verified(): void
+    public function test_unverified_scholar_can_log_in_and_reach_dashboard(): void
     {
-        $user = $this->makeUnverifiedScholar();
+        $user = $this->makeScholar(['email_verified_at' => null, 'status' => User::STATUS_APPROVED]);
 
-        $url = URL::temporarySignedRoute(
-            'verification.verify',
-            now()->addMinutes(60),
-            ['id' => $user->id, 'hash' => sha1($user->getEmailForVerification())]
-        );
+        $this->assertNull($user->email_verified_at);
 
-        $this->actingAs($user)
-            ->get($url)
-            ->assertRedirect(route('dashboard'));
+        $this->post(route('login.post'), [
+            'email' => $user->email,
+            'password' => 'password123',
+        ])
+            ->assertRedirect(route('user.dashboard'));
 
-        $this->assertNotNull($user->fresh()->email_verified_at);
+        $this->assertAuthenticatedAs($user);
+
+        $this->get(route('user.dashboard'))
+            ->assertOk()
+            ->assertDontSee('Verify Your Email')
+            ->assertDontSee('Resend verification email')
+            ->assertDontSee('We sent a verification link to');
     }
 
-    public function test_resend_sends_once_then_skips_when_already_verified(): void
+    public function test_scholar_registration_does_not_send_verification_email(): void
     {
         Notification::fake();
-        $this->fakeReadyMail();
 
-        $user = $this->makeUnverifiedScholar();
-
-        $this->actingAs($user)
-            ->from(route('verification.notice'))
-            ->post(route('verification.send'))
-            ->assertRedirect(route('verification.notice'))
-            ->assertSessionHas('success');
-
-        Notification::assertSentToTimes($user, VerifyEmail::class, 1);
-
-        $user->forceFill(['email_verified_at' => now()])->save();
-        Notification::fake();
-
-        $this->actingAs($user)
-            ->post(route('verification.send'))
-            ->assertRedirect(route('dashboard'));
-
-        Notification::assertNothingSent();
-    }
-
-    public function test_array_mailer_is_not_reported_as_invalid_username(): void
-    {
-        config([
-            'mail.default' => 'array',
-            'mail.mailers.smtp.username' => '',
-            'mail.mailers.smtp.password' => '',
-            'mail.from.address' => '',
+        $program = ScholarshipProgram::create([
+            'location_name' => 'Surigao City',
+            'location_type' => 'city_municipality',
+            'name' => 'Surigao City Scholarship Program',
+            'display_name' => 'Surigao City',
+            'province_name' => 'Surigao del Norte',
+            'slug' => 'surigao-city-no-verify-'.uniqid(),
+            'is_active' => true,
         ]);
 
-        $status = app(MailConfigService::class)->status();
+        $club = ScholarshipClub::createForProgram('No Verify Club', $program->id);
+        $school = ScholarshipClubSchool::createForClub('Sample University', $club->id);
 
-        $this->assertTrue($status['ready']);
-        $this->assertSame('array', $status['mailer']);
-        $this->assertSame([], $status['issues']);
+        $email = 'new-scholar-'.uniqid().'@example.com';
+
+        $this->post(route('register.post'), [
+            'full_name' => 'New Scholar',
+            'scholar_id' => 'SCH-NV-'.uniqid(),
+            'email' => $email,
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'scholarship_club_id' => $club->id,
+            'scholarship_club_school_id' => $school->id,
+            'year_level' => '1st Year',
+            'course_year_level' => 'Bachelor of Science in Information Technology',
+        ])
+            ->assertRedirect(route('login'))
+            ->assertSessionHas('success')
+            ->assertSessionMissing('warning');
+
+        $this->assertDatabaseHas('users', ['email' => $email]);
+
+        $user = User::where('email', $email)->firstOrFail();
+
+        Notification::assertNothingSent();
+        Notification::assertNotSentTo($user, VerifyEmail::class);
+
+        $response = $this->post(route('login.post'), [
+            'email' => $user->email,
+            'password' => 'password123',
+        ]);
+
+        $response->assertRedirect(route('user.dashboard'));
+        $this->assertStringNotContainsString('verification', strtolower((string) session('success')));
+        $this->assertStringNotContainsString('verification', strtolower((string) session('warning')));
+
+        $this->get(route('user.dashboard'))
+            ->assertOk()
+            ->assertDontSee('Verify Your Email');
     }
 
-    private function fakeReadyMail(): void
-    {
-        $this->mock(MailConfigService::class, function ($mail) {
-            $mail->shouldReceive('syncRuntimeCredentials')->andReturnNull();
-            $mail->shouldReceive('isReady')->andReturn(true);
-            $mail->shouldReceive('status')->andReturn([
-                'ready' => true,
-                'mailer' => 'smtp',
-                'host' => 'smtp.gmail.com',
-                'port' => 587,
-                'encryption' => 'tls',
-                'scheme' => 'smtp',
-                'username_configured' => true,
-                'password_configured' => true,
-                'from_configured' => true,
-                'from_matches_username' => true,
-                'username_preview' => 'b***@gmail.com',
-                'username_source' => 'config',
-                'issues' => [],
-            ]);
-        });
-    }
-
-    private function makeUnverifiedScholar(): User
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    private function makeScholar(array $overrides = []): User
     {
         $program = ScholarshipProgram::create([
             'location_name' => 'Surigao del Norte',
@@ -121,9 +117,9 @@ class EmailVerificationTest extends TestCase
         ]);
 
         $user = User::register([
-            'full_name' => 'Unverified Scholar',
+            'full_name' => 'Dashboard Scholar',
             'scholar_id' => 'SCH-EV-'.uniqid(),
-            'email' => 'unverified-'.uniqid().'@example.com',
+            'email' => 'scholar-'.uniqid().'@example.com',
             'password' => 'password123',
             'role' => User::ROLE_SCHOLAR,
             'status' => User::STATUS_APPROVED,
@@ -131,7 +127,9 @@ class EmailVerificationTest extends TestCase
             'province' => 'Surigao del Norte',
         ]);
 
-        $user->forceFill(['email_verified_at' => null])->save();
+        if (array_key_exists('email_verified_at', $overrides) || array_key_exists('status', $overrides)) {
+            $user->forceFill(collect($overrides)->only(['email_verified_at', 'status'])->all())->save();
+        }
 
         return $user->fresh();
     }

@@ -103,7 +103,7 @@
                         @foreach($pendingAttendances as $att)
                             <tr>
                                 <td data-label="Event"><div class="table-event">@if($att->event?->image_url)<img src="{{ $att->event->image_url }}" alt="">@endif {{ $att->event?->title }}</div></td>
-                                <td data-label="Date">{{ $att->event?->starts_at?->format('M d, Y') }}</td>
+                                <td data-label="Date">{{ $att->event?->starts_at?->format('M d Y') }}</td>
                                 <td data-label="Check In">{{ $att->check_in?->format('g:i A') ?? '—' }}</td>
                                 <td data-label="Check Out">{{ $att->check_out?->format('g:i A') ?? '—' }}</td>
                                 <td data-label="Hours">{{ $att->hoursLabel() }}</td>
@@ -142,7 +142,7 @@
                             <div class="dashboard-doc-info">
                                 <div class="dashboard-doc-title">{{ $doc->documentType->name }}</div>
                                 @if($doc->uploaded_at)
-                                    <div class="dashboard-doc-date">Uploaded on {{ $doc->uploaded_at->format('M d, Y') }}</div>
+                                    <div class="dashboard-doc-date">Uploaded on {{ $doc->uploaded_at->format('M d Y') }}</div>
                                 @endif
                             </div>
                         </div>
@@ -162,7 +162,7 @@
                 @forelse($activities as $act)
                     <li>
                         <div class="activity-icon green">&#10003;</div>
-                        <div><div class="text">{{ $act->description }}</div><div class="time">{{ $act->created_at->format('M d, Y - g:i A') }}</div></div>
+                        <div><div class="text">{{ $act->description }}</div><div class="time">{{ $act->created_at->format('M d Y - g:i A') }}</div></div>
                     </li>
                 @empty
                     <li><p class="muted">No recent activities.</p></li>
@@ -188,7 +188,7 @@
                                     @endif
                                 </div>
                                 <div class="muted ann-excerpt">{{ Str::limit($ann->body, 72) }}</div>
-                                <div class="ann-date">{{ $ann->published_at?->format('M d, Y') ?? $ann->created_at->format('M d, Y') }}</div>
+                                <div class="ann-date">{{ $ann->published_at?->format('M d Y') ?? $ann->created_at->format('M d Y') }}</div>
                             </div>
                         </a>
                     </li>

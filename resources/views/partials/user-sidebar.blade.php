@@ -130,8 +130,6 @@
 
                     @include('partials.documents-overview-sidebar')
 
-                    @include('partials.current-semester-card', ['useEnrollmentStatus' => true])
-
                 </div>
 
             @endif
@@ -161,14 +159,6 @@
             @include('partials.quick-links-card')
 
         @endif
-
-        @if($active === 'service-hours')
-
-            @include('partials.current-semester-card')
-
-        @endif
-
-
 
         @include('partials.logout-button', ['formClass' => 'logout-form', 'class' => 'app-logout-btn logout-btn'])
 

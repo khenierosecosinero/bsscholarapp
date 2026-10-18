@@ -16,7 +16,7 @@
 
             <div class="upcoming-event-info">
                 <div class="upcoming-event-title">{{ $upcomingEvent['title'] }}</div>
-                <div class="upcoming-event-meta">{{ $upcomingEvent['starts_at']->format('M d, Y') }} &bull; {{ $upcomingEvent['starts_at']->format('g:i A') }}</div>
+                <div class="upcoming-event-meta">{{ $upcomingEvent['starts_at']->format('M d Y') }} &bull; {{ $upcomingEvent['starts_at']->format('g:i A') }}</div>
                 <div class="upcoming-event-meta">{{ $upcomingEvent['location'] }}</div>
                 <span class="badge pill {{ $statusClass }} upcoming-event-status">{{ $statusLabel }}</span>
             </div>

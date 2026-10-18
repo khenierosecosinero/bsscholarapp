@@ -28,7 +28,7 @@ class SidebarLayoutConsistencyTest extends TestCase
         $this->assertMatchesRegularExpression('/\.staff-brand-logo\s*\{[^}]*width:\s*52px/s', $staffCss);
         $this->assertStringContainsString('@media (max-width: 1000px)', $staffCss);
         $this->assertStringContainsString('max-width: 86vw', $staffCss);
-        $this->assertStringNotContainsString('width: 260px', $staffCss);
+        $this->assertDoesNotMatchRegularExpression('/(?<!min-)width:\s*260px/', $staffCss);
 
         $this->assertStringContainsString("matchMedia('(max-width: 1000px)')", $appJs);
 
@@ -87,7 +87,7 @@ class SidebarLayoutConsistencyTest extends TestCase
         $this->assertLessThan(strpos($html, 'class="sidebar-widgets"'), $calendar);
     }
 
-    public function test_documents_page_stacks_overview_and_semester_under_profile_nav(): void
+    public function test_documents_page_stacks_overview_under_profile_nav(): void
     {
         $html = $this->actingAs($this->makeApprovedScholar())
             ->get(route('user.documents'))
@@ -97,22 +97,21 @@ class SidebarLayoutConsistencyTest extends TestCase
         $this->assertStringContainsString('sidebar-nav-widgets', $html);
         $this->assertStringContainsString('documents-overview-sidebar-card', $html);
         $this->assertStringContainsString('DOCUMENTS OVERVIEW', $html);
-        $this->assertStringContainsString('current-semester-card', $html);
+        $this->assertStringNotContainsString('current-semester-card', $html);
+        $this->assertStringNotContainsString('class="academic-period-filter"', $html);
 
         $this->assertMatchesRegularExpression(
-            '/nav-label">Profile &amp; Settings<\/span>[\s\S]*?sidebar-nav-widgets[\s\S]*?documents-overview-sidebar-card[\s\S]*?current-semester-card[\s\S]*?class="sidebar-widgets"/',
+            '/nav-label">Profile &amp; Settings<\/span>[\s\S]*?sidebar-nav-widgets[\s\S]*?documents-overview-sidebar-card[\s\S]*?class="sidebar-widgets"/',
             $html
         );
 
         $widgets = strpos($html, 'sidebar-nav-widgets');
         $overview = strpos($html, 'documents-overview-sidebar-card');
-        $semester = strpos($html, 'current-semester-card');
         $logout = strpos($html, 'logout-btn');
 
         $this->assertLessThan($overview, $widgets);
-        $this->assertLessThan($semester, $overview);
-        $this->assertLessThan($logout, $semester);
-        $this->assertLessThan(strpos($html, 'class="sidebar-widgets"'), $semester);
+        $this->assertLessThan($logout, $overview);
+        $this->assertLessThan(strpos($html, 'class="sidebar-widgets"'), $overview);
     }
 
     public function test_calendar_page_stacks_upcoming_events_under_schedule_summary(): void
@@ -183,10 +182,11 @@ class SidebarLayoutConsistencyTest extends TestCase
         $this->assertStringContainsString('System Administrator', $html);
         $this->assertStringContainsString('staff-logout-btn', $html);
         $this->assertStringContainsString('app-logout-icon', $html);
-        $this->assertStringContainsString('admin-academic-year-selector', $html);
-        $this->assertStringContainsString('admin-dashboard-year', $html);
+        $this->assertStringNotContainsString('admin-academic-year-selector', $html);
+        $this->assertStringNotContainsString('admin-dashboard-year', $html);
         $this->assertStringNotContainsString('class="academic-period-filter"', $html);
         $this->assertStringNotContainsString('aria-label="Semester"', $html);
+        $this->assertStringNotContainsString('staff-date-banner', $html);
         $this->assertStringNotContainsString('>Locations</span>', $html);
 
         $this->assertLessThan(strpos($html, 'staff-user-chip'), strpos($html, 'staff-brand-logo'));

@@ -7,25 +7,6 @@
 @section('page-content')
 <div class="page-documents">
 
-<section class="card documents-scholar-card">
-    <div class="card-header">STUDENT INFORMATION</div>
-    <div class="documents-scholar-meta">
-        <div><span>Name</span><strong>{{ $scholarName ?? auth()->user()->full_name }}</strong></div>
-        <div><span>Scholar Code</span><strong>{{ $scholarCode ?? auth()->user()->scholar_id }}</strong></div>
-        <div><span>Academic Year</span><strong>{{ $academicYearLabel ?? '—' }}</strong></div>
-    </div>
-    @if(empty($driveReady))
-        @include('partials.bssa-alert', [
-            'type' => 'warning',
-            'title' => 'Uploads unavailable',
-            'message' => 'Google Drive is not connected yet. Ask Scholar Staff or an administrator to connect Drive before uploading.',
-            'dismissible' => false,
-            'autoDismiss' => false,
-            'class' => 'bssa-alert--banner',
-        ])
-    @endif
-</section>
-
 @if(!empty($documentOverview))
     @php $o = $documentOverview; @endphp
     <section class="documents-overview-banner card">
@@ -57,7 +38,7 @@
             <div class="doc-status-body">
                 <strong>{{ $doc->documentType->name }}</strong>
                 <span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $doc->status)) }}</span>
-                <span class="muted">{{ $doc->uploaded_at ? 'Uploaded on ' . $doc->uploaded_at->format('M d, Y') : 'Not yet uploaded' }}</span>
+                <span class="muted">{{ $doc->uploaded_at ? 'Uploaded on ' . $doc->uploaded_at->format('M d Y') : 'Not yet uploaded' }}</span>
                 @if($doc->status === 'rejected' && $doc->review_notes)
                     <span class="muted">Reason: {{ $doc->review_notes }}</span>
                 @endif
@@ -119,7 +100,7 @@
                             <td data-label="Document Type"><div class="table-event">@include('partials.document-icon', ['slug' => $doc->documentType->slug, 'size' => 'sm'])<span>{{ $doc->documentType->name }}</span></div></td>
                             <td data-label="Description">{{ $doc->documentType->description }}</td>
                             <td data-label="Status"><span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $doc->status)) }}</span></td>
-                            <td data-label="Date Uploaded">{{ $doc->uploaded_at?->format('M d, Y') ?? '—' }}</td>
+                            <td data-label="Date Uploaded">{{ $doc->uploaded_at?->format('M d Y') ?? '—' }}</td>
                             <td data-label="Action">
                                 <div class="doc-actions">
                                     @if($doc->hasFile())

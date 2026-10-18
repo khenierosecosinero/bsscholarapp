@@ -5,7 +5,6 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AnnouncementActionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DocumentActionController;
-use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\EventActionController;
 use App\Http\Controllers\GoogleDriveController;
 use App\Http\Controllers\NotificationActionController;
@@ -52,15 +51,6 @@ Route::get('/auth/google/callback', [GoogleDriveController::class, 'handleGoogle
     ->name('google.callback');
 
 Route::middleware('auth')->group(function () {
-    Route::get('/email/verify', [EmailVerificationController::class, 'notice'])
-        ->name('verification.notice');
-    Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
-        ->middleware(['signed', 'throttle:6,1'])
-        ->name('verification.verify');
-    Route::post('/email/verification-notification', [EmailVerificationController::class, 'resend'])
-        ->middleware('throttle:6,1')
-        ->name('verification.send');
-
     Route::put('/academic-period', [AcademicPeriodController::class, 'update'])->name('academic.period.update');
     Route::get('/auth/google', [GoogleDriveController::class, 'redirectToGoogle'])
         ->name('google.redirect');
@@ -166,6 +156,11 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
         Route::get('/events/create', [StaffController::class, 'createEvent'])->name('events.create');
         Route::post('/events', [StaffController::class, 'storeEvent'])->name('events.store');
         Route::get('/events/{event}', [StaffController::class, 'showEvent'])->name('events.show');
+        Route::patch('/events/{event}/status', [StaffController::class, 'updateEventStatus'])->name('events.status');
+        Route::post('/events/{event}/pending', [StaffController::class, 'markEventPending'])->name('events.pending');
+        Route::post('/events/{event}/confirm', [StaffController::class, 'markEventConfirmed'])->name('events.confirm');
+        Route::post('/events/{event}/cancel', [StaffController::class, 'cancelEvent'])->name('events.cancel');
+        Route::delete('/events/{event}', [StaffController::class, 'destroyEvent'])->name('events.destroy');
         Route::get('/attendance', [StaffController::class, 'attendance'])->name('attendance');
         Route::post('/events/{event}/attendance/open', [StaffController::class, 'openAttendance'])->name('attendance.open');
         Route::post('/events/{event}/attendance/close', [StaffController::class, 'closeAttendance'])->name('attendance.close');

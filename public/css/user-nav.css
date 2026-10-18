@@ -93,8 +93,7 @@
     grid-template-areas:
         "left"
         "profile"
-        "welcome"
-        "date";
+        "welcome";
 }
 
 .app-shell .topbar-left {
@@ -208,17 +207,6 @@
     word-wrap: break-word;
 }
 
-.app-shell .topbar-date {
-    grid-area: date;
-    margin: 0;
-    text-align: right;
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.4;
-    color: var(--muted);
-    overflow-wrap: break-word;
-}
-
 @media (max-width: 800px) {
     .app-shell .topbar,
     .app-shell .topbar-dashboard {
@@ -265,10 +253,6 @@
     .app-shell .topbar-welcome-context,
     .app-shell .topbar-subtitle {
         font-size: 14px;
-    }
-
-    .app-shell .topbar-date {
-        font-size: 13px;
     }
 
     .app-shell .profile-info .name {

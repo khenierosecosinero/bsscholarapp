@@ -10,7 +10,7 @@
         <div>
             <h2>{{ $announcement->title }}</h2>
             <p class="muted small">
-                Posted {{ $announcement->published_at?->format('F d, Y \a\t g:i A') ?? $announcement->created_at->format('F d, Y \a\t g:i A') }}
+                Posted {{ $announcement->published_at?->format('F d Y \a\t g:i A') ?? $announcement->created_at->format('F d Y \a\t g:i A') }}
             </p>
         </div>
     </div>

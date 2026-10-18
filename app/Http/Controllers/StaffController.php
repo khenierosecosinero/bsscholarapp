@@ -215,13 +215,35 @@ class StaffController extends Controller
             ->whereIn('scholarship_program_id', $programIds ?: [0])
             ->visibleToStaff($staff);
 
+        $completedIds = Event::completeExpiredConfirmedIds();
+        if ($completedIds !== []) {
+            $this->scholar->notifyScholarsOfCompletedEvents($completedIds);
+        }
+
         $events = (clone $baseQuery)
             ->when($search !== '', fn ($q) => $q->where(function ($scoped) use ($search) {
                 $scoped->where('title', 'like', "%{$search}%")
                     ->orWhere('location', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%");
             }))
-            ->when($statusFilter !== 'all', fn ($q) => $q->where('status', $statusFilter))
+            ->when($statusFilter !== 'all', function ($q) use ($statusFilter) {
+                if ($statusFilter === 'upcoming') {
+                    return $q->where('status', Event::STATUS_CONFIRMED)
+                        ->where('starts_at', '>', now());
+                }
+
+                if ($statusFilter === 'ongoing') {
+                    return $q->whereIn('status', [Event::STATUS_CONFIRMED, Event::STATUS_ONGOING])
+                        ->where('starts_at', '<=', now())
+                        ->where('ends_at', '>=', now());
+                }
+
+                if ($statusFilter === Event::STATUS_CONFIRMED) {
+                    return $q->whereIn('status', [Event::STATUS_CONFIRMED, Event::STATUS_ONGOING]);
+                }
+
+                return $q->where('status', $statusFilter);
+            })
             ->orderByDesc('starts_at')
             ->paginate(10)
             ->withQueryString();
@@ -229,10 +251,18 @@ class StaffController extends Controller
         $now = now();
         $stats = [
             'total' => (clone $baseQuery)->count(),
-            'upcoming' => (clone $baseQuery)->where('starts_at', '>', $now)->count(),
-            'ongoing' => (clone $baseQuery)->where('starts_at', '<=', $now)->where('ends_at', '>=', $now)->count(),
-            'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
-            'completed' => (clone $baseQuery)->where('ends_at', '<', $now)->count(),
+            'upcoming' => (clone $baseQuery)
+                ->where('status', Event::STATUS_CONFIRMED)
+                ->where('starts_at', '>', $now)
+                ->count(),
+            'ongoing' => (clone $baseQuery)
+                ->whereIn('status', [Event::STATUS_CONFIRMED, Event::STATUS_ONGOING])
+                ->where('starts_at', '<=', $now)
+                ->where('ends_at', '>=', $now)
+                ->count(),
+            'pending' => (clone $baseQuery)->where('status', Event::STATUS_PENDING)->count(),
+            'completed' => (clone $baseQuery)->where('status', Event::STATUS_COMPLETED)->count(),
+            'cancelled' => (clone $baseQuery)->where('status', Event::STATUS_CANCELLED)->count(),
         ];
 
         return view('staff.events', array_merge(
@@ -308,6 +338,97 @@ class StaffController extends Controller
             ->with('success', $message);
     }
 
+    public function updateEventStatus(Request $request, Event $event)
+    {
+        $staff = Auth::user();
+
+        abort_unless(
+            $staff->canViewStaffManagedEvent($event),
+            403,
+            'You can only manage events created after your scholar staff account became active for your assigned scholarship program.'
+        );
+
+        $data = $request->validate([
+            'status' => ['required', 'string', Rule::in([
+                Event::STATUS_PENDING,
+                Event::STATUS_CONFIRMED,
+                Event::STATUS_CANCELLED,
+            ])],
+        ]);
+
+        $target = $data['status'];
+
+        if (! $event->canEditStaffStatus() && $event->staffStatusSelectValue() !== $target) {
+            return redirect()
+                ->route('staff.events')
+                ->with('error', "\"{$event->title}\" status can no longer be changed.");
+        }
+
+        if (! $event->applyStaffStatus($target)) {
+            return redirect()
+                ->route('staff.events')
+                ->with('error', "\"{$event->title}\" could not be updated to ".ucfirst($target).'.');
+        }
+
+        $event->refresh();
+        $this->scholar->notifyScholarsOfEventStatusChange($event, $target);
+
+        $label = match ($target) {
+            Event::STATUS_PENDING => 'Pending',
+            Event::STATUS_CONFIRMED => 'Confirmed',
+            Event::STATUS_CANCELLED => 'Cancelled',
+            default => ucfirst($target),
+        };
+
+        return redirect()
+            ->route('staff.events')
+            ->with('success', "\"{$event->title}\" is now {$label}.");
+    }
+
+    public function markEventPending(Event $event)
+    {
+        return $this->updateEventStatus(request()->merge(['status' => Event::STATUS_PENDING]), $event);
+    }
+
+    public function markEventConfirmed(Event $event)
+    {
+        return $this->updateEventStatus(request()->merge(['status' => Event::STATUS_CONFIRMED]), $event);
+    }
+
+    public function cancelEvent(Event $event)
+    {
+        return $this->updateEventStatus(request()->merge(['status' => Event::STATUS_CANCELLED]), $event);
+    }
+
+    public function destroyEvent(Event $event)
+    {
+        $staff = Auth::user();
+
+        abort_unless(
+            $staff->canViewStaffManagedEvent($event),
+            403,
+            'You can only manage events created after your scholar staff account became active for your assigned scholarship program.'
+        );
+
+        if (! $event->canBeRemoved()) {
+            return redirect()
+                ->route('staff.events')
+                ->with('error', "\"{$event->title}\" can only be removed after it has been cancelled.");
+        }
+
+        $title = $event->title;
+
+        if (! $event->removeCancelled()) {
+            return redirect()
+                ->route('staff.events')
+                ->with('error', "\"{$title}\" could not be removed. Only cancelled events can be deleted.");
+        }
+
+        return redirect()
+            ->route('staff.events')
+            ->with('success', "\"{$title}\" has been removed.");
+    }
+
     public function showEvent(Event $event)
     {
         $staff = Auth::user();
@@ -317,6 +438,8 @@ class StaffController extends Controller
             403,
             'You can only manage events created after your scholar staff account became active for your assigned scholarship program.'
         );
+
+        $event->syncStatusFromSchedule();
 
         $event->loadCount('registrations');
         $event->load(['registrations.user', 'attendances']);

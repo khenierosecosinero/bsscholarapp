@@ -38,6 +38,12 @@ class UserController extends Controller
         $needsSync = $hasPortalAccess && in_array($active, ['dashboard', 'events', 'calendar', 'service-hours'], true);
 
         if ($needsSync) {
+            // Mirror staff/admin: persist Completed when confirmed events pass ends_at.
+            // Cancelled events are never completed by this sync.
+            $completedIds = Event::completeExpiredConfirmedIds();
+            if ($completedIds !== []) {
+                $this->scholar->notifyScholarsOfCompletedEvents($completedIds);
+            }
             $this->scholar->syncMissedCheckInsForUser($user);
             $this->scholar->syncCompletedEventHoursForUser($user);
         }

@@ -606,6 +606,11 @@ class AdminController extends Controller
 
         $clubId = ScholarshipClub::selectableId($clubId);
 
+        $completedIds = Event::completeExpiredConfirmedIds();
+        if ($completedIds !== []) {
+            $this->scholar->notifyScholarsOfCompletedEvents($completedIds);
+        }
+
         $events = $this->admin->eventsDirectoryQuery(
             $scope['locationKey'],
             $clubId

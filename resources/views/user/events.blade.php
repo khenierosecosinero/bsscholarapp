@@ -16,8 +16,10 @@
     <select name="status" onchange="this.form.submit()">
         <option value="upcoming" @selected(request('status', 'upcoming') === 'upcoming')>Active Events</option>
         <option value="all" @selected(request('status') === 'all')>All Events</option>
-        <option value="confirmed" @selected(request('status') === 'confirmed')>Confirmed</option>
         <option value="pending" @selected(request('status') === 'pending')>Pending</option>
+        <option value="confirmed" @selected(request('status') === 'confirmed')>Confirmed</option>
+        <option value="cancelled" @selected(request('status') === 'cancelled')>Cancelled</option>
+        <option value="completed" @selected(request('status') === 'completed')>Completed</option>
         <option value="failed_to_check_in" @selected(request('status') === 'failed_to_check_in')>Failed to Check In</option>
         <option value="not_joined" @selected(request('status') === 'not_joined')>Not Joined</option>
     </select>
@@ -41,8 +43,11 @@
                                 <span class="badge {{ !empty($ev['attendance_open']) ? 'attendance-open' : 'attendance-closed' }}">{{ $ev['attendance_status'] ?? 'CLOSED' }}</span>
                             </div>
                         </div>
-                        <div class="event-action">
+                        <div class="event-action event-action-stack">
                             <span class="badge {{ $ev['status_class'] }}">{{ $ev['status_label'] }}</span>
+                            @if(($ev['event_status'] ?? '') !== 'cancelled')
+                                <span class="badge {{ $ev['participation_class'] ?? $ev['status_class'] }}">{{ $ev['participation_label'] ?? '' }}</span>
+                            @endif
                         </div>
                     </a>
                 @empty
@@ -58,8 +63,22 @@
                 <a href="{{ route('user.events', request()->only('search', 'status')) }}" class="back-link">&lt; Back to Events</a>
                 <div class="event-detail-flags">
                     <span class="badge {{ $selected['status_class'] }}">{{ $selected['status_label'] }}</span>
-                    <span class="badge {{ !empty($selected['attendance_open']) ? 'attendance-open' : 'attendance-closed' }} attendance-status-flag" data-attendance-event-badge>{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
+                    @if(empty($selected['is_cancelled']))
+                        <span class="badge {{ $selected['participation_class'] ?? '' }}">{{ $selected['participation_label'] ?? '' }}</span>
+                        <span class="badge {{ !empty($selected['attendance_open']) ? 'attendance-open' : 'attendance-closed' }} attendance-status-flag" data-attendance-event-badge>{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
+                    @endif
                 </div>
+
+                @if(!empty($selected['is_cancelled']))
+                    @include('partials.bssa-alert', [
+                        'type' => 'error',
+                        'title' => 'Event Cancelled',
+                        'message' => 'This event has been cancelled by Scholar Staff. It is no longer available for registration or attendance.',
+                        'dismissible' => false,
+                        'autoDismiss' => false,
+                        'class' => 'bssa-alert--banner',
+                    ])
+                @endif
 
                 <div class="event-hero">
                     @if($selected['image_url'])<img src="{{ $selected['image_url'] }}" alt="{{ $selected['title'] }}">@endif
@@ -77,7 +96,7 @@
                     <div class="about-section"><h3>About this event</h3><p>{{ $selected['description'] }}</p></div>
                 @endif
 
-                @if($selected['registration_status'] === 'not_joined' && (! $selected['is_past'] || !empty($selected['attendance_open'])))
+                @if(!empty($selected['can_register']))
                     <form
                         method="POST"
                         action="{{ route('user.events.register', $selected['id']) }}"
@@ -86,8 +105,18 @@
                         data-confirm-yes="Attend"
                         data-confirm-no="Cancel"
                     >@csrf<button type="submit" class="btn full">Attend / Register</button></form>
+                @elseif(!empty($selected['registration_blocked_message']) && ($selected['registration_status'] ?? 'not_joined') === 'not_joined')
+                    @include('partials.bssa-alert', [
+                        'type' => !empty($selected['is_pending']) ? 'warning' : 'info',
+                        'title' => !empty($selected['is_pending']) ? 'Pending approval' : (!empty($selected['is_cancelled']) ? 'Event cancelled' : 'Registration closed'),
+                        'message' => $selected['registration_blocked_message'],
+                        'dismissible' => false,
+                        'autoDismiss' => false,
+                        'class' => 'bssa-alert--banner',
+                    ])
                 @endif
 
+                @if(empty($selected['is_cancelled']) && empty($selected['is_pending']))
                 <div class="bssa-alert {{ !empty($selected['attendance_open']) ? 'bssa-alert--success' : 'bssa-alert--info' }} bssa-alert--banner reminder-box {{ !empty($selected['attendance_open']) ? 'attendance-open-box' : 'attendance-closed-box' }}" data-attendance-event-message role="status">
                     <div class="bssa-alert__icon" aria-hidden="true">
                         @if(!empty($selected['attendance_open']))
@@ -222,6 +251,7 @@
                             </form>
                         @endif
                     </div>
+                @endif
                 @endif
             </div>
         @else

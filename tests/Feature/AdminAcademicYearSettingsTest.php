@@ -96,7 +96,7 @@ class AdminAcademicYearSettingsTest extends TestCase
             ->assertSessionHasErrors('academic_year');
     }
 
-    public function test_admin_dashboard_shows_centered_academic_year_selector_without_semester(): void
+    public function test_admin_dashboard_hides_academic_year_selector_and_settings_keeps_it(): void
     {
         $admin = $this->makeAdmin();
         $academic = app(AcademicSettingsService::class);
@@ -106,20 +106,26 @@ class AdminAcademicYearSettingsTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.dashboard'))
             ->assertOk()
-            ->assertSee('admin-academic-year-selector', false)
-            ->assertSee('admin-dashboard-year', false)
-            ->assertSee('Academic Year')
-            ->assertSee('AY '.$current->periodLabel())
+            ->assertDontSee('admin-academic-year-selector', false)
+            ->assertDontSee('admin-dashboard-year', false)
             ->assertDontSee('class="academic-period-filter"', false)
+            ->assertDontSee('staff-date-banner', false);
+
+        $this->actingAs($admin)
+            ->get(route('admin.settings'))
+            ->assertOk()
+            ->assertSee('admin-academic-year-selector', false)
+            ->assertSee('Viewing Academic Year')
+            ->assertSee('AY '.$current->periodLabel())
             ->assertDontSee('aria-label="Semester"', false);
 
         $this->actingAs($admin)
-            ->from(route('admin.dashboard'))
+            ->from(route('admin.settings'))
             ->put(route('academic.period.update'), [
                 'year_start' => $next->year_start,
                 'semester' => $current->semester,
             ])
-            ->assertRedirect(route('admin.dashboard'))
+            ->assertRedirect(route('admin.settings'))
             ->assertSessionHas('success');
 
         $this->assertSame($current->year_start, $academic->current()->year_start);

@@ -17,12 +17,11 @@ class AdminRegionalReportsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_reports_page_shows_three_regions_and_academic_year_filter(): void
+    public function test_reports_page_shows_three_regions_without_academic_year_dropdown(): void
     {
         $html = $this->actingAs($this->makeAdmin())
             ->get(route('admin.reports'))
             ->assertOk()
-            ->assertSee('Academic Year')
             ->assertSee('SURIGAO DEL NORTE')
             ->assertSee('SURIGAO DEL SUR')
             ->assertDontSee('LUZON')
@@ -37,12 +36,11 @@ class AdminRegionalReportsTest extends TestCase
             ->assertDontSee('Province Scholarship Program Data')
             ->assertDontSee('Scholarship Category')
             ->assertDontSee('class="academic-period-filter"', false)
-            ->assertSee('admin-reports-year', false)
-            ->assertSee('Viewing Academic Year')
+            ->assertDontSee('admin-reports-year', false)
+            ->assertDontSee('admin-academic-year-selector', false)
             ->getContent();
 
         $this->assertSame(8, substr_count($html, 'admin-pie-card'));
-        $this->assertStringContainsString('name="year_start"', $html);
         $this->assertStringNotContainsString('aria-label="Semester"', $html);
     }
 

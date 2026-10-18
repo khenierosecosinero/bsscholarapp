@@ -37,7 +37,14 @@ class ScholarService
 
     public function scopeEventsForUser(Builder $query, User $user): Builder
     {
-        $query->whereIn('status', ['confirmed', 'upcoming', 'ongoing', 'completed', 'pending']);
+        $query->whereIn('status', [
+            Event::STATUS_PENDING,
+            Event::STATUS_CONFIRMED,
+            Event::STATUS_ONGOING,
+            Event::STATUS_COMPLETED,
+            Event::STATUS_CANCELLED,
+            'upcoming', // legacy values retained for older rows
+        ]);
 
         if (! $user->scholarship_program_id) {
             return $query->whereRaw('1 = 0');
@@ -575,6 +582,7 @@ class ScholarService
 
         $query = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
             ->where('starts_at', '>=', now()->subDay())
+            ->whereNotIn('status', [Event::STATUS_CANCELLED, Event::STATUS_COMPLETED])
             ->orderBy('starts_at')
             ->limit($limit);
         $this->scopeEventsForSelectedPeriod($query);
@@ -589,6 +597,7 @@ class ScholarService
 
         $registered = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
             ->where('starts_at', '>', now())
+            ->whereNotIn('status', [Event::STATUS_CANCELLED, Event::STATUS_COMPLETED])
             ->whereHas('registrations', fn ($q) => $q->where('user_id', $user->id))
             ->orderBy('starts_at');
         $this->scopeEventsForSelectedPeriod($registered);
@@ -598,6 +607,7 @@ class ScholarService
         if (! $event) {
             $open = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
                 ->where('starts_at', '>', now())
+                ->whereNotIn('status', [Event::STATUS_CANCELLED, Event::STATUS_COMPLETED])
                 ->orderBy('starts_at');
             $this->scopeEventsForSelectedPeriod($open);
             $event = $this->scopeEventsForUser($open, $user)->first();
@@ -609,8 +619,14 @@ class ScholarService
     public function eventsForUser(User $user, ?string $search = null, ?string $status = null): Collection
     {
         $base = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-            ->upcomingForFreshScholar($user)
             ->orderBy('starts_at');
+
+        // Active/default lists hide past rows for fresh scholars. History filters
+        // (all / cancelled / completed) must still show staff status changes.
+        if (! in_array($status, ['all', 'cancelled', 'completed'], true)) {
+            $base->upcomingForFreshScholar($user);
+        }
+
         $this->scopeEventsForSelectedPeriod($base);
 
         $query = $this->scopeEventsForUser($base, $user);
@@ -629,7 +645,25 @@ class ScholarService
         if ($status && $status !== 'all') {
             $formatted = $formatted->filter(function (array $event) use ($status) {
                 if ($status === 'upcoming') {
-                    return ! $event['is_past'];
+                    return ! $event['is_past']
+                        && ! in_array($event['event_status'], [
+                            Event::STATUS_CANCELLED,
+                            Event::STATUS_COMPLETED,
+                        ], true);
+                }
+
+                if (in_array($status, [
+                    Event::STATUS_PENDING,
+                    Event::STATUS_CONFIRMED,
+                    Event::STATUS_CANCELLED,
+                    Event::STATUS_COMPLETED,
+                ], true)) {
+                    $eventStatus = $event['event_status'];
+                    if ($status === Event::STATUS_CONFIRMED) {
+                        return in_array($eventStatus, [Event::STATUS_CONFIRMED, Event::STATUS_ONGOING], true);
+                    }
+
+                    return $eventStatus === $status;
                 }
 
                 return $event['calendar_status'] === $status;
@@ -653,6 +687,11 @@ class ScholarService
         }
         $hasParticipated = $this->hasParticipated($attendance);
         $calendarStatus = $this->calendarStatus($event, $user, $attendance, $registration);
+        $isCancelled = $event->isCancelled();
+        $isCompleted = $event->status === Event::STATUS_COMPLETED;
+        $isPending = $event->isPendingApproval();
+        $canRegister = $event->allowsScholarRegistration()
+            && ($registration?->status ?? 'not_joined') === 'not_joined';
 
         return [
             'id' => $event->id,
@@ -666,34 +705,61 @@ class ScholarService
             'day' => $event->starts_at->format('d'),
             'dow' => strtoupper($event->starts_at->format('D')),
             'time' => $event->starts_at->format('g:i A').' - '.$event->ends_at->format('g:i A'),
-            'full_date' => $event->starts_at->format('F d, Y').' ('.$event->starts_at->format('l').')',
+            'full_date' => $event->starts_at->format('F d Y').' ('.$event->starts_at->format('l').')',
             'hours' => $event->service_hours,
             'organizer' => $event->organizer,
             'image_url' => $event->image_url,
             'registration_status' => $registration?->status ?? 'not_joined',
             'has_participated' => $hasParticipated,
+            'event_status' => $event->status,
             'calendar_status' => $calendarStatus,
-            'status_label' => $this->eventStatusLabel($calendarStatus),
-            'status_class' => $this->eventStatusClass($calendarStatus),
+            'status_label' => $event->statusLabel(),
+            'status_class' => $this->lifecycleStatusClass($event),
+            'participation_label' => $this->eventStatusLabel($calendarStatus),
+            'participation_class' => $this->eventStatusClass($calendarStatus),
             'failed_to_check_in' => $calendarStatus === 'failed_to_check_in',
+            'is_cancelled' => $isCancelled,
+            'is_pending' => $isPending,
+            'is_completed' => $isCompleted,
+            'can_register' => $canRegister,
+            'registration_blocked_message' => $isPending
+                ? 'Registration is unavailable because this event is pending approval. Please wait until the event is confirmed.'
+                : ($isCancelled
+                    ? 'This event has been cancelled and is no longer available for registration or attendance.'
+                    : ($isCompleted
+                        ? 'This event is completed and is no longer open for registration.'
+                        : null)),
             'calendar_days' => $event->calendarDateKeys(),
             'attendance' => $attendance,
-            'attendance_open' => $event->isAttendanceOpen(),
+            'attendance_open' => $event->allowsScholarAttendanceActions(),
             'attendance_status' => $event->attendanceStatusLabel(),
             'attendance_opened_at' => $event->attendanceOpenedAtLabel(),
             'attendance_closed_at' => $event->attendanceClosedAtLabel(),
             'attendance_message' => $this->attendanceSessionMessage($event),
-            'can_check_in' => $event->isAttendanceOpen()
+            'can_check_in' => $event->allowsScholarAttendanceActions()
                 && $registration
                 && in_array($registration->status, [
                     EventRegistration::STATUS_CONFIRMED,
                     EventRegistration::STATUS_FAILED_CHECK_IN,
                 ], true)
                 && ! $attendance?->hasCheckedIn(),
-            'can_check_out' => $attendance?->scholarCanCheckOut() ?? false,
-            'can_modify_attendance' => $attendance?->scholarCanModify() ?? false,
+            'can_check_out' => $event->allowsScholarAttendanceActions()
+                && ($attendance?->scholarCanCheckOut() ?? false),
+            'can_modify_attendance' => $event->allowsScholarAttendanceActions()
+                && ($attendance?->scholarCanModify() ?? false),
             'is_past' => $event->hasEnded(),
         ];
+    }
+
+    public function lifecycleStatusClass(Event $event): string
+    {
+        return match ($event->status) {
+            Event::STATUS_PENDING => 'pending',
+            Event::STATUS_CONFIRMED, Event::STATUS_ONGOING => 'confirmed',
+            Event::STATUS_CANCELLED => 'cancelled',
+            Event::STATUS_COMPLETED => 'completed',
+            default => 'not-joined',
+        };
     }
 
     public function hasParticipated(?Attendance $attendance): bool
@@ -705,6 +771,18 @@ class ScholarService
 
     public function attendanceSessionMessage(Event $event): string
     {
+        if ($event->isPendingApproval()) {
+            return 'Registration is unavailable because this event is pending approval. Please wait until the event is confirmed.';
+        }
+
+        if ($event->isCancelled()) {
+            return 'This event has been cancelled and is no longer available for registration or attendance.';
+        }
+
+        if ($event->status === Event::STATUS_COMPLETED) {
+            return 'This event is completed and is no longer open for registration or attendance.';
+        }
+
         $eventStamp = sprintf(
             '%s on %s at %s',
             $event->title,
@@ -729,6 +807,10 @@ class ScholarService
 
     public function missedCheckIn(Event $event, ?EventRegistration $registration, ?Attendance $attendance): bool
     {
+        if ($event->isPendingApproval() || $event->isCancelled() || $event->status === Event::STATUS_COMPLETED) {
+            return false;
+        }
+
         if ($event->isAttendanceOpen()) {
             return false;
         }
@@ -1389,10 +1471,145 @@ class ScholarService
 
     public function notifyScholarsOfPublishedEvent(Event $event): int
     {
+        return $this->notifyScholarsOfEventAction(
+            $event,
+            'published',
+            'New Event: '.$event->title,
+            sprintf(
+                '%s has been scheduled on %s at %s (%s). Service hours: %s. Open Events to view details and register.',
+                $event->title,
+                $event->starts_at->format('M j Y'),
+                $event->starts_at->format('g:i A'),
+                $event->location,
+                number_format((float) $event->service_hours, 1).' hrs'
+            ),
+            true
+        );
+    }
+
+    public function notifyScholarsOfEventStatusChange(Event $event, string $status): int
+    {
+        $status = strtolower(trim($status));
+
+        return match ($status) {
+            Event::STATUS_PENDING => $this->notifyScholarsOfEventAction(
+                $event,
+                'pending',
+                'Event Pending: '.$event->title,
+                sprintf(
+                    '%s is now Pending. Scheduled %s at %s (%s). Check Events for the latest status.',
+                    $event->title,
+                    $event->starts_at->format('M j Y'),
+                    $event->starts_at->format('g:i A'),
+                    $event->location
+                ),
+                false
+            ),
+            Event::STATUS_CONFIRMED => $this->notifyScholarsOfEventAction(
+                $event,
+                'confirmed',
+                'Event Confirmed: '.$event->title,
+                sprintf(
+                    '%s is Confirmed for %s at %s (%s). Open Events to register or review details.',
+                    $event->title,
+                    $event->starts_at->format('M j Y'),
+                    $event->starts_at->format('g:i A'),
+                    $event->location
+                ),
+                true
+            ),
+            Event::STATUS_CANCELLED => $this->notifyScholarsOfEventAction(
+                $event,
+                'cancelled',
+                'Event Cancelled: '.$event->title,
+                sprintf(
+                    '%s scheduled for %s at %s has been Cancelled. It is no longer available for registration or attendance.',
+                    $event->title,
+                    $event->starts_at->format('M j Y'),
+                    $event->starts_at->format('g:i A')
+                ),
+                true
+            ),
+            Event::STATUS_COMPLETED => $this->notifyScholarsOfEventAction(
+                $event,
+                'completed',
+                'Event Completed: '.$event->title,
+                sprintf(
+                    '%s has been marked Completed. Review Events or Service Hours for your participation record.',
+                    $event->title
+                ),
+                false
+            ),
+            default => 0,
+        };
+    }
+
+    public function notifyScholarsOfCompletedEvents(array $eventIds): int
+    {
+        if ($eventIds === []) {
+            return 0;
+        }
+
+        $total = 0;
+
+        Event::query()
+            ->whereIn('id', $eventIds)
+            ->where('status', Event::STATUS_COMPLETED)
+            ->each(function (Event $event) use (&$total) {
+                $total += $this->notifyScholarsOfEventStatusChange($event, Event::STATUS_COMPLETED);
+            });
+
+        return $total;
+    }
+
+    /**
+     * Deduplicated in-app notification for a staff/admin event lifecycle action.
+     * Same user + event + action title is updated in place (no duplicate rows).
+     */
+    public function notifyScholarsOfEventAction(
+        Event $event,
+        string $actionKey,
+        string $title,
+        string $body,
+        bool $important = false
+    ): int {
         if (! $event->scholarship_program_id) {
             return 0;
         }
 
+        $scholarsQuery = $this->scholarsQueryForEvent($event);
+        $count = 0;
+
+        $scholarsQuery->each(function (User $scholar) use ($event, $title, $body, $important, &$count) {
+            if (! $event->isVisibleAfter($scholar->eventsVisibleFrom())) {
+                return;
+            }
+
+            ScholarNotification::updateOrCreate(
+                [
+                    'user_id' => $scholar->id,
+                    'event_id' => $event->id,
+                    'title' => $title,
+                ],
+                [
+                    'body' => $body,
+                    'category' => 'event_reminder',
+                    'is_important' => $important,
+                    'is_read' => false,
+                ]
+            );
+
+            $count++;
+        });
+
+        return $count;
+    }
+
+    /**
+     * Approved scholars in the event's program (scoped to the acting staff club when present).
+     */
+    public function scholarsQueryForEvent(Event $event): Builder
+    {
         $scholarsQuery = User::query()
             ->where('role', User::ROLE_SCHOLAR)
             ->where('status', User::STATUS_APPROVED)
@@ -1403,36 +1620,7 @@ class ScholarService
             $scholarsQuery->where('scholarship_club_id', $staff->scholarship_club_id);
         }
 
-        $title = 'New Event: '.$event->title;
-        $body = sprintf(
-            '%s has been scheduled on %s at %s (%s). Service hours: %s. Visit the Events page to view details and register.',
-            $event->title,
-            $event->starts_at->format('M j, Y'),
-            $event->starts_at->format('g:i A'),
-            $event->location,
-            number_format((float) $event->service_hours, 1).' hrs'
-        );
-
-        $count = 0;
-
-        $scholarsQuery->each(function (User $scholar) use ($event, $title, $body, &$count) {
-            ScholarNotification::updateOrCreate(
-                [
-                    'user_id' => $scholar->id,
-                    'title' => $title,
-                ],
-                [
-                    'event_id' => $event->id,
-                    'body' => $body,
-                    'category' => 'event_reminder',
-                    'is_important' => true,
-                    'is_read' => false,
-                ]
-            );
-            $count++;
-        });
-
-        return $count;
+        return $scholarsQuery;
     }
 
     private function attendancesByEvent(User $user): Collection

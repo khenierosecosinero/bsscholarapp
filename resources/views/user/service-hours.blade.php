@@ -41,7 +41,7 @@
                         @foreach($records as $rec)
                             <tr>
                                 <td data-label="Event / Activity"><div class="table-event">@if($rec->event?->image_url)<img src="{{ $rec->event->image_url }}" alt="">@endif {{ $rec->event?->title ?? 'N/A' }}</div></td>
-                                <td data-label="Date">{{ $rec->event?->starts_at?->format('M d, Y') ?? '—' }}</td>
+                                <td data-label="Date">{{ $rec->event?->starts_at?->format('M d Y') ?? '—' }}</td>
                                 <td data-label="Time In">{{ $rec->check_in?->format('g:i A') ?? '—' }}</td>
                                 <td data-label="Time Out">{{ $rec->check_out?->format('g:i A') ?? '—' }}</td>
                                 <td data-label="Hours Earned">{{ $rec->hoursLabel() }}</td>

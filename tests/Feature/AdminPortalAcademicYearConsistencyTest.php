@@ -38,7 +38,7 @@ class AdminPortalAcademicYearConsistencyTest extends TestCase
 
         $this->assertSame($other->year_start, $academic->selectedPeriod()->year_start);
 
-        $pages = [
+        $filteredPages = [
             'admin.dashboard',
             'admin.scholars',
             'admin.staff',
@@ -46,17 +46,23 @@ class AdminPortalAcademicYearConsistencyTest extends TestCase
             'admin.service-hours',
             'admin.documents',
             'admin.reports',
-            'admin.settings',
         ];
 
-        foreach ($pages as $routeName) {
+        foreach ($filteredPages as $routeName) {
             $this->actingAs($admin)
                 ->get(route($routeName))
                 ->assertOk()
-                ->assertSee('admin-academic-year-selector', false)
-                ->assertSee('AY '.$other->periodLabel())
-                ->assertDontSee('aria-label="Semester"', false);
+                ->assertDontSee('admin-academic-year-selector', false)
+                ->assertDontSee('aria-label="Semester"', false)
+                ->assertDontSee('class="academic-period-filter"', false);
         }
+
+        $this->actingAs($admin)
+            ->get(route('admin.settings'))
+            ->assertOk()
+            ->assertSee('admin-academic-year-selector', false)
+            ->assertSee('AY '.$other->periodLabel())
+            ->assertDontSee('aria-label="Semester"', false);
 
         $scholarsHtml = $this->actingAs($admin)
             ->get(route('admin.scholars'))

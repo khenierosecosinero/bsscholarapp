@@ -214,9 +214,6 @@
             <div class="card">
                 <div class="card-header">START ACADEMIC YEAR</div>
                 <p class="muted small">This is the academic year when you originally began the scholarship. Year 1–Year 4 are calculated from this year and stay fixed. Changing the viewing Academic Year and Semester below does not change your Start Academic Year.</p>
-                @if(! $user->program_start_year)
-                    <p class="muted small" style="color:#b45309">Select and save your Start Academic Year so your four-year service-hour progress can be displayed correctly.</p>
-                @endif
                 <form method="POST" action="{{ route('user.profile.academic') }}">
                     @csrf
                     @method('PUT')
