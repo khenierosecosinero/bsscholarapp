@@ -394,7 +394,7 @@ class User extends Authenticatable
         }
 
         if ($this->isScholar()) {
-            return $this->status !== self::STATUS_REJECTED;
+            return $this->status === self::STATUS_APPROVED;
         }
 
         return true;

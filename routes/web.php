@@ -79,6 +79,16 @@ Route::get('/dashboard', function () {
             ->with('error', 'Your account has been rejected and can no longer access the system. Please contact Scholar Staff for assistance.');
     }
 
+    if ($user->isPendingApproval()) {
+        Auth::logout();
+        request()->session()->invalidate();
+        request()->session()->regenerateToken();
+
+        return redirect()
+            ->route('login')
+            ->with('warning', 'Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in.');
+    }
+
     if ($user->isAdmin()) {
         return redirect()->route('admin.dashboard');
     }
@@ -193,6 +203,7 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
         Route::get('/reports/completion', [StaffController::class, 'completionReports'])->name('reports.completion');
         Route::post('/scholars/{scholar}/approve', [StaffController::class, 'approveScholar'])->name('scholars.approve');
         Route::post('/scholars/{scholar}/reject', [StaffController::class, 'rejectScholar'])->name('scholars.reject');
+        Route::delete('/scholars/{scholar}', [StaffController::class, 'deleteScholar'])->name('scholars.destroy');
         Route::post('/scholars/{scholar}/block', [StaffController::class, 'blockScholar'])->name('scholars.block');
         Route::post('/scholars/{scholar}/suspend', [StaffController::class, 'suspendScholar'])->name('scholars.suspend');
         Route::post('/scholars/{scholar}/reactivate', [StaffController::class, 'reactivateScholar'])->name('scholars.reactivate');

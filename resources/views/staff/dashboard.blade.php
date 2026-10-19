@@ -82,18 +82,18 @@
                                         method="POST"
                                         action="{{ route('staff.scholars.reject', $request) }}"
                                         style="display:inline"
-                                        data-confirm="Reject and permanently delete this account?"
-                                        data-confirm-title="Reject this account?"
+                                        data-confirm="Reject this scholar application? The application record will be kept for review."
+                                        data-confirm-title="Reject this application?"
                                         data-confirm-name="{{ $request->full_name }}"
-                                        data-confirm-note="This cannot be undone. The scholar account and related records will be permanently removed from the database."
-                                        data-confirm-yes="Reject & Delete"
+                                        data-confirm-note="The account will be marked Rejected and removed from active scholars. Staff can still review it under Approval Requests."
+                                        data-confirm-yes="Reject Application"
                                         data-confirm-no="Cancel"
                                         data-confirm-variant="danger"
                                         data-ajax-approval="reject"
                                         data-no-loading="true"
                                     >
                                         @csrf
-                                        <button type="submit" class="staff-action-btn" title="Reject and delete">✕</button>
+                                        <button type="submit" class="staff-action-btn" title="Reject application">✕</button>
                                     </form>
                                 </td>
                             </tr>

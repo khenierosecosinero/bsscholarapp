@@ -63,29 +63,46 @@
                 <form
                     method="POST"
                     action="{{ route('staff.scholars.reject', $scholar) }}"
-                    data-confirm="Reject and permanently delete this account?"
-                    data-confirm-title="Reject this account?"
+                    data-confirm="Reject this scholar application? The application record will be kept for review."
+                    data-confirm-title="Reject this application?"
                     data-confirm-name="{{ $scholar->full_name }}"
-                    data-confirm-note="This cannot be undone. The scholar account and related records will be permanently removed from the database."
-                    data-confirm-yes="Reject & Delete"
+                    data-confirm-note="The account will be marked Rejected and removed from active scholars. Staff can still open the application for review."
+                    data-confirm-yes="Reject Application"
                     data-confirm-no="Cancel"
                     data-confirm-variant="danger"
                     data-ajax-approval="reject"
                     data-no-loading="true"
                 >
                     @csrf
-                    <button type="submit" class="staff-btn" style="border-color:#ef4444;color:#ef4444">Reject &amp; Delete Account</button>
+                    <button type="submit" class="staff-btn" style="border-color:#ef4444;color:#ef4444">Reject Application</button>
                 </form>
             </div>
         @else
             <div class="staff-scholar-profile-actions">
-                @include('partials.account-access-actions', [
-                    'account' => $scholar,
-                    'blockUrl' => route('staff.scholars.block', $scholar),
-                    'suspendUrl' => route('staff.scholars.suspend', $scholar),
-                    'reactivateUrl' => route('staff.scholars.reactivate', $scholar),
-                    'showSuspensionReason' => true,
-                ])
+                @if(in_array($scholar->status, ['approved', 'blocked', 'suspended'], true))
+                    @include('partials.account-access-actions', [
+                        'account' => $scholar,
+                        'blockUrl' => route('staff.scholars.block', $scholar),
+                        'suspendUrl' => route('staff.scholars.suspend', $scholar),
+                        'reactivateUrl' => route('staff.scholars.reactivate', $scholar),
+                        'showSuspensionReason' => true,
+                    ])
+                @endif
+                <form
+                    method="POST"
+                    action="{{ route('staff.scholars.destroy', $scholar) }}"
+                    data-confirm="Permanently delete this scholar account?"
+                    data-confirm-title="Delete scholar account?"
+                    data-confirm-name="{{ $scholar->full_name }}"
+                    data-confirm-note="This cannot be undone. The scholar account will be permanently removed."
+                    data-confirm-yes="Delete Account"
+                    data-confirm-no="Cancel"
+                    data-confirm-variant="danger"
+                >
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="staff-btn" style="border-color:#ef4444;color:#ef4444">Delete Account</button>
+                </form>
             </div>
         @endif
     </div>

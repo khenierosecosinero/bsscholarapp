@@ -32,9 +32,16 @@ class PasswordResetWorkflowTest extends TestCase
 
         $this->get(route('password.request'))
             ->assertOk()
-            ->assertSee('Account found')
+            ->assertSee('Account found. Select a recovery email:')
             ->assertSee('Send Reset Link')
-            ->assertSee($user->email);
+            ->assertSee('Name:')
+            ->assertSee($user->full_name)
+            ->assertSee('Email:')
+            ->assertSee($user->email)
+            ->assertSee('Primary email')
+            ->assertSee('value="'.$user->email.'"', false)
+            ->assertSee('Enter your registered email address', false)
+            ->assertDontSee('cosinerok@gmail.com');
 
         $this->post(route('password.email'), ['recovery_email' => $user->email])
             ->assertRedirect(route('password.verify'))
@@ -92,6 +99,8 @@ class PasswordResetWorkflowTest extends TestCase
 
         $this->get(route('password.request'))
             ->assertOk()
+            ->assertSee('Name:')
+            ->assertSee($admin->full_name)
             ->assertSee(User::PERMANENT_ADMIN_EMAIL)
             ->assertSee($backup)
             ->assertSee('Verified backup email');
@@ -118,17 +127,161 @@ class PasswordResetWorkflowTest extends TestCase
         $this->assertTrue(Hash::check('AdminBackup99', $admin->fresh()->password));
     }
 
+    public function test_forgot_password_form_starts_empty_without_hardcoded_account_data(): void
+    {
+        $this->get(route('password.request'))
+            ->assertOk()
+            ->assertSee('Enter your registered email address', false)
+            ->assertSee('Find Account')
+            ->assertDontSee('cosinerok@gmail.com')
+            ->assertDontSee('Account found. Select a recovery email:')
+            ->assertDontSee('Send Reset Link')
+            ->assertDontSee('Name:')
+            ->assertDontSee('id="recovery-options"', false)
+            ->assertDontSee('Primary email');
+    }
+
+    public function test_fresh_forgot_password_link_clears_prior_recovery_section(): void
+    {
+        $user = $this->makeScholar('fresh-start@example.com', 'OldPass123');
+
+        $this->post(route('password.find'), ['email' => $user->email]);
+        $this->get(route('password.request'))
+            ->assertSee('Account found. Select a recovery email:')
+            ->assertSee('Send Reset Link');
+
+        $this->get(route('password.request', ['fresh' => 1]))
+            ->assertRedirect(route('password.request'));
+
+        $this->get(route('password.request'))
+            ->assertOk()
+            ->assertSessionMissing(PasswordResetService::SESSION_RECOVERY_OPTIONS)
+            ->assertDontSee('Account found. Select a recovery email:')
+            ->assertDontSee('Send Reset Link')
+            ->assertDontSee($user->full_name)
+            ->assertDontSee('id="recovery-options"', false);
+    }
+
     public function test_unknown_email_shows_not_found_without_recovery_options(): void
     {
         $this->from(route('password.request'))
             ->post(route('password.find'), ['email' => 'nobody-here@example.com'])
             ->assertRedirect(route('password.request'))
-            ->assertSessionHas('error')
+            ->assertSessionHas('error', 'No account was found with the email address you entered.')
             ->assertSessionMissing(PasswordResetService::SESSION_ACCOUNT_ID);
 
         $this->get(route('password.request'))
             ->assertOk()
+            ->assertSee('No account was found with the email address you entered.')
+            ->assertDontSee('Account found. Select a recovery email:')
+            ->assertDontSee('Send Reset Link')
+            ->assertDontSee('Name:')
+            ->assertDontSee('id="recovery-options"', false);
+    }
+
+    public function test_failed_search_after_success_hides_previous_recovery_section(): void
+    {
+        $user = $this->makeScholar('had-account@example.com', 'OldPass123');
+
+        $this->post(route('password.find'), ['email' => $user->email]);
+        $this->get(route('password.request'))
+            ->assertSee($user->full_name)
+            ->assertSee('Send Reset Link');
+
+        $this->from(route('password.request'))
+            ->post(route('password.find'), ['email' => 'missing-now@example.com'])
+            ->assertRedirect(route('password.request'))
+            ->assertSessionHas('error')
+            ->assertSessionMissing(PasswordResetService::SESSION_RECOVERY_OPTIONS);
+
+        $this->get(route('password.request'))
+            ->assertOk()
+            ->assertDontSee('Account found. Select a recovery email:')
+            ->assertDontSee('Send Reset Link')
+            ->assertDontSee($user->full_name)
+            ->assertDontSee('id="recovery-options"', false)
+            ->assertDontSee('value="missing-now@example.com"', false)
+            ->assertDontSee('value="'.$user->email.'"', false);
+    }
+
+    public function test_reopening_forgot_password_does_not_restore_prior_find(): void
+    {
+        $user = $this->makeScholar('reopen-find@example.com', 'OldPass123');
+
+        $this->post(route('password.find'), ['email' => $user->email]);
+        $this->get(route('password.request'))
+            ->assertOk()
+            ->assertSee('Account found. Select a recovery email:')
+            ->assertSee($user->full_name);
+
+        // Second open (refresh / revisit) has no reveal flash — must render a blank form.
+        $this->get(route('password.request'))
+            ->assertOk()
+            ->assertSessionMissing(PasswordResetService::SESSION_ACCOUNT_ID)
+            ->assertSessionMissing(PasswordResetService::SESSION_RECOVERY_OPTIONS)
+            ->assertSessionMissing(PasswordResetService::SESSION_LOOKUP_EMAIL)
+            ->assertDontSee('Account found. Select a recovery email:')
+            ->assertDontSee('Send Reset Link')
+            ->assertDontSee($user->full_name)
+            ->assertDontSee('value="'.$user->email.'"', false)
+            ->assertDontSee('id="recovery-options"', false)
+            ->assertDontSee('cosinerok@gmail.com');
+    }
+
+    public function test_empty_email_is_validated_before_search(): void
+    {
+        $this->from(route('password.request'))
+            ->post(route('password.find'), ['email' => ''])
+            ->assertRedirect(route('password.request'))
+            ->assertSessionHasErrors('email');
+    }
+
+    public function test_search_again_clears_previous_account_information(): void
+    {
+        $user = $this->makeScholar('search-again@example.com', 'OldPass123');
+
+        $this->post(route('password.find'), ['email' => $user->email])
+            ->assertSessionHas(PasswordResetService::SESSION_ACCOUNT_ID, $user->id);
+
+        $this->get(route('password.request'))
+            ->assertOk()
+            ->assertSee($user->full_name)
+            ->assertSee($user->email);
+
+        $this->get(route('password.request', ['again' => 1]))
+            ->assertRedirect(route('password.request'));
+
+        $this->get(route('password.request'))
+            ->assertOk()
+            ->assertSessionMissing(PasswordResetService::SESSION_ACCOUNT_ID)
+            ->assertSessionMissing(PasswordResetService::SESSION_ACCOUNT_NAME)
+            ->assertSessionMissing(PasswordResetService::SESSION_LOOKUP_EMAIL)
+            ->assertSessionMissing(PasswordResetService::SESSION_RECOVERY_OPTIONS)
+            ->assertDontSee('Account found')
+            ->assertDontSee($user->full_name)
+            ->assertDontSee('value="'.$user->email.'"', false)
             ->assertDontSee('Send Reset Link');
+    }
+
+    public function test_new_find_replaces_previous_account_information(): void
+    {
+        $first = $this->makeScholar('first-find@example.com', 'OldPass123');
+        $second = $this->makeScholar('second-find@example.com', 'OldPass123');
+
+        $this->post(route('password.find'), ['email' => $first->email]);
+        $this->get(route('password.request'))
+            ->assertSee($first->full_name)
+            ->assertSee($first->email);
+
+        $this->post(route('password.find'), ['email' => $second->email])
+            ->assertSessionHas(PasswordResetService::SESSION_ACCOUNT_ID, $second->id);
+
+        $this->get(route('password.request'))
+            ->assertOk()
+            ->assertSee($second->full_name)
+            ->assertSee($second->email)
+            ->assertSee('value="'.$second->email.'"', false)
+            ->assertDontSee('value="'.$first->email.'"', false);
     }
 
     public function test_cannot_send_reset_to_email_not_in_found_options(): void

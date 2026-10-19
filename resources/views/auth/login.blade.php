@@ -28,7 +28,7 @@
                             </svg>
                         </button>
                     </div>
-                    <a class="forgot" href="{{ route('password.request') }}">Forgot Password?</a>
+                    <a class="forgot" href="{{ route('password.request', ['fresh' => 1]) }}">Forgot Password?</a>
                 </div>
                 <div class="auth-form-footer">
                     <button class="btn login-btn" type="submit">Login</button>

@@ -392,6 +392,38 @@ class AdminDashboardService
         ];
     }
 
+    /**
+     * Compact system-wide Overall Reports card for the Admin Dashboard.
+     * One pie chart: Total Scholars vs Total Scholar Staff across all locations
+     * (ignores the dashboard Province / Municipality filter).
+     *
+     * @return array{
+     *     total_scholars: int,
+     *     total_staff: int,
+     *     chart: array{title: string, total: int|float, empty: bool, gradient: string, slices: array<int, array<string, mixed>>}
+     * }
+     */
+    public function overallReportSummary(): array
+    {
+        $programIds = $this->resolveGeographicProgramIds('all');
+        $periodFilter = $this->academic->adminYearFilter();
+
+        $scholars = $this->scholarsQuery($programIds, null);
+        $this->academic->scopeScholarsForAcademicYear($scholars, (int) $periodFilter['year_start']);
+
+        $totalScholars = (clone $scholars)->count();
+        $totalStaff = $this->approvedStaffQuery($programIds, null)->count();
+
+        return [
+            'total_scholars' => $totalScholars,
+            'total_staff' => $totalStaff,
+            'chart' => $this->buildPieChart('Overall Reports', [
+                ['label' => 'Total Scholars', 'value' => $totalScholars, 'color' => '#2563eb'],
+                ['label' => 'Total Scholar Staff', 'value' => $totalStaff, 'color' => '#0d9488'],
+            ]),
+        ];
+    }
+
     public function dashboardStats(array $programIds, ?array $clubIds = null, ?int $totalClubs = null): array
     {
         // Admin Academic Year selector is year-scoped: include both semesters for that AY.
@@ -418,6 +450,10 @@ class AdminDashboardService
         $stats['pending_scholars'] = $statusCounts['pending'] ?? 0;
         $stats['rejected_scholars'] = $statusCounts['rejected'] ?? 0;
 
+        $completedEvents = $this->eventsQuery($programIds)
+            ->where('status', Event::STATUS_COMPLETED)
+            ->count();
+
         return array_merge($stats, [
             'total_staff' => $this->approvedStaffQuery($programIds, $clubIds)->count(),
             'pending_staff' => $this->pendingStaffQuery($programIds, $clubIds)->count(),
@@ -429,6 +465,7 @@ class AdminDashboardService
             ),
             'total_participation' => $participation['participated'] ?? 0,
             'completed_scholars' => $completion['completed'] ?? 0,
+            'completed_events' => $completedEvents,
             'pending_records' => ($stats['pending_scholars'] ?? 0)
                 + ($stats['pending_attendances'] ?? 0)
                 + ($stats['pending_documents'] ?? 0),

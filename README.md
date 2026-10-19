@@ -279,29 +279,31 @@ flowchart TD
 5. An administrator or approved staff member must connect Google Drive once via `/google-drive` (OAuth). The token is stored encrypted in `google_drive_connections` so scholars do not each connect their own Drive. See [§34](#34-google-drive-integration).
 6. The scholar Documents page shows document overview, status cards, and upload UI. It does **not** show a STUDENT INFORMATION card or a “Google Drive is not connected” banner (`GoogleDriveFolderStructureTest`).
 
-### 4.5 Forgot password (Scholar and Scholar Staff)
+### 4.5 Forgot password (Scholar, Scholar Staff, and Administrator)
 
 ```mermaid
 flowchart LR
   A[Forgot Password] --> B[Enter registered email]
-  B --> C[System generates 6-digit code]
-  C --> D[Same code emailed and stored hashed]
-  D --> E[User enters code]
-  E --> F[Code must match, be unused, and unexpired]
+  B --> C[Find Account in database]
+  C --> D[Show Name + recovery email options]
+  D --> E[Send reset link / 6-digit code]
+  E --> F[Verify code or open signed link]
   F --> G[New password + confirm]
   G --> H[Hashed update on that account]
   H --> I[Login with new password]
 ```
 
-1. Login **Forgot Password?** opens `GET /forgot-password`.
-2. The email must belong to an existing **Scholar** or **Scholar Staff** account (admin emails are rejected).
-3. `PasswordResetService` generates one 6-digit code (`random_int`), stores **only its hash** on `password_reset_tokens` for that email, and sends **that same plaintext code** through Gmail SMTP (`PasswordResetCodeMail`). The code is never shown on the website.
-4. Verifying the code does **not** generate a new code. The typed value is compared with `Hash::check` against the stored hash.
-5. Incorrect, expired (10 minutes), already-used, or locked-out codes cannot continue. After a successful verify the code is marked used (`used_at`).
-6. New password rules match registration: `Password::min(8)`, confirmed. `User::updatePassword()` hashes via the existing `hashed` cast and updates **only** that email’s account.
-7. Success redirects to login with a confirmation message.
+1. Login **Forgot Password?** opens `GET /forgot-password` (`?fresh=1` from the login link). A cold GET never restores a prior find: the controller clears find-session keys and `_old_input` email values, and the Blade template does **not** use `old('email')`. Only the empty registered-email input (placeholder: “Enter your registered email address”) and **Find Account** are rendered—no recovery markup in the HTML.
+2. **Find Account** (`POST /forgot-password/find`) validates the email, looks up an eligible account (`PasswordResetService::findRecoveryAccount`), stores id / name / lookup email / recovery options in the session, and sets a one-time `password_reset_reveal` flash. Empty or invalid emails show validation errors with an empty field. Unknown emails show: “No account was found with the email address you entered.” with no recovery section and no prefills.
+3. The recovery block (**Account found. Select a recovery email:**, **Name**, **Email**, options, **Send Reset Link**) is server-rendered only when that reveal flash is present on the redirect after a successful find. Refreshing or reopening `/forgot-password` without a new find clears the session and returns the blank form again. Editing the lookup email also clears prior results.
+4. Eligible recovery targets: Scholar and Scholar Staff primary emails; Administrators may use the primary email or a **verified** backup email. Passwords, hashes, and reset tokens are never shown in the UI.
+5. **Send Reset Link** is available only after a find and a selected recovery email. `PasswordResetService` generates one 6-digit code (`random_int`), stores **only its hash** on `password_reset_tokens`, and emails that code plus a signed reset link through Gmail SMTP (`PasswordResetCodeMail`). Success is shown only after SMTP delivery succeeds; if delivery fails, the token row is deleted and the user sees an error (never a false “sent” message).
+6. Verifying the code (or opening the signed link) does **not** generate a new code. The value is compared with `Hash::check` against the stored hash.
+7. Incorrect, expired (10 minutes), already-used, or locked-out codes cannot continue. After a successful verify the code is marked used (`used_at`).
+8. New password rules match registration: `Password::min(8)`, confirmed. `User::updatePassword()` hashes via the existing `hashed` cast and updates **only** that account.
+9. Success redirects to login with a confirmation message.
 
-Mail uses Laravel’s default mailer from `config/mail.php` / `.env`. There is no extra “SMTP is not configured” gate. If Gmail rejects the message, the unused code row is deleted and the user sees a sanitized SMTP error (the App Password is never shown).
+Mail uses Gmail SMTP from `config/mail.php` / `.env` (`MailConfigService`). If SMTP is not ready or Gmail rejects the message, the unused code row is deleted and the user sees a sanitized error (the App Password is never shown).
 
 ### 4.6 Scholar presence and staff scholar profile
 
@@ -382,7 +384,7 @@ Scholar **email verification is not used**. Routes `verification.notice` / `veri
 | Page | Route | Function |
 |------|--------|----------|
 | Login | `GET/POST /login` | Sign in. Password is masked by default with a closed-eye toggle; click to reveal (open eye) or hide again. **Forgot Password?** goes to password recovery |
-| Forgot password | `GET/POST /forgot-password` | Enter registered Scholar/Staff email; send verification code |
+| Forgot password | `GET/POST /forgot-password`, `POST /forgot-password/find` | Empty email lookup → Find Account (DB name + recovery emails) → Send Reset Link |
 | Verify reset code | `GET/POST /forgot-password/verify` | Enter the exact emailed 6-digit code |
 | Resend code | `POST /forgot-password/resend` | Replace the stored code and email a new one |
 | New password | `GET/POST /forgot-password/reset` | After successful verify: new password + confirm |
@@ -429,7 +431,7 @@ Global academic year/semester can be updated from the scholar profile **only by 
 
 | Section | What it does |
 |---------|----------------|
-| **Dashboard** | **Location** card with Province then Municipality/City (no Current Admin Scope banner, no Scholarship category, no Scholarship Clubs list). Cards: Total Scholars, Approved Scholars, Pending Scholars, Rejected Scholars, Scholar Staff, Pending Staff, Total Scholarship Clubs, Documents, Completed Scholars. Stats include only records in the selected Province (or that Municipality/City). Empty locations show **0**. Quick Actions: View Scholars, View Scholar Staff, View Events, Open Reports |
+| **Dashboard** | **Location** card with Province then Municipality/City (no Current Admin Scope banner, no Scholarship category, no Scholarship Clubs list). Cards: Total Scholars, Approved Scholars, Pending Scholars, Rejected Scholars, Scholar Staff, Pending Staff, Total Scholarship Clubs, Documents, Completed Scholars, **Events** (count of events with status `completed` for the selected location / overall when none selected). Stats include only records in the selected Province (or that Municipality/City). Empty locations show **0**. Below: **Quick Actions** beside a compact **Overall Reports** card with **one pie chart** (two slices: Total Scholars and Total Scholar Staff across all locations via `AdminDashboardService::overallReportSummary()`), plus **View Overall Reports** → `GET /admin/reports`. Quick Actions: View Scholars, View Scholar Staff, View Events, Open Reports |
 | **Scholars** | Unified list (City Scholar and Province Scholar together). Filters: Province, Municipality/City, Scholarship Club (all registered clubs except the retired **Batang Surigaonon Scholars Club**), plus search by name / email / scholar ID. Table columns: Scholar, Scholar ID, Scholarship Club, Course, School, Status. Click a scholar name (`.admin-scholar-name-link`) to open a view-only profile (`GET /admin/scholars/{scholar}`). No approve/reject here |
 | **Scholar Staff** | Unified list (no City Scholar / Province Scholar split). Filters: Region (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, Scholarship Club (all registered clubs; selecting a club fills Province and Municipality/City from the club record), plus search by name / email / contact number. **All Scholar Staff Accounts** columns: Staff Member, Email, Contact Number, Scholarship Club, Status, Actions (**View**, **More**). View opens a dedicated page (`GET /admin/staff/{staffMember}`) with registration details and **Update Started Year** (`staff_started_year`). **More** opens a centered `#admin-staff-more-modal` with **Activate** / **Deactivate** / **Delete**. Pending registrations (Approve → `approved` and sets `events_visible_from`; Reject sets `rejected`, account kept). All Scholar Staff Accounts shows approved/rejected/inactive, **not** pending. Empty filter results show **No records found** |
 | **Events** | Unified list (no City Scholar / Province Scholar split). Filters: Region (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, Scholarship Club (all registered clubs from the database; selecting a club fills Province and Municipality/City from the club record), plus search by event title. Events are filtered by `events.scholarship_program_id` (club filter uses that club’s program). Table columns: Event, Scholarship Club (clubs registered on the event’s program; a selected club filter shows that club), **Participants** (count of scholars with `attendances.status = approved` and a check-in; pending, rejected, failed check-in, and unverified records are excluded), Schedule, Status, Service Hours. Empty results show **No events found**. Click an event title (`.admin-event-name-link`) to open attendees (`GET /admin/events/{event}`): Scholar, Attendance Status, Check-In, Service Hours Earned, **Attendance Photo**. Event details show Scholarship Club and Participants instead of Scholar Program / Program Type. The photo column shows only **approved** participation photos for that scholar and event. Pending, rejected, and unverified photos are hidden (`No approved photo`). Click a thumbnail to open the existing photo preview modal. Photo files are served at `GET /admin/events/{event}/attendances/{attendance}/photo` (`admin.events.attendances.photo`) only when the attendance is approved and belongs to that event |
@@ -609,6 +611,12 @@ Admin **reuses** staff components and only overrides colors:
 | Location banner / pills | `#fff2f1` fill, `#f5d0c8` border |
 | Scholar / event name links | `.admin-scholar-name-link`, `.admin-event-name-link` — underlined `#c2410c` |
 | Reports | `.admin-regional-reports` stacks Luzon / Visayas / Mindanao; each region `.admin-region-charts` is a 2-column grid of `.admin-pie-card` charts (1 column ≤900px) |
+
+### Sidebar scrolling (Scholar, Scholar Staff, Administrator)
+
+- Scholar (`.sidebar` / `.nav` in `resources/css/styles.css`) and Staff/Admin (`.staff-sidebar` / `.staff-nav` in `public/css/staff-admin.css`) use a viewport-tall column (`height: 100dvh`, `overflow: hidden`) with a sticky shell.
+- Brand / logo / profile stay fixed; the nav list scrolls (`flex: 1`, `min-height: 0`, `overflow-y: auto`, `scrollbar-gutter: stable`) so every menu item stays reachable without scrolling the whole page.
+- Main content remains independently scrollable. Mobile drawers (≤1000px) keep the same nav-scroll pattern inside the overlay.
 
 ### UI patterns to keep
 
@@ -892,6 +900,7 @@ Full folder layout, OAuth setup, and troubleshooting: [§34](#34-google-drive-in
 | Method | Path | Name |
 |--------|------|------|
 | GET | `/forgot-password` | `password.request` |
+| POST | `/forgot-password/find` | `password.find` |
 | POST | `/forgot-password` | `password.email` |
 | GET | `/forgot-password/verify` | `password.verify` |
 | POST | `/forgot-password/verify` | `password.verify.post` |
@@ -1254,7 +1263,7 @@ No other demo scholar or staff passwords are defined in seeders.
 - CSRF tokens on forms (`@csrf`).
 - Role middleware on all three portals.
 - Login/register rate limiting.
-- Forgot Password: 6-digit code hashed in `password_reset_tokens`, sent once through Gmail SMTP, 10-minute expiry, single-use, Scholar/Staff emails only. Verification compares the typed code to the stored hash and does not generate a second code. SMTP credentials stay in `.env` only.
+- Forgot Password: empty registered-email lookup → Find Account loads **Name** + recovery emails from the database (Scholar/Staff primary; Admin primary or verified backup) → Send Reset Link emails a 6-digit code (hashed in `password_reset_tokens`) via Gmail SMTP, 10-minute expiry, single-use. Success is shown only after delivery succeeds. SMTP credentials stay in `.env` only.
 - Session regeneration after login and after password change.
 - Password change requires current password; new password must differ, be confirmed, and meet `Password::min(8)` (staff also requires letters + numbers).
 - Account delete (scholar) requires current password and is rate limited. After delete, remaining `users.id` values are compacted (`UserSequenceService`).
@@ -1306,7 +1315,7 @@ Uncaught exceptions follow Laravel’s default handler (`bootstrap/app.php` has 
 | Forgot Password code never arrives | Confirm Gmail accepted SMTP (`php artisan mail:inspect --send=you@gmail.com`). `MAIL_PASSWORD` must be a quoted Google App Password. Run `php artisan optimize:clear`. Check Spam |
 | Gmail SMTP login rejected | Enable 2-Step Verification, generate a new App Password, update `MAIL_PASSWORD`, then `php artisan config:clear` |
 | Cannot connect to smtp.gmail.com | Keep `MAIL_HOST=smtp.gmail.com`, `MAIL_PORT=587`, `MAIL_ENCRYPTION=tls`. Allow outbound TCP 587 (firewall / school network) |
-| Forgot Password rejects an Admin email | Intended. Recovery is for Scholar and Scholar Staff accounts only |
+| Forgot Password find shows no Name/Email | Complete Find Account first; reopening the page or editing the lookup email clears a prior match. Admin recovery also allows verified backup emails |
 | Cannot delete the Admin account | Intended. The designated Admin (`is_permanent`, `PERMANENT_ADMIN_EMAIL`, or `ADMIN-001`) is permanent |
 | Scholar cannot Attend / Register on a Pending event | Intended. Staff must set the event to **Confirmed**. Direct POSTs to register/check-in are rejected with a flash error |
 | Scholar cannot register for Cancelled or Completed events | Intended. New registration and attendance are blocked on UI and backend |
@@ -1364,7 +1373,7 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 
 - Google Drive OAuth (`/auth/google`) and temporary upload test (`/google-drive`, auth)
 - Login (email + password, remember me, rate limit 5/60s). Password starts masked; the closed-eye / open-eye button only toggles visibility and does not change login POST)
-- Forgot Password (Scholar/Staff email → emailed 6-digit code → verify same code → new password)
+- Forgot Password (Find Account from DB → Name + recovery email → emailed reset link/code → verify → new password)
 - Scholar register (province/city + Scholarship Club picker from staff-created clubs, unique email/scholar ID, min 8 password)
 - Staff register (location + typed Scholarship Club Name, required Contact Number, unique email, no Scholar Staff Number, status pending, cannot log in until admin approves)
 - Logout (invalidate session; scholar logout also clears `last_seen_at`)

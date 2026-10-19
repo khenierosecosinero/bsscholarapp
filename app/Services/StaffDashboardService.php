@@ -60,6 +60,7 @@ class StaffDashboardService
             'total' => array_sum($counts),
             'pending' => (int) ($counts['pending'] ?? 0),
             'approved' => (int) ($counts['approved'] ?? 0),
+            'rejected' => (int) ($counts['rejected'] ?? 0),
         ];
     }
 

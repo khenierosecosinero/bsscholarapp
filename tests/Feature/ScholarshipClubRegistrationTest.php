@@ -157,12 +157,19 @@ class ScholarshipClubRegistrationTest extends TestCase
             'email' => 'club-scholar@example.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
-        ])->assertRedirect(route('login'));
+        ])
+            ->assertRedirect(route('login'))
+            ->assertSessionHas(
+                'success',
+                'You have successfully created an account! Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in. Thank you for your patience!'
+            );
 
         $scholar = User::query()->where('email', 'club-scholar@example.com')->first();
 
         $this->assertNotNull($scholar);
         $this->assertSame(User::ROLE_SCHOLAR, $scholar->role);
+        $this->assertSame(User::STATUS_PENDING, $scholar->status);
+        $this->assertFalse($scholar->canLogin());
         $this->assertSame($city->id, $scholar->scholarship_program_id);
         $this->assertSame($club->id, $scholar->scholarship_club_id);
         $this->assertSame('Dapa', $scholar->city);
@@ -175,6 +182,31 @@ class ScholarshipClubRegistrationTest extends TestCase
         $this->assertSame('Dapa', $scholar->scholarshipClubCity());
         $this->assertSame('Surigao del Norte', $scholar->scholarshipClubProvince());
         $this->assertNotSame($province->id, $scholar->scholarship_program_id);
+
+        $this->get(route('login'))
+            ->assertOk()
+            ->assertSee('You have successfully created an account! Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in. Thank you for your patience!');
+
+        $this->from(route('login'))
+            ->post(route('login.post'), [
+                'email' => 'club-scholar@example.com',
+                'password' => 'password123',
+            ])
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
+
+        $this->assertGuest();
+
+        $scholar->forceFill(['status' => User::STATUS_APPROVED])->save();
+
+        $this->assertTrue($scholar->fresh()->canLogin());
+
+        $this->post(route('login.post'), [
+            'email' => 'club-scholar@example.com',
+            'password' => 'password123',
+        ])->assertRedirect(route('user.dashboard'));
+
+        $this->assertAuthenticatedAs($scholar->fresh());
     }
 
     public function test_scholar_registration_requires_a_scholarship_club(): void

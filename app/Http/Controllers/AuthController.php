@@ -76,6 +76,16 @@ class AuthController extends Controller
             ]);
         }
 
+        if ($user->isPendingApproval()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            throw ValidationException::withMessages([
+                'email' => 'Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in.',
+            ]);
+        }
+
         if ($user->isStaffInactive()) {
             Auth::logout();
             $request->session()->invalidate();
@@ -111,10 +121,6 @@ class AuthController extends Controller
 
         if ($user->isScholarStaff()) {
             return redirect()->intended(route('staff.dashboard'));
-        }
-
-        if ($user->isPendingApproval()) {
-            $request->session()->put('show_pending_approval_modal', true);
         }
 
         return redirect()->intended(route('user.dashboard'));
@@ -209,7 +215,7 @@ class AuthController extends Controller
 
         return redirect()->route('login')->with(
             'success',
-            'Scholar account created successfully. Your account is permanent — you may log in at any time, including after a long period of inactivity, while Scholar Staff reviews your registration.'
+            'You have successfully created an account! Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in. Thank you for your patience!'
         );
     }
 

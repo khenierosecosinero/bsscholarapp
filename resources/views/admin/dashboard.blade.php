@@ -77,9 +77,17 @@
             <div class="sub">Requirements met</div>
         </div>
     </div>
+    <div class="staff-stat-card">
+        <div class="staff-stat-icon purple">📅</div>
+        <div class="staff-stat-body">
+            <h3>Events</h3>
+            <div class="value">{{ $stats['completed_events'] ?? 0 }}</div>
+            <div class="sub">Total completed events</div>
+        </div>
+    </div>
 </section>
 
-<section class="staff-grid-2">
+<section class="staff-grid-2 admin-dashboard-actions-grid">
     <div class="staff-card">
         <div class="staff-card-header">
             <h2>Quick Actions</h2>
@@ -88,8 +96,18 @@
             <a href="{{ route('admin.scholars', array_filter(['location' => $locationKey !== 'all' ? $locationKey : null, 'program_type' => ($programType ?? 'all') !== 'all' ? $programType : null])) }}" class="staff-quick-btn blue">View Scholars</a>
             <a href="{{ route('admin.staff', array_filter(['location' => $locationKey !== 'all' ? $locationKey : null, 'program_type' => ($programType ?? 'all') !== 'all' ? $programType : null])) }}" class="staff-quick-btn green">View Scholar Staff</a>
             <a href="{{ route('admin.events', array_filter(['location' => $locationKey !== 'all' ? $locationKey : null, 'program_type' => ($programType ?? 'all') !== 'all' ? $programType : null])) }}" class="staff-quick-btn purple">View Events</a>
-            <a href="{{ route('admin.reports', array_filter(['location' => $locationKey !== 'all' ? $locationKey : null, 'program_type' => ($programType ?? 'all') !== 'all' ? $programType : null])) }}" class="staff-quick-btn orange">Open Reports</a>
+            <a href="{{ route('admin.reports') }}" class="staff-quick-btn orange">Open Reports</a>
         </div>
+    </div>
+    <div class="staff-card admin-overall-reports-card">
+        <div class="staff-card-header">
+            <h2>Overall Reports</h2>
+        </div>
+        @include('partials.admin-report-pie-chart', [
+            'regionLabel' => 'System-wide',
+            'chart' => $overallSummary['chart'] ?? ['empty' => true, 'slices' => [], 'title' => 'Overall Reports', 'gradient' => ''],
+        ])
+        <a href="{{ route('admin.reports') }}" class="staff-quick-btn orange admin-overall-reports-link">View Overall Reports</a>
     </div>
 </section>
 
@@ -98,6 +116,7 @@
 @push('styles')
 <style>
 .staff-stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-dashboard-actions-grid { grid-template-columns: 1fr 1fr; }
 .admin-dashboard-scope-card { margin-bottom: 20px; }
 .admin-dashboard-scope-copy { margin: 0 0 14px; }
 .admin-dashboard-scope-label {
@@ -117,9 +136,23 @@
     background: #fff;
     box-sizing: border-box;
 }
+.admin-overall-reports-card .admin-pie-body {
+    margin-bottom: 16px;
+}
+.admin-overall-reports-card .admin-pie-empty {
+    margin-bottom: 16px;
+}
+.admin-overall-reports-link {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+}
 @media (max-width: 700px) {
     .admin-dashboard-scope-form { grid-template-columns: 1fr; max-width: 100%; }
 }
-@media (max-width: 900px) { .staff-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) {
+    .staff-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .admin-dashboard-actions-grid { grid-template-columns: 1fr; }
+}
 </style>
 @endpush

@@ -298,6 +298,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function applyApprovalResult(form, data) {
+        // Reject / approve from a profile page must leave that URL when a redirect is provided.
+        if (data && data.redirect && (data.action === 'rejected' || form.closest('[data-approval-actions]'))) {
+            window.location.assign(data.redirect);
+            return;
+        }
+
         var row = form.closest('tr');
         if (row) {
             row.remove();

@@ -502,6 +502,11 @@ class StaffController extends Controller
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
         $search = trim((string) $request->get('search', ''));
+        $statusFilter = (string) $request->get('status', User::STATUS_PENDING);
+
+        if (! in_array($statusFilter, [User::STATUS_PENDING, User::STATUS_REJECTED], true)) {
+            $statusFilter = User::STATUS_PENDING;
+        }
 
         $requests = $this->staffData->scholarsQuery($programIds, $staff)
             ->with(['scholarshipProgram', 'scholarshipClub'])
@@ -512,7 +517,7 @@ class StaffController extends Controller
                         ->orWhere('scholar_id', 'like', "%{$search}%");
                 });
             })
-            ->where('status', 'pending')
+            ->where('status', $statusFilter)
             ->latest()
             ->paginate(10)
             ->withQueryString();
@@ -521,7 +526,7 @@ class StaffController extends Controller
 
         return view('staff.approval-requests', array_merge(
             $this->layoutData('approval-requests', 'Approval Requests', 'Review and process newly registered scholar accounts.'),
-            compact('requests', 'search', 'stats')
+            compact('requests', 'search', 'stats', 'statusFilter')
         ));
     }
 
@@ -751,7 +756,11 @@ class StaffController extends Controller
         return $this->approvalActionSucceeded(
             $request,
             "{$scholar->full_name}'s account has been approved.",
-            ['action' => 'approved', 'scholar_id' => $scholar->id]
+            [
+                'action' => 'approved',
+                'scholar_id' => $scholar->id,
+                'redirect' => route('staff.scholars.show', $scholar),
+            ]
         );
     }
 
@@ -766,16 +775,48 @@ class StaffController extends Controller
             return $this->approvalActionFailed($request, 'Only pending scholar accounts can be rejected.', 422);
         }
 
-        $scholarId = $scholar->id;
-        $scholarName = $scholar->full_name;
+        $scholar->update(['status' => User::STATUS_REJECTED]);
+        $scholar->forceFill(['last_seen_at' => null])->save();
 
-        $this->accounts->permanentlyDelete($scholar);
+        $this->scholar->logActivity($scholar, 'account', 'Account rejected by scholar staff');
+        $this->scholar->notify(
+            $scholar,
+            'Account Rejected',
+            'Your scholar registration was rejected by Scholar Staff. You cannot log in until a new registration is approved.',
+            'system'
+        );
 
+        // Keep the rejected application record for staff review; leave the profile URL safely.
         return $this->approvalActionSucceeded(
             $request,
-            "{$scholarName}'s account has been rejected and permanently removed from the system.",
-            ['action' => 'rejected', 'scholar_id' => $scholarId]
+            "{$scholar->full_name}'s application has been rejected. The account remains on file for review and is no longer in the active scholar list.",
+            [
+                'action' => 'rejected',
+                'scholar_id' => $scholar->id,
+                'redirect' => route('staff.scholars'),
+            ]
         );
+    }
+
+    public function deleteScholar(Request $request, User $scholar)
+    {
+        $staff = Auth::user();
+
+        abort_unless($scholar->isScholar(), 404);
+        abort_unless($staff->canManageScholar($scholar), 403);
+
+        if ($scholar->status === User::STATUS_PENDING) {
+            return redirect()
+                ->route('staff.scholars.show', $scholar)
+                ->with('error', 'Pending applications must be approved or rejected. Use Reject to close a pending application.');
+        }
+
+        $name = $scholar->full_name;
+        $this->accounts->permanentlyDelete($scholar);
+
+        return redirect()
+            ->route('staff.scholars')
+            ->with('success', 'Scholar account deleted successfully.');
     }
 
     public function blockScholar(User $scholar)
@@ -853,6 +894,12 @@ class StaffController extends Controller
                 'stats' => $stats,
                 'pending_count' => $stats['pending'],
             ], $extra));
+        }
+
+        $redirect = $extra['redirect'] ?? null;
+
+        if (is_string($redirect) && $redirect !== '') {
+            return redirect()->to($redirect)->with('success', $message);
         }
 
         return back()->with('success', $message);

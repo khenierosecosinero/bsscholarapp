@@ -36,7 +36,7 @@
                 <button class="forgot resend-code-btn" type="submit">Resend verification code</button>
             </form>
 
-            <p class="muted form-note"><a href="{{ route('password.request') }}" class="create">Use a different email</a></p>
+            <p class="muted form-note"><a href="{{ route('password.request', ['again' => 1]) }}" class="create">Use a different email</a></p>
         </div>
 
         @include('partials.auth-welcome', [

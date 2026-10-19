@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Event;
 use App\Models\ScholarshipClub;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
@@ -87,7 +88,11 @@ class AdminLocationClubFilterTest extends TestCase
             ->assertDontSee('Dapa Scholars Club')
             ->assertDontSee('Tandag Scholars Club')
             ->assertDontSee('No registered Scholarship Club found')
-            ->assertDontSee('<h3>Events</h3>', false)
+            ->assertSee('<h3>Events</h3>', false)
+            ->assertSee('Total completed events')
+            ->assertDontSee('Completed Events')
+            ->assertSee('Overall Reports')
+            ->assertSee('View Overall Reports')
             ->assertDontSee('>Locations</span>', false)
             ->assertDontSee('admin-location-pill', false)
             ->assertDontSee('City Scholar — All Locations')
@@ -140,6 +145,152 @@ class AdminLocationClubFilterTest extends TestCase
             ->assertOk()
             ->assertSee('Total Scholarship Clubs')
             ->assertDontSee('Dapa Scholars Club');
+    }
+
+    public function test_admin_dashboard_events_card_counts_completed_events_by_location(): void
+    {
+        $sdn = $this->makeProgram('province', 'Surigao del Norte', 'Surigao del Norte', 'sdn-dash-events');
+        $dapa = $this->makeProgram('city_municipality', 'Dapa', 'Dapa, Surigao del Norte', 'dapa-dash-events', 'Surigao del Norte');
+        $tandag = $this->makeProgram('city_municipality', 'Tandag', 'Tandag, Surigao del Sur', 'tandag-dash-events', 'Surigao del Sur');
+
+        Event::create([
+            'title' => 'Dapa Completed Event',
+            'description' => 'Completed in Dapa',
+            'location' => 'Dapa',
+            'starts_at' => now()->subDays(3),
+            'ends_at' => now()->subDays(2),
+            'service_hours' => 4,
+            'status' => Event::STATUS_COMPLETED,
+            'scholarship_program_id' => $dapa->id,
+        ]);
+        Event::create([
+            'title' => 'Dapa Ongoing Event',
+            'description' => 'Not completed',
+            'location' => 'Dapa',
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->addHour(),
+            'service_hours' => 2,
+            'status' => Event::STATUS_ONGOING,
+            'scholarship_program_id' => $dapa->id,
+        ]);
+        Event::create([
+            'title' => 'Tandag Completed Event',
+            'description' => 'Completed in Tandag',
+            'location' => 'Tandag',
+            'starts_at' => now()->subDays(5),
+            'ends_at' => now()->subDays(4),
+            'service_hours' => 3,
+            'status' => Event::STATUS_COMPLETED,
+            'scholarship_program_id' => $tandag->id,
+        ]);
+
+        $service = app(AdminDashboardService::class);
+
+        $cityStats = $service->dashboardStats(
+            $service->resolveGeographicProgramIds((string) $dapa->id),
+            null,
+            $service->geographicClubs((string) $dapa->id)->count()
+        );
+        $this->assertSame(1, (int) $cityStats['completed_events']);
+
+        $provinceStats = $service->dashboardStats(
+            $service->resolveGeographicProgramIds((string) $sdn->id),
+            null,
+            $service->geographicClubs((string) $sdn->id)->count()
+        );
+        $this->assertSame(1, (int) $provinceStats['completed_events']);
+
+        $allStats = $service->dashboardStats(
+            $service->resolveGeographicProgramIds('all'),
+            null,
+            $service->geographicClubs('all')->count()
+        );
+        $this->assertSame(2, (int) $allStats['completed_events']);
+
+        $admin = $this->makeAdmin();
+        $this->actingAs($admin)
+            ->get(route('admin.dashboard', ['location' => $dapa->id]))
+            ->assertOk()
+            ->assertSee('<h3>Events</h3>', false)
+            ->assertSee('Total completed events')
+            ->assertDontSee('Completed Events');
+    }
+
+    public function test_overall_reports_card_ignores_dashboard_location_filter(): void
+    {
+        $dapa = $this->makeProgram('city_municipality', 'Dapa', 'Dapa, Surigao del Norte', 'dapa-overall-reports', 'Surigao del Norte');
+        $tandag = $this->makeProgram('city_municipality', 'Tandag', 'Tandag, Surigao del Sur', 'tandag-overall-reports', 'Surigao del Sur');
+        $dapaClub = ScholarshipClub::createForProgram('Dapa Overall Club', $dapa->id);
+        $tandagClub = ScholarshipClub::createForProgram('Tandag Overall Club', $tandag->id);
+
+        $this->makeScholar($dapa, $dapaClub, 'OVERALL-DAPA');
+        $this->makeScholar($tandag, $tandagClub, 'OVERALL-TANDAG');
+
+        User::register([
+            'full_name' => 'Staff Overall',
+            'scholar_id' => 'STAFF-OVERALL-1',
+            'email' => 'staff-overall@example.com',
+            'password' => 'password123',
+            'role' => User::ROLE_SCHOLAR_STAFF,
+            'status' => User::STATUS_APPROVED,
+            'scholarship_program_id' => $dapa->id,
+            'scholarship_club_id' => $dapaClub->id,
+        ]);
+
+        Event::create([
+            'title' => 'Overall Event One',
+            'description' => 'Dapa event',
+            'location' => 'Dapa',
+            'starts_at' => now()->subDays(2),
+            'ends_at' => now()->subDay(),
+            'service_hours' => 2,
+            'status' => Event::STATUS_COMPLETED,
+            'scholarship_program_id' => $dapa->id,
+        ]);
+        Event::create([
+            'title' => 'Overall Event Two',
+            'description' => 'Tandag event',
+            'location' => 'Tandag',
+            'starts_at' => now()->subDays(4),
+            'ends_at' => now()->subDays(3),
+            'service_hours' => 2,
+            'status' => Event::STATUS_CONFIRMED,
+            'scholarship_program_id' => $tandag->id,
+        ]);
+
+        $service = app(AdminDashboardService::class);
+        $summary = $service->overallReportSummary();
+
+        $this->assertSame(2, (int) $summary['total_scholars']);
+        $this->assertSame(1, (int) $summary['total_staff']);
+        $this->assertFalse($summary['chart']['empty']);
+        $this->assertCount(2, $summary['chart']['slices']);
+        $this->assertSame('Total Scholars', $summary['chart']['slices'][0]['label']);
+        $this->assertSame('Total Scholar Staff', $summary['chart']['slices'][1]['label']);
+        $this->assertSame(2.0, (float) $summary['chart']['slices'][0]['value']);
+        $this->assertSame(1.0, (float) $summary['chart']['slices'][1]['value']);
+        $this->assertStringContainsString('conic-gradient', (string) $summary['chart']['gradient']);
+
+        $cityStats = $service->dashboardStats(
+            $service->resolveGeographicProgramIds((string) $dapa->id),
+            null,
+            $service->geographicClubs((string) $dapa->id)->count()
+        );
+        $this->assertSame(1, (int) $cityStats['total_scholars']);
+        $this->assertSame(1, (int) $cityStats['completed_events']);
+
+        $admin = $this->makeAdmin();
+        $this->actingAs($admin)
+            ->get(route('admin.dashboard', ['location' => $dapa->id]))
+            ->assertOk()
+            ->assertSee('Overall Reports')
+            ->assertSee('View Overall Reports')
+            ->assertSee('Total Scholars')
+            ->assertSee('Total Scholar Staff')
+            ->assertSee('admin-pie-chart', false)
+            ->assertDontSee('Total Events')
+            ->assertDontSee('admin-overall-reports-list', false)
+            ->assertSee('href="'.route('admin.reports').'"', false);
     }
 
     public function test_admin_locations_page_and_sidebar_item_are_removed(): void

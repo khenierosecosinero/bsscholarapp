@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Services\PasswordResetService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -17,12 +18,69 @@ class PasswordResetController extends Controller
 
     public function showRequestForm(Request $request)
     {
+        if ($request->boolean('again') || $request->boolean('fresh')) {
+            $this->forgetFindSession($request);
+
+            return redirect()->route('password.request');
+        }
+
+        // Cold opens (bookmark, refresh, Login → Forgot Password) must never restore a prior find.
+        // Recovery HTML is returned only when this request carries the one-time reveal flash
+        // set by a successful Find Account (or a Send Reset Link error that re-flashes it).
+        $reveal = $request->session()->get(PasswordResetService::FLASH_REVEAL) === true;
+
+        if (! $reveal) {
+            $this->forgetFindSession($request);
+            $this->forgetLookupOldInput($request);
+
+            return view('auth.forgot-password', [
+                'accountFound' => false,
+                'recoveryOptions' => [],
+                'accountName' => '',
+                'lookupEmail' => '',
+            ]);
+        }
+
         $options = $request->session()->get(PasswordResetService::SESSION_RECOVERY_OPTIONS);
+        $accountName = $request->session()->get(PasswordResetService::SESSION_ACCOUNT_NAME);
         $lookupEmail = $request->session()->get(PasswordResetService::SESSION_LOOKUP_EMAIL);
+        $accountId = (int) $request->session()->get(PasswordResetService::SESSION_ACCOUNT_ID);
+
+        if ((! is_string($accountName) || trim($accountName) === '') && $accountId > 0) {
+            $accountName = trim((string) (User::query()->whereKey($accountId)->value('full_name') ?? ''));
+            if ($accountName !== '') {
+                $request->session()->put(PasswordResetService::SESSION_ACCOUNT_NAME, $accountName);
+            }
+        }
+
+        $accountName = is_string($accountName) ? trim($accountName) : '';
+        $lookupEmail = is_string($lookupEmail) ? strtolower(trim($lookupEmail)) : '';
+        $recoveryOptions = is_array($options) ? array_values(array_filter($options, function ($option) use ($accountName) {
+            $email = trim((string) ($option['email'] ?? ''));
+            $name = trim((string) ($option['account_name'] ?? $accountName));
+
+            return $email !== '' && $name !== '';
+        })) : [];
+
+        $accountFound = $accountId > 0 && $accountName !== '' && $lookupEmail !== '' && $recoveryOptions !== [];
+
+        if (! $accountFound) {
+            $this->forgetFindSession($request);
+            $this->forgetLookupOldInput($request);
+
+            return view('auth.forgot-password', [
+                'accountFound' => false,
+                'recoveryOptions' => [],
+                'accountName' => '',
+                'lookupEmail' => '',
+            ]);
+        }
 
         return view('auth.forgot-password', [
-            'recoveryOptions' => is_array($options) ? $options : [],
-            'lookupEmail' => is_string($lookupEmail) ? $lookupEmail : '',
+            'accountFound' => true,
+            'recoveryOptions' => $recoveryOptions,
+            'accountName' => $accountName,
+            'lookupEmail' => $lookupEmail,
         ]);
     }
 
@@ -30,6 +88,9 @@ class PasswordResetController extends Controller
     {
         $data = $request->validate([
             'email' => ['required', 'email', 'max:255'],
+        ], [
+            'email.required' => 'Enter your registered email address.',
+            'email.email' => 'Enter a valid email address.',
         ]);
 
         $email = strtolower(trim($data['email']));
@@ -38,72 +99,123 @@ class PasswordResetController extends Controller
 
         $found = $this->resets->findRecoveryAccount($email);
 
-        $request->session()->forget([
-            PasswordResetService::SESSION_EMAIL,
-            PasswordResetService::SESSION_VERIFIED,
-            PasswordResetService::SESSION_ACCOUNT_ID,
-            PasswordResetService::SESSION_RECOVERY_OPTIONS,
-            PasswordResetService::SESSION_LOOKUP_EMAIL,
-        ]);
+        $this->forgetFindSession($request);
+        $this->forgetLookupOldInput($request);
 
         if (! $found) {
+            // Do not withInput / old() — keep the email field empty on failure.
             return redirect()
                 ->route('password.request')
-                ->withInput(['email' => $email])
-                ->with('error', 'No matching account was found for that email. Check the address and try again.');
+                ->with('error', 'No account was found with the email address you entered.');
         }
 
         $request->session()->put(PasswordResetService::SESSION_ACCOUNT_ID, $found['user']->id);
         $request->session()->put(PasswordResetService::SESSION_RECOVERY_OPTIONS, $found['options']);
         $request->session()->put(PasswordResetService::SESSION_LOOKUP_EMAIL, $email);
+        $request->session()->put(
+            PasswordResetService::SESSION_ACCOUNT_NAME,
+            trim((string) ($found['account_name'] ?: $found['user']->full_name))
+        );
+        $request->session()->flash(PasswordResetService::FLASH_REVEAL, true);
 
         return redirect()
             ->route('password.request')
             ->with('success', 'Account found. Choose where to send the password reset link.');
     }
 
+    private function forgetFindSession(Request $request): void
+    {
+        $request->session()->forget([
+            PasswordResetService::SESSION_EMAIL,
+            PasswordResetService::SESSION_VERIFIED,
+            PasswordResetService::SESSION_ACCOUNT_ID,
+            PasswordResetService::SESSION_RECOVERY_OPTIONS,
+            PasswordResetService::SESSION_LOOKUP_EMAIL,
+            PasswordResetService::SESSION_ACCOUNT_NAME,
+            PasswordResetService::FLASH_REVEAL,
+        ]);
+    }
+
+    private function forgetLookupOldInput(Request $request): void
+    {
+        $old = $request->session()->get('_old_input');
+        if (! is_array($old)) {
+            return;
+        }
+
+        unset($old['email'], $old['recovery_email']);
+        $request->session()->put('_old_input', $old);
+    }
+
+    private function redirectToRequestWithReveal(array $with = [])
+    {
+        $redirect = redirect()->route('password.request')->with(PasswordResetService::FLASH_REVEAL, true);
+
+        foreach ($with as $key => $value) {
+            $redirect = $redirect->with($key, $value);
+        }
+
+        return $redirect;
+    }
+
     public function sendCode(Request $request)
     {
-        $data = $request->validate([
-            'recovery_email' => ['required', 'email', 'max:255'],
-        ]);
-
-        $recoveryEmail = strtolower(trim($data['recovery_email']));
         $accountId = (int) $request->session()->get(PasswordResetService::SESSION_ACCOUNT_ID);
         $options = $request->session()->get(PasswordResetService::SESSION_RECOVERY_OPTIONS);
 
         if ($accountId < 1 || ! is_array($options) || $options === []) {
+            $this->forgetFindSession($request);
+
             return redirect()
                 ->route('password.request')
                 ->with('error', 'Find your account first, then choose a recovery email.');
         }
 
-        if (! $this->resets->isAllowedRecoveryEmail($options, $recoveryEmail)) {
-            throw ValidationException::withMessages([
-                'recovery_email' => 'Choose one of the recovery emails listed for this account.',
-            ]);
-        }
-
-        $this->ensureSendIsNotRateLimited($request, $recoveryEmail);
-        RateLimiter::hit($this->sendThrottleKey($request, $recoveryEmail), 60);
-
-        $target = $this->resets->resolveRecoveryTarget($recoveryEmail);
-        if (! $target || (int) $target['user']->id !== $accountId) {
-            $request->session()->forget([
-                PasswordResetService::SESSION_ACCOUNT_ID,
-                PasswordResetService::SESSION_RECOVERY_OPTIONS,
-                PasswordResetService::SESSION_LOOKUP_EMAIL,
+        try {
+            $data = $request->validate([
+                'recovery_email' => ['required', 'email', 'max:255'],
             ]);
 
-            return redirect()
-                ->route('password.request')
-                ->with('error', 'That recovery option is no longer available. Find your account again.');
-        }
+            $recoveryEmail = strtolower(trim($data['recovery_email']));
 
-        $this->resets->sendCode($target['user'], $recoveryEmail);
+            if (! $this->resets->isAllowedRecoveryEmail($options, $recoveryEmail)) {
+                throw ValidationException::withMessages([
+                    'recovery_email' => 'Choose one of the recovery emails listed for this account.',
+                ]);
+            }
+
+            $this->ensureSendIsNotRateLimited($request, $recoveryEmail);
+            RateLimiter::hit($this->sendThrottleKey($request, $recoveryEmail), 60);
+
+            $target = $this->resets->resolveRecoveryTarget($recoveryEmail);
+            if (! $target || (int) $target['user']->id !== $accountId) {
+                $this->forgetFindSession($request);
+
+                return redirect()
+                    ->route('password.request')
+                    ->with('error', 'That recovery option is no longer available. Find your account again.');
+            }
+
+            $this->resets->sendCode($target['user'], $recoveryEmail);
+        } catch (ValidationException $e) {
+            $message = $e->errors()['recovery_email'][0]
+                ?? $e->errors()['email'][0]
+                ?? 'The password reset link could not be sent. Please try again.';
+
+            return $this->redirectToRequestWithReveal([
+                'error' => $message,
+            ])->withErrors($e->errors());
+        }
 
         $request->session()->put(PasswordResetService::SESSION_EMAIL, $recoveryEmail);
         $request->session()->forget(PasswordResetService::SESSION_VERIFIED);
+        $request->session()->forget([
+            PasswordResetService::SESSION_ACCOUNT_ID,
+            PasswordResetService::SESSION_RECOVERY_OPTIONS,
+            PasswordResetService::SESSION_LOOKUP_EMAIL,
+            PasswordResetService::SESSION_ACCOUNT_NAME,
+            PasswordResetService::FLASH_REVEAL,
+        ]);
 
         return redirect()
             ->route('password.verify')
@@ -139,6 +251,7 @@ class PasswordResetController extends Controller
             PasswordResetService::SESSION_ACCOUNT_ID,
             PasswordResetService::SESSION_RECOVERY_OPTIONS,
             PasswordResetService::SESSION_LOOKUP_EMAIL,
+            PasswordResetService::SESSION_ACCOUNT_NAME,
         ]);
 
         return redirect()
@@ -202,6 +315,7 @@ class PasswordResetController extends Controller
                 PasswordResetService::SESSION_ACCOUNT_ID,
                 PasswordResetService::SESSION_RECOVERY_OPTIONS,
                 PasswordResetService::SESSION_LOOKUP_EMAIL,
+                PasswordResetService::SESSION_ACCOUNT_NAME,
             ]);
 
             return redirect()
@@ -256,6 +370,7 @@ class PasswordResetController extends Controller
             PasswordResetService::SESSION_ACCOUNT_ID,
             PasswordResetService::SESSION_RECOVERY_OPTIONS,
             PasswordResetService::SESSION_LOOKUP_EMAIL,
+            PasswordResetService::SESSION_ACCOUNT_NAME,
         ]);
         $request->session()->regenerate();
 

@@ -78,24 +78,41 @@ class EmailVerificationTest extends TestCase
             'course_year_level' => 'Bachelor of Science in Information Technology',
         ])
             ->assertRedirect(route('login'))
-            ->assertSessionHas('success')
+            ->assertSessionHas(
+                'success',
+                'You have successfully created an account! Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in. Thank you for your patience!'
+            )
             ->assertSessionMissing('warning');
 
-        $this->assertDatabaseHas('users', ['email' => $email]);
+        $this->assertDatabaseHas('users', [
+            'email' => $email,
+            'status' => User::STATUS_PENDING,
+        ]);
 
         $user = User::where('email', $email)->firstOrFail();
 
         Notification::assertNothingSent();
         Notification::assertNotSentTo($user, VerifyEmail::class);
 
-        $response = $this->post(route('login.post'), [
+        $this->from(route('login'))
+            ->post(route('login.post'), [
+                'email' => $user->email,
+                'password' => 'password123',
+            ])
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
+
+        $this->assertGuest();
+        $this->assertStringNotContainsString('verification', strtolower((string) session('errors')->first('email')));
+
+        $user->forceFill(['status' => User::STATUS_APPROVED])->save();
+
+        $this->post(route('login.post'), [
             'email' => $user->email,
             'password' => 'password123',
-        ]);
+        ])->assertRedirect(route('user.dashboard'));
 
-        $response->assertRedirect(route('user.dashboard'));
-        $this->assertStringNotContainsString('verification', strtolower((string) session('success')));
-        $this->assertStringNotContainsString('verification', strtolower((string) session('warning')));
+        $this->assertAuthenticatedAs($user->fresh());
 
         $this->get(route('user.dashboard'))
             ->assertOk()

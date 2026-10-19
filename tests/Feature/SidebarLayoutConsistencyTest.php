@@ -18,13 +18,19 @@ class SidebarLayoutConsistencyTest extends TestCase
         $staffCss = file_get_contents(public_path('css/staff-admin.css'));
         $appJs = file_get_contents(resource_path('js/user-app.js'));
 
-        $this->assertStringContainsString('.sidebar{width:300px', $scholarCss);
+        $this->assertStringContainsString('width:300px', $scholarCss);
         $this->assertStringContainsString('padding:28px 20px', $scholarCss);
+        $this->assertStringContainsString('height:100dvh', $scholarCss);
+        $this->assertMatchesRegularExpression('/\.nav\s*\{[^}]*overflow-y:\s*auto/s', $scholarCss);
+        $this->assertMatchesRegularExpression('/\.nav\s*\{[^}]*min-height:\s*0/s', $scholarCss);
         $this->assertStringContainsString('@media (max-width:1000px){', $scholarCss);
 
         $this->assertMatchesRegularExpression('/\.staff-sidebar\s*\{[^}]*width:\s*300px/s', $staffCss);
         $this->assertMatchesRegularExpression('/\.staff-sidebar\s*\{[^}]*padding:\s*28px 20px/s', $staffCss);
         $this->assertMatchesRegularExpression('/\.staff-sidebar\s*\{[^}]*gap:\s*20px/s', $staffCss);
+        $this->assertMatchesRegularExpression('/\.staff-sidebar\s*\{[^}]*height:\s*100dvh/s', $staffCss);
+        $this->assertMatchesRegularExpression('/\.staff-nav\s*\{[^}]*overflow-y:\s*auto/s', $staffCss);
+        $this->assertMatchesRegularExpression('/\.staff-nav\s*\{[^}]*min-height:\s*0/s', $staffCss);
         $this->assertMatchesRegularExpression('/\.staff-brand-logo\s*\{[^}]*width:\s*52px/s', $staffCss);
         $this->assertStringContainsString('@media (max-width: 1000px)', $staffCss);
         $this->assertStringContainsString('max-width: 86vw', $staffCss);

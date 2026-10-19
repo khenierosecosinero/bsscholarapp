@@ -56,6 +56,16 @@ class EnsureScholar
                 ->with('error', 'Your account has been rejected and can no longer access the system. Please contact Scholar Staff for assistance.');
         }
 
+        if ($user && $user->isPendingApproval()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('login')
+                ->with('warning', 'Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in.');
+        }
+
         return $next($request);
     }
 }

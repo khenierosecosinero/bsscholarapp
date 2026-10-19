@@ -234,6 +234,7 @@ class AdminController extends Controller
         return view('admin.dashboard', array_merge($layout, [
             'locationLabel' => $this->dashboardLocationLabel($scope),
             'stats' => $this->admin->dashboardStats($programIds, null, $clubs->count()),
+            'overallSummary' => $this->admin->overallReportSummary(),
             'programGroups' => $this->admin->locationOptionGroups($scope['locationKey'], $scope['programType']),
             'academicPeriod' => $this->academic->selectedPeriod(),
             'academicYearOptions' => $this->academic->yearOptions(),

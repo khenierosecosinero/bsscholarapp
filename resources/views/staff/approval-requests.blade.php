@@ -2,15 +2,16 @@
 
 @section('page-content')
 
-<section class="staff-stat-grid staff-stat-grid-3">
+<section class="staff-stat-grid staff-stat-grid-4">
     <div class="staff-stat-card"><div class="staff-stat-icon blue">📋</div><div class="staff-stat-body"><h3>Total Scholars</h3><div class="value" data-approval-stat="total">{{ $stats['total'] }}</div></div></div>
     <div class="staff-stat-card"><div class="staff-stat-icon orange">⏱</div><div class="staff-stat-body"><h3>Pending Requests</h3><div class="value" data-approval-stat="pending">{{ $stats['pending'] }}</div></div></div>
     <div class="staff-stat-card"><div class="staff-stat-icon green">✓</div><div class="staff-stat-body"><h3>Approved Scholars</h3><div class="value" data-approval-stat="approved">{{ $stats['approved'] }}</div></div></div>
+    <div class="staff-stat-card"><div class="staff-stat-icon red">✕</div><div class="staff-stat-body"><h3>Rejected Applications</h3><div class="value" data-approval-stat="rejected">{{ $stats['rejected'] ?? 0 }}</div></div></div>
 </section>
 
 <div class="staff-info-banner">
     <strong>Account Approval System</strong>
-    <p>Pending scholar accounts cannot access full system features until approved. Rejected accounts are permanently removed from the database.</p>
+    <p>Pending scholar accounts cannot log in until approved. Rejected applications stay on file here for review and are removed from the active Scholars list.</p>
 </div>
 
 <form method="GET" class="staff-filter-bar">
@@ -18,6 +19,10 @@
         <span>🔍</span>
         <input type="search" name="search" value="{{ $search }}" placeholder="Search by name, email or ID...">
     </div>
+    <select name="status" class="staff-select" onchange="this.form.submit()">
+        <option value="pending" @selected(($statusFilter ?? 'pending') === 'pending')>Pending</option>
+        <option value="rejected" @selected(($statusFilter ?? 'pending') === 'rejected')>Rejected</option>
+    </select>
     <button type="submit" class="staff-btn">Search</button>
 </form>
 
@@ -69,12 +74,16 @@
                         </td>
                         <td data-label="Status" class="staff-col-status">
                             <div class="staff-stack-value staff-approval-status">
-                                <span class="staff-badge orange" data-approval-status>Pending</span>
+                                @if($request->status === 'rejected')
+                                    <span class="staff-badge red" data-approval-status>Rejected</span>
+                                @else
+                                    <span class="staff-badge orange" data-approval-status>Pending</span>
+                                @endif
                             </div>
                         </td>
                     </tr>
                 @empty
-                    <tr class="staff-table-empty"><td colspan="7">No approval requests found.</td></tr>
+                    <tr class="staff-table-empty"><td colspan="7">{{ ($statusFilter ?? 'pending') === 'rejected' ? 'No rejected applications found.' : 'No approval requests found.' }}</td></tr>
                 @endforelse
             </tbody>
         </table>

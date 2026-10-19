@@ -30,10 +30,15 @@ class PasswordResetService
 
     public const SESSION_LOOKUP_EMAIL = 'password_reset_lookup_email';
 
+    public const SESSION_ACCOUNT_NAME = 'password_reset_account_name';
+
+    /** One-request flash: recovery UI may render only after a successful Find Account redirect. */
+    public const FLASH_REVEAL = 'password_reset_reveal';
+
     /**
      * Look up an eligible account and list verified recovery destinations.
      *
-     * @return array{user: User, options: list<array{email: string, label: string, type: string}>}|null
+     * @return array{user: User, account_name: string, options: list<array{email: string, label: string, type: string, account_name: string}>}|null
      */
     public function findRecoveryAccount(string $email): ?array
     {
@@ -43,6 +48,7 @@ class PasswordResetService
         }
 
         $user = $target['user'];
+        $accountName = trim((string) $user->full_name);
         $options = [];
         $seen = [];
 
@@ -52,6 +58,7 @@ class PasswordResetService
                 'email' => $primary,
                 'label' => 'Primary email',
                 'type' => 'primary',
+                'account_name' => $accountName,
             ];
             $seen[$primary] = true;
         }
@@ -66,6 +73,7 @@ class PasswordResetService
                     'email' => $backup,
                     'label' => 'Verified backup email',
                     'type' => 'backup',
+                    'account_name' => $accountName,
                 ];
                 $seen[$backup] = true;
             }
@@ -77,6 +85,7 @@ class PasswordResetService
 
         return [
             'user' => $user,
+            'account_name' => $accountName,
             'options' => $options,
         ];
     }

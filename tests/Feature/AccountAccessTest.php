@@ -83,7 +83,8 @@ class AccountAccessTest extends TestCase
 
         $this->actingAs($staff)
             ->post(route('staff.scholars.block', $staff))
-            ->assertNotFound();
+            ->assertRedirect(route('staff.scholars'))
+            ->assertSessionHas('warning');
     }
 
     public function test_staff_cannot_block_a_pending_scholar_or_a_staff_account(): void
@@ -158,7 +159,8 @@ class AccountAccessTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('admin.staff.block', $scholar))
-            ->assertNotFound();
+            ->assertRedirect(route('admin.staff'))
+            ->assertSessionHas('warning');
 
         $this->actingAs($admin)
             ->post(route('staff.scholars.block', $scholar))
