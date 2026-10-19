@@ -452,17 +452,14 @@ class AdminController extends Controller
         abort_unless($staffMember->status === User::STATUS_PENDING, 422, 'Only pending scholar staff accounts can be rejected.');
         $this->assertStaffInDirectoryScope($request, $staffMember);
 
-        $staffMember->update(['status' => User::STATUS_REJECTED]);
+        $name = $staffMember->full_name;
+        $this->accounts->permanentlyDelete($staffMember);
 
-        $this->scholar->logActivity($staffMember, 'account', 'Scholar staff account rejected by administrator');
-        $this->scholar->notify(
-            $staffMember,
-            'Scholar Staff Registration Rejected',
-            'Your scholar staff registration has been rejected by an administrator. You cannot access the Scholar Staff section. Please contact the system administrator if you believe this was a mistake.',
-            'system'
-        );
-
-        return back()->with('success', "{$staffMember->full_name}'s scholar staff registration has been rejected.");
+        return $this->staffListRedirect($request)
+            ->with(
+                'success',
+                "{$name}'s scholar staff registration was rejected and permanently removed. Their email and Scholarship Club name (if unused by other staff) can be used to register again."
+            );
     }
 
     public function activateStaff(Request $request, User $staffMember)
@@ -572,7 +569,10 @@ class AdminController extends Controller
         $this->accounts->permanentlyDelete($staffMember);
 
         return $this->staffListRedirect($request)
-            ->with('success', "{$name}'s scholar staff account has been permanently deleted.");
+            ->with(
+                'success',
+                "{$name}'s scholar staff account and associated records were permanently deleted. Their email and Scholarship Club name (if unused by other staff) can be used to register again."
+            );
     }
 
     private function assertManagedStaff(Request $request, User $staffMember): void
@@ -1033,31 +1033,6 @@ class AdminController extends Controller
         return redirect()
             ->route('admin.settings')
             ->with('success', 'Academic year updated to '.$year->periodLabel().'.');
-    }
-
-    public function activateAcademicYear(AcademicSetting $academicYear)
-    {
-        $previous = $this->academic->current();
-        $year = $this->academic->activate($academicYear, Auth::user());
-        $message = $year->periodLabel().' is now the active academic year.';
-
-        if ($previous->id !== $year->id) {
-            $message .= ' '.$previous->periodLabel().' was deactivated.';
-        }
-
-        return redirect()
-            ->route('admin.settings')
-            ->with('success', $message);
-    }
-
-    public function deactivateAcademicYear(AcademicSetting $academicYear)
-    {
-        $year = $this->academic->deactivate($academicYear, Auth::user());
-        $active = $this->academic->current();
-
-        return redirect()
-            ->route('admin.settings')
-            ->with('success', $year->periodLabel().' was deactivated. '.$active->periodLabel().' is now active.');
     }
 
     public function destroyAcademicYear(AcademicSetting $academicYear)

@@ -16,8 +16,8 @@
             </div>
             <div class="staff-form-group">
                 <label for="app_name">Scholarship Club Name</label>
-                <input type="text" id="app_name" name="scholarship_club_name" value="{{ old('scholarship_club_name', $staff->scholarshipClubName()) }}" required maxlength="255" data-profile-editable data-saved-value="{{ $staff->scholarshipClubName() }}">
-                <p class="staff-muted" style="margin:6px 0 0">Scholarship Club linked to this staff account. Scholars you manage belong to this club only.</p>
+                <input type="text" id="app_name" name="scholarship_club_name" value="{{ old('scholarship_club_name', $staff->scholarshipClubName()) }}" required maxlength="255" pattern=".*\S.*" title="Enter a Scholarship Club Name that is not already registered." data-profile-editable data-saved-value="{{ $staff->scholarshipClubName() }}">
+                <p class="staff-muted" style="margin:6px 0 0">Scholarship Club linked to this staff account. Scholars you manage belong to this club only. Each club name can only be registered once across the system.</p>
                 @error('scholarship_club_name')
                     <p class="staff-field-error">{{ $message }}</p>
                 @enderror

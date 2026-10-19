@@ -140,6 +140,276 @@ class ScholarshipClubRegistrationTest extends TestCase
         $this->assertDatabaseMissing('scholarship_clubs', ['name' => 'Province Club']);
     }
 
+    public function test_staff_registration_rejects_duplicate_club_names_case_insensitively(): void
+    {
+        $cityA = $this->makeProgram('city_municipality', 'Dapa', 'Dapa, Surigao del Norte', 'dapa-club-dup-a', 'Surigao del Norte');
+        $cityB = $this->makeProgram('city_municipality', 'Tandag', 'Tandag, Surigao del Sur', 'tandag-club-dup-b', 'Surigao del Sur');
+
+        $existingClub = ScholarshipClub::createForProgram('Batang Surigaonon Scholars Club', $cityA->id);
+        $owner = User::register([
+            'full_name' => 'Existing Club Staff',
+            'scholar_id' => 'STAFF-CLUB-DUP-OWNER',
+            'email' => 'existing-club-owner@example.com',
+            'password' => 'password123',
+            'role' => User::ROLE_SCHOLAR_STAFF,
+            'status' => User::STATUS_APPROVED,
+            'scholarship_program_id' => $cityA->id,
+            'scholarship_club_id' => $existingClub->id,
+            'city' => 'Dapa',
+            'province' => 'Surigao del Norte',
+        ]);
+        $existingClub->forceFill(['created_by' => $owner->id])->save();
+
+        $this->post(route('register.staff.post'), [
+            'full_name' => 'Duplicate Club Staff',
+            'scholarship_program_id' => $cityB->id,
+            'scholarship_club_name' => '  batang surigaonon scholars club  ',
+            'email' => 'duplicate-club-staff@example.com',
+            'cellphone_number' => '09171234567',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])
+            ->assertSessionHasErrors([
+                'scholarship_club_name' => ScholarshipClub::DUPLICATE_NAME_MESSAGE,
+            ]);
+
+        $this->assertDatabaseMissing('users', ['email' => 'duplicate-club-staff@example.com']);
+        $this->assertSame(1, ScholarshipClub::query()->where('name_key', 'batang surigaonon scholars club')->count());
+    }
+
+    public function test_staff_settings_rejects_rename_to_an_existing_club_name(): void
+    {
+        $cityA = $this->makeProgram('city_municipality', 'Dapa', 'Dapa, Surigao del Norte', 'dapa-rename-dup', 'Surigao del Norte');
+        $cityB = $this->makeProgram('city_municipality', 'Tandag', 'Tandag, Surigao del Sur', 'tandag-rename-dup', 'Surigao del Sur');
+        $clubA = ScholarshipClub::createForProgram('Dapa Scholars Club', $cityA->id);
+        $clubB = ScholarshipClub::createForProgram('Tandag Scholars Club', $cityB->id);
+
+        $staff = User::register([
+            'full_name' => 'Rename Staff',
+            'scholar_id' => 'STAFF-RENAME-DUP',
+            'email' => 'rename-dup-staff@example.com',
+            'password' => 'password123',
+            'role' => User::ROLE_SCHOLAR_STAFF,
+            'status' => User::STATUS_APPROVED,
+            'scholarship_program_id' => $cityA->id,
+            'scholarship_club_id' => $clubA->id,
+            'city' => 'Dapa',
+            'province' => 'Surigao del Norte',
+        ]);
+        $clubA->forceFill(['created_by' => $staff->id])->save();
+
+        $otherStaff = User::register([
+            'full_name' => 'Other Rename Staff',
+            'scholar_id' => 'STAFF-RENAME-OTHER',
+            'email' => 'rename-other-staff@example.com',
+            'password' => 'password123',
+            'role' => User::ROLE_SCHOLAR_STAFF,
+            'status' => User::STATUS_APPROVED,
+            'scholarship_program_id' => $cityB->id,
+            'scholarship_club_id' => $clubB->id,
+            'city' => 'Tandag',
+            'province' => 'Surigao del Sur',
+        ]);
+        $clubB->forceFill(['created_by' => $otherStaff->id])->save();
+
+        $this->actingAs($staff)
+            ->from(route('staff.settings'))
+            ->put(route('staff.settings.club'), [
+                'scholarship_club_name' => 'TANDAG SCHOLARS CLUB',
+                'scholarship_program_id' => $cityA->id,
+                'cellphone_number' => '09179876543',
+            ])
+            ->assertRedirect(route('staff.settings'))
+            ->assertSessionHasErrors([
+                'scholarship_club_name' => ScholarshipClub::DUPLICATE_NAME_MESSAGE,
+            ]);
+
+        $this->assertSame('Dapa Scholars Club', $clubA->fresh()->name);
+        $this->assertSame('Tandag Scholars Club', $clubB->fresh()->name);
+    }
+
+    public function test_permanent_staff_deletion_releases_club_name_for_reregistration(): void
+    {
+        $city = $this->makeProgram('city_municipality', 'Dapa', 'Dapa, Surigao del Norte', 'dapa-club-release', 'Surigao del Norte');
+        $otherCity = $this->makeProgram('city_municipality', 'Tandag', 'Tandag, Surigao del Sur', 'tandag-club-keep', 'Surigao del Sur');
+        $keptClub = ScholarshipClub::createForProgram('Tandag Keepers Club', $otherCity->id);
+
+        $this->post(route('register.staff.post'), [
+            'full_name' => 'Release Club Staff',
+            'scholarship_program_id' => $city->id,
+            'scholarship_club_name' => 'Batang Surigaonon Scholars Club',
+            'email' => 'release-club-staff@example.com',
+            'cellphone_number' => '09171234567',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertRedirect(route('login'));
+
+        $staff = User::query()->where('email', 'release-club-staff@example.com')->first();
+        $this->assertNotNull($staff);
+        $clubId = (int) $staff->scholarship_club_id;
+        $this->assertDatabaseHas('scholarship_clubs', [
+            'id' => $clubId,
+            'name_key' => 'batang surigaonon scholars club',
+        ]);
+
+        $staff->forceFill(['status' => User::STATUS_APPROVED])->save();
+
+        $scholar = User::register([
+            'full_name' => 'Club Scholar Kept',
+            'scholar_id' => 'SCH-CLUB-RELEASE',
+            'email' => 'club-scholar-release@example.com',
+            'password' => 'password123',
+            'role' => User::ROLE_SCHOLAR,
+            'status' => User::STATUS_APPROVED,
+            'scholarship_program_id' => $city->id,
+            'scholarship_club_id' => $clubId,
+            'city' => 'Dapa',
+            'province' => 'Surigao del Norte',
+        ]);
+
+        $keptStaff = User::register([
+            'full_name' => 'Kept Staff',
+            'scholar_id' => 'STAFF-CLUB-KEEP',
+            'email' => 'kept-club-staff@example.com',
+            'password' => 'password123',
+            'role' => User::ROLE_SCHOLAR_STAFF,
+            'status' => User::STATUS_APPROVED,
+            'scholarship_program_id' => $otherCity->id,
+            'scholarship_club_id' => $keptClub->id,
+            'city' => 'Tandag',
+            'province' => 'Surigao del Sur',
+        ]);
+
+        $admin = User::register([
+            'full_name' => 'Release Admin',
+            'scholar_id' => 'ADMIN-CLUB-RELEASE',
+            'email' => 'admin-club-release@example.com',
+            'password' => 'password123',
+            'role' => User::ROLE_ADMIN,
+            'status' => User::STATUS_APPROVED,
+        ]);
+        $admin->forceFill(['is_admin' => true])->save();
+
+        $this->actingAs($admin)
+            ->delete(route('admin.staff.delete', $staff), ['location' => 'all'])
+            ->assertRedirect(route('admin.staff', ['location' => 'all']));
+
+        $this->assertDatabaseMissing('users', ['email' => 'release-club-staff@example.com']);
+        $this->assertDatabaseMissing('scholarship_clubs', ['id' => $clubId]);
+        $this->assertDatabaseHas('users', [
+            'email' => 'club-scholar-release@example.com',
+            'scholarship_club_id' => null,
+        ]);
+        $this->assertDatabaseHas('users', ['email' => 'kept-club-staff@example.com']);
+        $this->assertDatabaseHas('scholarship_clubs', [
+            'id' => $keptClub->id,
+            'name' => 'Tandag Keepers Club',
+        ]);
+        $this->assertSame($keptClub->id, $keptStaff->fresh()->scholarship_club_id);
+        $this->assertNotNull($scholar->fresh());
+
+        $this->post(route('register.staff.post'), [
+            'full_name' => 'Reregister Club Staff',
+            'scholarship_program_id' => $city->id,
+            'scholarship_club_name' => 'batang surigaonon scholars club',
+            'email' => 'reregister-club-staff@example.com',
+            'cellphone_number' => '09179876543',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertRedirect(route('login'));
+
+        $this->assertDatabaseHas('users', ['email' => 'reregister-club-staff@example.com']);
+        $this->assertDatabaseHas('scholarship_clubs', [
+            'name' => 'batang surigaonon scholars club',
+            'name_key' => 'batang surigaonon scholars club',
+        ]);
+    }
+
+    public function test_orphaned_club_without_staff_does_not_block_reregistration(): void
+    {
+        $city = $this->makeProgram('city_municipality', 'Dapa', 'Dapa, Surigao del Norte', 'dapa-club-orphan', 'Surigao del Norte');
+
+        $orphan = ScholarshipClub::create([
+            'name' => 'Batang Surigaonon Scholars Club',
+            'name_key' => 'batang surigaonon scholars club',
+            'city' => 'Dapa',
+            'province' => 'Surigao del Norte',
+            'scholarship_program_id' => $city->id,
+            'created_by' => null,
+            'is_active' => true,
+        ]);
+
+        $this->assertDatabaseHas('scholarship_clubs', ['id' => $orphan->id]);
+
+        $this->post(route('register.staff.post'), [
+            'full_name' => 'Orphan Reclaim Staff',
+            'scholarship_program_id' => $city->id,
+            'scholarship_club_name' => 'Batang Surigaonon Scholars Club',
+            'email' => 'orphan-reclaim-staff@example.com',
+            'cellphone_number' => '09171234567',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertRedirect(route('login'));
+
+        $this->assertDatabaseMissing('scholarship_clubs', ['id' => $orphan->id]);
+        $this->assertDatabaseHas('users', ['email' => 'orphan-reclaim-staff@example.com']);
+        $this->assertSame(
+            1,
+            ScholarshipClub::query()->where('name_key', 'batang surigaonon scholars club')->count()
+        );
+    }
+
+    public function test_deactivating_staff_does_not_release_club_name(): void
+    {
+        $city = $this->makeProgram('city_municipality', 'Dapa', 'Dapa, Surigao del Norte', 'dapa-club-inactive', 'Surigao del Norte');
+
+        $this->post(route('register.staff.post'), [
+            'full_name' => 'Inactive Club Staff',
+            'scholarship_program_id' => $city->id,
+            'scholarship_club_name' => 'Inactive Holders Club',
+            'email' => 'inactive-club-staff@example.com',
+            'cellphone_number' => '09171234567',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertRedirect(route('login'));
+
+        $staff = User::query()->where('email', 'inactive-club-staff@example.com')->firstOrFail();
+        $staff->forceFill(['status' => User::STATUS_APPROVED])->save();
+        $clubId = (int) $staff->scholarship_club_id;
+
+        $admin = User::register([
+            'full_name' => 'Inactive Admin',
+            'scholar_id' => 'ADMIN-CLUB-INACTIVE',
+            'email' => 'admin-club-inactive@example.com',
+            'password' => 'password123',
+            'role' => User::ROLE_ADMIN,
+            'status' => User::STATUS_APPROVED,
+        ]);
+        $admin->forceFill(['is_admin' => true])->save();
+
+        $this->actingAs($admin)
+            ->post(route('admin.staff.deactivate', $staff), ['location' => 'all'])
+            ->assertRedirect(route('admin.staff', ['location' => 'all']));
+
+        $this->assertSame(User::STATUS_INACTIVE, $staff->fresh()->status);
+        $this->assertDatabaseHas('scholarship_clubs', [
+            'id' => $clubId,
+            'name_key' => 'inactive holders club',
+        ]);
+
+        $this->post(route('register.staff.post'), [
+            'full_name' => 'Should Fail Staff',
+            'scholarship_program_id' => $city->id,
+            'scholarship_club_name' => 'Inactive Holders Club',
+            'email' => 'should-fail-club-staff@example.com',
+            'cellphone_number' => '09170000000',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertSessionHasErrors([
+            'scholarship_club_name' => ScholarshipClub::DUPLICATE_NAME_MESSAGE,
+        ]);
+    }
+
     public function test_scholar_registration_saves_selected_club_and_its_address(): void
     {
         $province = $this->makeProgram('province', 'Surigao del Norte', 'Surigao del Norte Club', 'sdn-club-save');
@@ -161,7 +431,7 @@ class ScholarshipClubRegistrationTest extends TestCase
             ->assertRedirect(route('login'))
             ->assertSessionHas(
                 'success',
-                'You have successfully created an account! Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in. Thank you for your patience!'
+                'You have successfully created an account! Your account is currently pending approval from the authorized scholar staff. You can log in to view your restricted dashboard while you wait for approval.'
             );
 
         $scholar = User::query()->where('email', 'club-scholar@example.com')->first();
@@ -169,7 +439,8 @@ class ScholarshipClubRegistrationTest extends TestCase
         $this->assertNotNull($scholar);
         $this->assertSame(User::ROLE_SCHOLAR, $scholar->role);
         $this->assertSame(User::STATUS_PENDING, $scholar->status);
-        $this->assertFalse($scholar->canLogin());
+        $this->assertTrue($scholar->canLogin());
+        $this->assertFalse($scholar->hasScholarPortalAccess());
         $this->assertSame($city->id, $scholar->scholarship_program_id);
         $this->assertSame($club->id, $scholar->scholarship_club_id);
         $this->assertSame('Dapa', $scholar->city);
@@ -185,21 +456,25 @@ class ScholarshipClubRegistrationTest extends TestCase
 
         $this->get(route('login'))
             ->assertOk()
-            ->assertSee('You have successfully created an account! Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in. Thank you for your patience!');
+            ->assertSee('You can log in to view your restricted dashboard while you wait for approval.');
 
         $this->from(route('login'))
             ->post(route('login.post'), [
                 'email' => 'club-scholar@example.com',
                 'password' => 'password123',
             ])
-            ->assertRedirect(route('login'))
-            ->assertSessionHasErrors('email');
+            ->assertRedirect(route('user.dashboard'));
 
-        $this->assertGuest();
+        $this->assertAuthenticatedAs($scholar->fresh());
 
+        $this->get(route('user.events'))
+            ->assertRedirect(route('user.dashboard'));
+
+        auth()->logout();
         $scholar->forceFill(['status' => User::STATUS_APPROVED])->save();
 
         $this->assertTrue($scholar->fresh()->canLogin());
+        $this->assertTrue($scholar->fresh()->hasScholarPortalAccess());
 
         $this->post(route('login.post'), [
             'email' => 'club-scholar@example.com',
@@ -207,6 +482,7 @@ class ScholarshipClubRegistrationTest extends TestCase
         ])->assertRedirect(route('user.dashboard'));
 
         $this->assertAuthenticatedAs($scholar->fresh());
+        $this->get(route('user.events'))->assertOk();
     }
 
     public function test_scholar_registration_requires_a_scholarship_club(): void

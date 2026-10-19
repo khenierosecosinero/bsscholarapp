@@ -43,13 +43,9 @@ class EnsureScholarStaffApproved
         }
 
         if (! $user->hasStaffPortalAccess()) {
-            Auth::logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
             return redirect()
-                ->route('login')
-                ->with('warning', 'Your scholar staff account is pending administrator approval. You cannot access Scholar Staff features until an administrator approves your registration.');
+                ->route('staff.pending-approval')
+                ->with('warning', 'Your account is pending approval. Some features will remain unavailable until your account is approved.');
         }
 
         return $next($request);

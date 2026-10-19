@@ -1,106 +1,38 @@
-@extends('layouts.app')
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Pending Approval — Batang Surigaonon Scholar's App</title>
+    @vite(['resources/css/styles.css', 'resources/js/app.js'])
+    <link rel="stylesheet" href="{{ asset('css/staff-admin.css') }}?v={{ @filemtime(public_path('css/staff-admin.css')) }}">
+</head>
+<body>
+<div class="auth-page" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px">
+    <div class="staff-card" style="max-width:520px;width:100%">
+        <div class="staff-card-header"><h2>Pending Approval</h2></div>
 
-@push('styles')
-    <link rel="stylesheet" href="{{ asset('css/pending-approval-modal.css') }}">
-    <style>
-        .staff-pending-page {
-            min-height: calc(100vh - 80px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 32px 20px;
-        }
+        @include('partials.flash-messages')
 
-        .staff-pending-card {
-            width: min(560px, 100%);
-            background: #fff;
-            border-radius: 16px;
-            padding: 32px 28px;
-            box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
-            text-align: center;
-        }
+        @include('partials.bssa-alert', [
+            'type' => 'warning',
+            'title' => 'Pending Approval',
+            'message' => 'Your account is pending approval. Some features will remain unavailable until your account is approved.',
+            'dismissible' => false,
+            'autoDismiss' => false,
+        ])
 
-        .staff-pending-card h1 {
-            margin: 0 0 12px;
-            font-size: 24px;
-            color: #0f2744;
-        }
+        <p style="margin:16px 0 8px"><strong>{{ $staff->full_name }}</strong></p>
+        <p class="staff-muted" style="margin:0 0 8px">{{ $staff->email }}</p>
+        <p style="margin:0 0 16px"><span class="staff-badge orange">Pending Approval</span></p>
+        <p class="staff-muted">An administrator must approve your Scholar Staff registration before you can access the Scholar Staff dashboard, manage scholars, or use staff features. You do not need to register again after approval.</p>
 
-        .staff-pending-card p {
-            margin: 0 0 16px;
-            color: #6b7280;
-            line-height: 1.6;
-        }
-
-        .staff-pending-meta {
-            background: #f8fafc;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 16px;
-            margin: 20px 0;
-            text-align: left;
-        }
-
-        .staff-pending-meta div + div {
-            margin-top: 10px;
-        }
-
-        .staff-pending-meta strong {
-            display: block;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: #64748b;
-            margin-bottom: 4px;
-        }
-
-        .staff-pending-actions {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-top: 24px;
-        }
-
-        .staff-pending-actions form {
-            width: min(240px, 100%);
-        }
-    </style>
-@endpush
-
-@section('content')
-<div class="staff-pending-page">
-    <div class="staff-pending-card">
-        <h1>Scholar Staff Access Pending</h1>
-        <p>
-            Your scholar staff account has been created successfully and is currently waiting for approval from a system administrator.
-            You cannot access the Scholar Staff dashboard or any staff features until your account is approved.
-        </p>
-
-        <div class="staff-pending-meta">
-            <div>
-                <strong>Account Name</strong>
-                {{ $staff->full_name }}
-            </div>
-            <div>
-                <strong>Scholarship Club</strong>
-                {{ $staff->scholarshipClubLabel() }}
-            </div>
-            <div>
-                <strong>Status</strong>
-                Pending Admin Approval
-            </div>
-        </div>
-
-        <p class="muted">Please check back after an administrator has reviewed your registration. You may log out and return at any time.</p>
-
-        <div class="staff-pending-actions">
-            @include('partials.logout-button', ['class' => 'app-logout-btn'])
-        </div>
+        <form method="POST" action="{{ route('logout') }}" style="margin-top:20px">
+            @csrf
+            <button type="submit" class="staff-btn">Log out</button>
+        </form>
     </div>
 </div>
-
-@include('partials.staff-pending-approval-modal', [
-    'showPendingStaffApprovalModal' => $showPendingStaffApprovalModal ?? false,
-])
-@endsection
+</body>
+</html>

@@ -390,11 +390,13 @@ class User extends Authenticatable
         }
 
         if ($this->isScholarStaff()) {
-            return $this->status === self::STATUS_APPROVED;
+            // Pending staff may sign in to a restricted waiting page only.
+            return in_array($this->status, [self::STATUS_APPROVED, self::STATUS_PENDING], true);
         }
 
         if ($this->isScholar()) {
-            return $this->status === self::STATUS_APPROVED;
+            // Pending scholars may sign in to a restricted dashboard only.
+            return in_array($this->status, [self::STATUS_APPROVED, self::STATUS_PENDING], true);
         }
 
         return true;

@@ -11,7 +11,7 @@
 
 <div class="staff-info-banner">
     <strong>Account Approval System</strong>
-    <p>Pending scholar accounts cannot log in until approved. Rejected applications stay on file here for review and are removed from the active Scholars list.</p>
+    <p>Pending scholar accounts cannot log in until approved. Rejecting a pending application permanently removes it so the applicant can register again with the same email and scholar ID.</p>
 </div>
 
 <form method="GET" class="staff-filter-bar">

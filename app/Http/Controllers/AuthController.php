@@ -66,26 +66,6 @@ class AuthController extends Controller
             ]);
         }
 
-        if ($user->isScholarStaff() && $user->isStaffPendingApproval()) {
-            Auth::logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
-            throw ValidationException::withMessages([
-                'email' => 'Your scholar staff account is pending administrator approval. You cannot log in until an administrator approves your registration.',
-            ]);
-        }
-
-        if ($user->isPendingApproval()) {
-            Auth::logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
-            throw ValidationException::withMessages([
-                'email' => 'Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in.',
-            ]);
-        }
-
         if ($user->isStaffInactive()) {
             Auth::logout();
             $request->session()->invalidate();
@@ -115,11 +95,25 @@ class AuthController extends Controller
         $user->markLogin();
         $request->session()->regenerate();
 
+        if ($user->isPendingApproval()) {
+            $request->session()->put('show_pending_approval_modal', true);
+        }
+
+        if ($user->isStaffPendingApproval()) {
+            $request->session()->put('show_pending_staff_approval_modal', true);
+        }
+
         if ($user->isAdmin()) {
             return redirect()->intended(route('admin.dashboard'));
         }
 
         if ($user->isScholarStaff()) {
+            if ($user->isStaffPendingApproval()) {
+                return redirect()
+                    ->route('staff.pending-approval')
+                    ->with('warning', 'Your account is pending approval. Some features will remain unavailable until your account is approved.');
+            }
+
             return redirect()->intended(route('staff.dashboard'));
         }
 
@@ -144,6 +138,18 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $this->ensureRegisterIsNotRateLimited($request);
+
+        $request->merge([
+            'email' => strtolower(trim((string) $request->input('email', ''))),
+            'scholar_id' => trim((string) $request->input('scholar_id', '')),
+            'full_name' => trim(preg_replace('/\s+/', ' ', (string) $request->input('full_name', '')) ?? (string) $request->input('full_name', '')),
+        ]);
+
+        // Clear leftover rejected rows so identifiers can be reused after older reject-keep behavior.
+        $this->accounts->purgeRejectedScholarForRegistration(
+            $request->input('email'),
+            $request->input('scholar_id')
+        );
 
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
@@ -215,13 +221,17 @@ class AuthController extends Controller
 
         return redirect()->route('login')->with(
             'success',
-            'You have successfully created an account! Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in. Thank you for your patience!'
+            'You have successfully created an account! Your account is currently pending approval from the authorized scholar staff. You can log in to view your restricted dashboard while you wait for approval.'
         );
     }
 
     public function registerStaff(Request $request)
     {
         $this->ensureStaffRegisterIsNotRateLimited($request);
+
+        $request->merge([
+            'scholarship_club_name' => ScholarshipClub::normalizeName((string) $request->input('scholarship_club_name', '')),
+        ]);
 
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
@@ -245,6 +255,7 @@ class AuthController extends Controller
         ]);
 
         $this->assertStaffRegistrationIsUnique($data);
+        ScholarshipClub::assertNameIsUnique($data['scholarship_club_name']);
 
         $assignment = $this->programAssignment->resolveRegistrationAssignment((int) $data['scholarship_program_id']);
         $street = LocationAddress::normalizeStreet($data['street'] ?? null);
@@ -281,11 +292,6 @@ class AuthController extends Controller
 
         return redirect()->route('login')
             ->with('success', 'Scholar staff account created successfully. Your registration is pending administrator approval. You will be able to log in and access the Scholar Staff section only after an administrator approves your account.');
-    }
-
-    public function dashboard()
-    {
-        return redirect()->route('user.dashboard');
     }
 
     public function logout(Request $request)
@@ -358,7 +364,7 @@ class AuthController extends Controller
         if ($existingByEmail) {
             $message = match (true) {
                 $existingByEmail->isScholarStaff() && $existingByEmail->isStaffPendingApproval() => 'An account with this email is already registered and pending administrator approval.',
-                $existingByEmail->isScholarStaff() && $existingByEmail->isStaffRejected() => 'An account with this email was rejected and cannot be used to register again.',
+                $existingByEmail->isScholarStaff() && $existingByEmail->isStaffRejected() => 'An account with this email is already registered as scholar staff. Ask an administrator to permanently delete it before registering again.',
                 $existingByEmail->isScholarStaff() => 'An account with this email is already registered as scholar staff.',
                 default => 'An account with this email already exists.',
             };

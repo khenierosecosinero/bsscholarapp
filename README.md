@@ -17,10 +17,12 @@ A Laravel **web** application for managing the **Batang Surigaonon scholarship p
 
 This README describes the **current codebase** in this repository. It is written from the routes, controllers, models, migrations, seeders, views, CSS, and configuration files that exist today.
 
+**Start here for stack / thesis defense:** [§0 Technical stack and architecture reference](#0-technical-stack-and-architecture-reference) (frontend, backend, database, auth, architecture, packages, tools, role features, integrations, install, security, testing).
+
 It has two jobs:
 
 1. **Technical documentation** for the live Laravel web system (every existing function, rule, and stylesheet).
-2. **Conversion reference** for a future **React Native + Expo / Expo Go** mobile client that must keep **all** of those functions, workflows, permissions, and the **same CSS visual identity** — only the presentation layer changes.
+2. **Conversion reference** for a future **React Native + Expo / Expo Go** mobile client that must keep **all** of those functions, workflows, permissions, and the **same CSS visual identity** — only the presentation layer changes. *(Planned only — not implemented in this repo.)*
 
 The visual language below is taken from the live stylesheets — not a new theme.
 
@@ -54,6 +56,12 @@ The visual language below is taken from the live stylesheets — not a new theme
 
 ## Table of contents
 
+**Technical reference (stack, architecture, setup)**
+
+0. [Technical stack and architecture reference](#0-technical-stack-and-architecture-reference) — overview, frontend, backend, database, auth, architecture, packages, tools, role features, integrations, install, security, testing
+
+**Detailed product documentation**
+
 1. [Project overview](#1-project-overview)
 2. [What problem it solves](#2-what-problem-it-solves)
 3. [User roles and permissions](#3-user-roles-and-permissions)
@@ -81,15 +89,220 @@ The visual language below is taken from the live stylesheets — not a new theme
 25. [Development guide](#25-development-guide)
 26. [Complete function catalog](#26-complete-function-catalog)
 27. [CSS files and UI component map](#27-css-files-and-ui-component-map)
-28. [Expo Go / React Native conversion](#28-expo-go--react-native-conversion)
-29. [CSS to React Native style translation](#29-css-to-react-native-style-translation)
-30. [Mobile UI adaptation](#30-mobile-ui-adaptation)
-31. [Laravel API for the mobile client](#31-laravel-api-for-the-mobile-client)
+28. [Expo Go / React Native conversion](#28-expo-go--react-native-conversion) *(planned — not implemented in this repo)*
+29. [CSS to React Native style translation](#29-css-to-react-native-style-translation) *(planned)*
+30. [Mobile UI adaptation](#30-mobile-ui-adaptation) *(planned)*
+31. [Laravel API for the mobile client](#31-laravel-api-for-the-mobile-client) *(planned — no versioned REST API today)*
 32. [Scholarship program isolation](#32-scholarship-program-isolation)
 33. [Academic year and period management](#33-academic-year-and-period-management)
 34. [Google Drive integration](#34-google-drive-integration)
 35. [Event lifecycle statuses](#35-event-lifecycle-statuses)
 36. [Recent verified changes](#36-recent-verified-changes)
+
+---
+
+## 0. Technical stack and architecture reference
+
+This section is the **complete technical reference** for evaluators and developers. It documents only technologies and features that exist in the current repository (`composer.json`, `package.json`, `.env.example`, `app/`, `resources/`, `database/`, `routes/web.php`, `tests/`). Deeper detail lives in the numbered sections below.
+
+### 0.1 Project overview
+
+**Batang Surigaonon Scholar’s App (BSSA)** is a **Laravel 12 web application** that manages scholarship operations for the Batang Surigaonon program. It connects three roles—**Scholars**, **Scholar Staff**, and **Administrators**—around events, attendance, service hours (30 required per semester), documents, approvals, announcements, academic years, and location-scoped scholarship programs/clubs.
+
+| Portal | URL prefix | Layout / CSS |
+|--------|------------|--------------|
+| Scholar | `/user` | `layouts.user` · `resources/css/styles.css` (green) |
+| Scholar Staff | `/staff` | `layouts.staff` · `public/css/staff-admin.css` (blue) |
+| Administrator | `/admin` | `layouts.admin` · `staff-admin.css` + `public/css/admin.css` (orange) |
+
+The product code lives under `app/`, `resources/views/`, `database/`, and `routes/web.php`. The Composer package name is still `laravel/laravel`. **There is no React Native / Expo app and no versioned public REST API in this repository** ([§28](#28-expo-go--react-native-conversion)–[§31](#31-laravel-api-for-the-mobile-client) describe a *planned* mobile client only).
+
+### 0.2 Frontend technologies
+
+| Layer | Actually used |
+|-------|----------------|
+| **Templates** | Laravel **Blade** (`resources/views/`: `layouts/`, `auth/`, `user/`, `staff/`, `admin/`, `partials/`, `mail/`, `components/`) |
+| **HTML / CSS / JS** | Server-rendered HTML; custom CSS (not a React/Vue SPA) |
+| **Scholar CSS** | `resources/css/styles.css` (Vite) + page CSS under `public/css/` (`user-nav.css`, `documents-page.css`, `service-hours-page.css`, `notifications-page.css`, `profile-page.css`, `dashboard-events.css`, `attendance-photo.css`, `pending-approval-modal.css`) |
+| **Staff / Admin CSS** | `public/css/staff-admin.css`, `public/css/admin.css` (loaded with `?v=filemtime`) |
+| **Build** | **Vite 7** + `laravel-vite-plugin` (`vite.config.js`). Inputs: `resources/css/styles.css`, `resources/js/app.js`, `resources/js/user-app.js` |
+| **Tailwind CSS v4** | Still listed in `package.json` / Vite plugin config for optional utility CSS; **product UI for the three portals is custom CSS** (`styles.css`, `staff-admin.css`, `admin.css`). The old Laravel `welcome` + `app.css` Vite entry were removed as unused |
+| **JS** | `resources/js/user-app.js` (sidebar, attendance poll ~12s, scholar presence ~20s, staff presence poll ~10s, avatar preview); `resources/js/app.js`; `public/js/notifications-toggle.js`; some inline Blade scripts |
+| **HTTP client** | `axios` (npm) available via the Vite bundle |
+| **Fonts** | **Inter** via Google Fonts in `layouts/app.blade.php` |
+| **Charts** | CSS `conic-gradient` pie charts (no Chart.js) — admin reports + Overall Reports card |
+
+**Not used for the product UI:** React, Vue, Alpine.js, Livewire, Inertia (not in `composer.json` / `package.json`).
+
+### 0.3 Backend technologies
+
+| Layer | Implementation |
+|-------|----------------|
+| **Language** | **PHP ^8.2** |
+| **Framework** | **Laravel 12** (`laravel/framework ^12.0`) |
+| **Architecture** | Classic **MVC + service layer**: routes → controllers → services/models → Blade responses |
+| **Routing** | `routes/web.php` only (no `routes/api.php`). Health: `GET /up` |
+| **Controllers** | `app/Http/Controllers/` (e.g. `AuthController`, `PasswordResetController`, `UserController`, `StaffController`, `AdminController`, `EventActionController`, `GoogleDriveController`, …) |
+| **Models** | Eloquent under `app/Models/` (see [§0.4](#04-database) and [§8](#8-backend-architecture)) |
+| **Services** | Domain logic in `app/Services/` (`ScholarService`, `StaffDashboardService`, `AdminDashboardService`, `PasswordResetService`, `GoogleDriveService`, …) |
+| **Middleware** | Aliases in `bootstrap/app.php`: `scholar`, `scholar.approved`, `scholar.staff`, `scholar.staff.approved`, `admin`; global web append `EnsureAccountAccess` |
+| **Support** | `app/Support/` (e.g. `CourseCatalog`, `PhilippineIslandGroup`, `MissingResourceRedirect`, `OutboundAppUrl`) |
+| **Mail** | Laravel Mail + Gmail SMTP (`PasswordResetCodeMail`, backup-email verification) |
+| **Queues / cache / sessions** | Database drivers by default (`.env.example`) |
+| **CLI** | `artisan` commands (e.g. `mail:inspect`, `app:reset-operational-data`) |
+
+### 0.4 Database
+
+| Item | Detail |
+|------|--------|
+| **Default DBMS** | **SQLite** (`DB_CONNECTION=sqlite` in `.env.example`). MySQL/MariaDB supported by changing `.env` |
+| **ORM** | Laravel Eloquent |
+| **Schema** | Migrations under `database/migrations/` |
+| **Seeders** | `DatabaseSeeder` → `ScholarshipProgramSeeder` (PSGC JSON import) + `AdminSeeder` + active `academic_settings` row |
+| **Factories** | `database/factories/UserFactory.php` (tests) |
+
+**Core tables (implemented):** `users`, `password_reset_tokens`, `sessions`, `cache` / `cache_locks`, `jobs` / `job_batches` / `failed_jobs`, `scholarship_programs`, `scholarship_clubs`, `scholarship_club_schools`, `events`, `event_registrations`, `attendances`, `attendance_session_logs`, `document_types`, `documents`, `announcements`, `announcement_reads`, `scholar_notifications`, `user_activities`, `academic_settings`, `google_drive_folders`, `google_drive_connections`, `admin_backup_emails`, `scholar_suspensions`.
+
+**Eloquent models:** `User`, `ScholarshipProgram`, `ScholarshipClub`, `ScholarshipClubSchool`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`, `GoogleDriveFolder`, `GoogleDriveConnection`, `AdminBackupEmail`, `ScholarSuspension`.
+
+High-level relationships and field notes: [§11](#11-database).
+
+### 0.5 Authentication and authorization
+
+| Concern | Implementation |
+|---------|----------------|
+| **Login** | Email + password (`AuthController`); session auth (Laravel guard `web`) |
+| **Remember-me** | Extended duration configured in `AppServiceProvider` |
+| **Roles** | `users.role` + `is_admin` — scholar, scholar staff, administrator |
+| **Login gate** | `User::canLogin()` — pending scholars blocked until approved; staff must be approved; admin always (credentials match) |
+| **Portal middleware** | `scholar` / `scholar.approved` / `scholar.staff` / `scholar.staff.approved` / `admin` |
+| **Account blocks** | `EnsureAccountAccess` (suspensions / blocked accounts) |
+| **Registration** | Scholar `/register`; staff `/register/staff` (pending until admin approval) |
+| **Password reset** | Find Account → recovery email options from DB → Gmail SMTP 6-digit code / signed link → verify → new password ([§4.5](#45-forgot-password-scholar-scholar-staff-and-administrator)) |
+| **Admin backup emails** | Verified backups usable for admin recovery (`AdminBackupEmail`) |
+| **Email verification (Laravel)** | **Not used** for scholars — routes removed; login follows `status` |
+
+Details: [§5](#5-authentication-and-authorization), [§22](#22-security-features).
+
+### 0.6 System architecture
+
+```text
+Browser (Blade UI + Vite assets)
+    │  HTTPS/HTTP form posts, occasional JSON XHR
+    ▼
+Laravel HTTP kernel (web middleware + role aliases)
+    │
+    ├─ Controllers  ──► Services  ──► Eloquent Models  ──► SQLite/MySQL
+    │                      │
+    │                      ├─ Mail (Gmail SMTP) ──► scholar/staff/admin inboxes
+    │                      └─ Google API Client ──► Google Drive (org OAuth)
+    │
+    └─ Blade views + public/css + Vite JS
+```
+
+- **Request flow:** `routes/web.php` → middleware → controller → service/model → Blade (or redirect/JSON).
+- **Files:** local `storage/app/public` (via `storage:link`) and optional **Google Drive** under `BSSA/DOCUMENTS` and `BSSA/ATTENDANCE`.
+- **Background:** database queue (`QUEUE_CONNECTION=database`); optional `php artisan queue:listen` in `composer dev`.
+- **No separate frontend server in production** — `npm run build` emits assets Laravel serves; local `npm run dev` is Vite HMR only.
+
+### 0.7 Libraries and dependencies
+
+**Composer (production):** `laravel/framework`, `laravel/tinker`, `google/apiclient` (Drive only via `extra.google/apiclient-services`).
+
+**Composer (dev):** `phpunit/phpunit`, `fakerphp/faker`, `mockery/mockery`, `nunomaduro/collision`, `laravel/pint`, `laravel/sail`, `laravel/pail`.
+
+**npm (devDependencies):** `vite`, `laravel-vite-plugin`, `tailwindcss`, `@tailwindcss/vite`, `axios`, `concurrently`.
+
+Full tables: [§14](#14-technologies-languages-and-packages).
+
+### 0.8 Development tools and environment
+
+| Tool | Role in this project |
+|------|----------------------|
+| **PHP 8.2+** | Runtime |
+| **Composer 2** | PHP deps; scripts `setup`, `dev`, `test` |
+| **Node.js + npm** | Vite build / dev server |
+| **Vite 7** | Asset bundling (`npm run build` / `npm run dev`) |
+| **SQLite** (default) or MySQL | Database |
+| **PHPUnit 11** | Feature/unit tests (`php artisan test` / `composer test`) |
+| **Laravel Pint** | Code style (dev) |
+| **Laravel Sail** | Optional Docker tooling (dev dependency; not required for local SQLite) |
+| **Laravel Pail** | Log tailing in `composer dev` |
+| **Artisan serve** | Local HTTP (`php artisan serve --host=0.0.0.0 --port=8000`) |
+
+Timezone default: `Asia/Manila` (`.env.example`).
+
+### 0.9 Core features by user role
+
+| Role | Implemented capabilities (summary) |
+|------|-------------------------------------|
+| **Scholar** | Dashboard, events/register/check-in/out + photo, calendar, service hours, documents upload/view/download, notifications, profile/settings, announcements (incl. pending), presence heartbeat; pending accounts limited until approval |
+| **Scholar Staff** | Dashboard, scholars (approve/reject/view), events CRUD + attendance sessions + status workflow, documents review, approval requests, calendar, settings (club/schools), four report pages (service hours, attendance, participation, completion), Google Drive connect (with admin) |
+| **Administrator** | Dashboard (location filters + Overall Reports pie + Events completed card), scholars/staff/events/service hours/documents directories, regional reports (Luzon/Visayas/Mindanao pies), admin settings (profile, password, backup emails, academic years), staff approve/reject/block/suspend/delete, Drive OAuth |
+
+Full portal matrices: [§3](#3-user-roles-and-permissions), [§6](#6-features-by-portal).
+
+### 0.10 Integrations and file storage
+
+| Integration | Status | Notes |
+|-------------|--------|-------|
+| **Gmail SMTP** | Implemented | Forgot Password codes / reset mail; backup-email verification |
+| **Google Drive API** | Implemented | Org OAuth (`GOOGLE_*`); folders under `BSSA/DOCUMENTS` and `BSSA/ATTENDANCE`; encrypted token in `google_drive_connections` |
+| **Local public disk** | Implemented | Event images, attendance photos, documents under `storage/app/public` |
+| **PSGC locations** | Implemented | `database/data/psgc-locations.json` imported by seeder |
+| **ui-avatars.com** | Used in some UI placeholders | External avatar image URLs |
+| **Versioned mobile API** | **Not implemented** | Web routes + a few JSON XHR endpoints only |
+
+Drive deep dive: [§34](#34-google-drive-integration).
+
+### 0.11 Installation and setup
+
+From the app root (folder containing `artisan`):
+
+```bash
+composer install
+copy .env.example .env          # macOS/Linux: cp .env.example .env
+php artisan key:generate
+# Ensure database/database.sqlite exists when using SQLite
+php artisan migrate --force
+php artisan db:seed
+php artisan storage:link
+npm install
+npm run build
+php artisan serve --host=0.0.0.0 --port=8000
+```
+
+Or: `composer setup` (install, `.env`, key, migrate, npm install + build) then run `db:seed`, `storage:link`, and serve separately.
+
+Configure `MAIL_*` and optional `GOOGLE_*` in `.env` ([§17](#17-environment-configuration)). Seeded admin: [§21](#21-seeded-administrator-account).
+
+### 0.12 Security and validation
+
+| Area | Implemented behavior |
+|------|----------------------|
+| **Passwords** | Eloquent `hashed` cast; `Password::min(8)` on register/reset; `User::updatePassword()` |
+| **CSRF** | Laravel web middleware on form posts |
+| **Authorization** | Role middleware + ownership checks (e.g. document owner-only view/download) |
+| **Uploads** | Size/type validation; `PostTooLargeException` → friendly 10 MB message; Drive or local storage |
+| **Password reset** | Hashed one-time codes, expiry, attempt limits, rate limiting; no password/hash exposure in UI |
+| **Drive tokens** | Encrypted at rest in DB; secrets only in `.env` |
+| **Mass assignment** | Sensitive flags (`is_permanent`, `last_seen_at`, `events_visible_from`) not freely fillable |
+
+Details: [§22](#22-security-features), [§23](#23-validation-and-error-handling).
+
+### 0.13 Testing and troubleshooting
+
+**Run tests:**
+
+```bash
+php artisan test
+# or
+composer test
+```
+
+**Feature tests** live under `tests/Feature/` (40+ files), including password reset, Google Drive folders/OAuth, admin filters/reports, event status workflow, attendance Drive storage, sidebar layout, account access, academic year settings, and more.
+
+**Common issues:** SMTP App Password / `config:clear`; Vite LAN host (`VITE_DEV_HOST`); missing `storage:link`; SQLite file missing; Google OAuth must use `127.0.0.1` not `localhost`. Full list: [§24](#24-troubleshooting).
 
 ---
 
@@ -108,11 +321,11 @@ The system is a **role-based scholar portal** with three portals:
 
 The root URL `/` redirects to the login page. After login, users are sent to the dashboard that matches their role.
 
-City Scholarship Programs and Province Scholarship Programs are stored as separate `scholarship_programs` rows and are **not mixed** in staff or admin queries. Admin location filtering uses **City Scholar** and **Province Scholar** only (no combined Scholar / All Program Types option). Selecting a Province lists Scholarship Clubs registered in that province; selecting a Municipality/City further limits the list to clubs in that city. If none are registered, Admin shows **No registered Scholarship Club found**. Club records are not modified. Scope still uses `scholarship_program_id`, with City Scholar lists also limited to matching `scholarship_club_id` values when a location is selected (see [§32](#32-scholarship-program-isolation)).
+City and province programs are stored as separate `scholarship_programs` rows (`location_type`). Staff queries stay program-scoped. **Admin list pages** (Scholars, Staff, Events, Service Hours, Documents) use geographic filters—**Region** (where applicable), **Province**, **Municipality/City**, and **Scholarship Club**—not a City Scholar / Province Scholar “program type” switch on the Admin Dashboard. The **Admin Dashboard** uses Province and Municipality/City only (plus Overall Reports system-wide pie). Selecting a location limits clubs and records to that geography; empty locations show **0** / empty states. Scope still uses `scholarship_program_id` (and club IDs when filtered). See [§6.4](#64-admin-portal-admin) and [§32](#32-scholarship-program-isolation).
 
 Required service hours for scholars: **30 per semester** (`ScholarService::REQUIRED_HOURS`). Approved hours are credited to the attendance row’s academic year and semester. Pending hours are not completed hours. Extra approved hours above 30 in a semester are carried into the next semester (`ScholarService::allocateHoursFromRecords`); they do not raise that semester’s completed total above 30. Staff → Scholar profile shows the current semester summary plus a 4-year progress grid from `ScholarService::programHourTracking`.
 
-There is **no Expo / React Native app in this repository yet**. The web Laravel app remains the source of truth. A future mobile client must call this backend and reuse the existing CSS tokens ([§10](#10-visual-identity-existing-css), [§28](#28-expo-go--react-native-conversion)).
+There is **no Expo / React Native app in this repository yet**. The web Laravel app remains the source of truth. A future mobile client must call this backend and reuse the existing CSS tokens ([§10](#10-visual-identity-existing-css), [§28](#28-expo-go--react-native-conversion)). For a concise stack map, see [§0](#0-technical-stack-and-architecture-reference).
 
 ---
 
@@ -174,7 +387,7 @@ Account status (`users.status`):
 
 ### 3.2 Scholar staff
 
-- Registration starts as **pending**. Pending, rejected, and inactive staff **cannot log in** to the staff portal (`EnsureScholarStaff`, `AuthController::login`).
+- Registration starts as **pending**. Pending scholars may log in to a **restricted user dashboard** (profile view + pending status); Events/Documents/Attendance stay locked until approval (`scholar.approved`). Pending staff may log in only to `/staff/pending-approval`. Rejected and inactive accounts still cannot use protected portals.
 - **Only administrators** see pending staff registrations and can Approve or Reject them. On the staff list, **More** can Activate, Deactivate (`inactive`), or Delete an existing (non-pending) staff account.
 - Pending staff **do not appear** in “All Scholar Staff Accounts” and are not counted as active staff.
 - After approval, staff can manage **only their assigned program** (`managedLocationIds()` / `coveredLocationIds()`, which is that program’s own ID — never city+province mixed).
@@ -220,7 +433,7 @@ flowchart LR
 2. `User::register()` creates the account; `AccountService::provisionNewAccount()` creates document placeholders and a pending-approval notification.
 3. Staff on the same Scholarship Club see the scholar under **Approval Requests** and **Scholars**. On **Scholars**, the name opens the scholar profile; Approval Requests still uses its view / approve / reject action buttons.
 4. **Approve** sets status to `approved`, calls `User::activateFreshEventList()` (sets `events_visible_from` if null), and notifies the scholar. That scholar’s Events/Calendar then include program events that had **not already ended** before activation (see [§3.1](#31-scholar)).
-5. **Reject** permanently deletes the scholar account (`AccountService::permanentlyDelete`). After a successful delete, remaining `users.id` values are compacted to `1, 2, 3, …` (`UserSequenceService`) and user foreign keys are rewritten. The designated Admin account is never deleted.
+5. **Reject** permanently deletes the pending scholar via `AccountService::permanentlyDelete` (same cleanup as Delete), releasing email and scholar ID for a new registration. **Delete Account** on an approved/blocked/suspended scholar profile does the same permanent removal. Leftover rejected rows from older behavior are purged automatically when the same email or scholar ID registers again. Remaining `users.id` values are compacted (`UserSequenceService`). The designated Admin account is never deleted.
 
 ### 4.2 Scholar staff registration and approval
 
@@ -235,11 +448,11 @@ flowchart LR
   F --> H[Cannot log in]
 ```
 
-1. Staff submits `/register/staff` with a typed **Scholarship Club Name**, the official **Province** and **Municipality/City** of the club, and a required **Contact Number**. There is no Scholar Staff Number field. Club values are stored on `scholarship_clubs` (`name`, `province`, `city`, and the matching city program) and linked to the staff account (`users.scholarship_club_id`). Contact Number is stored on `users.cellphone_number`. An internal unique `users.scholar_id` (`STAFF-{ULID}`) is generated for the database only and is not shown on staff registration, Admin Staff, or Staff Settings. Staff can edit the club name, address, and contact number in `/staff/settings`. **Batang Surigaonon Scholars Club** is retired: it is removed from `scholarship_clubs` if present, hidden from every Scholarship Club dropdown, list, filter, registration form, profile, dashboard, and report, and cannot be created or renamed to. Other clubs such as **KENI SCHOLARSHIP** stay available. Club filtering, registration, and reporting for remaining clubs are unchanged.
+1. Staff submits `/register/staff` with a typed **Scholarship Club Name**, the official **Province** and **Municipality/City** of the club, and a required **Contact Number**. There is no Scholar Staff Number field. Club values are stored on `scholarship_clubs` (`name`, `province`, `city`, and the matching city program) and linked to the staff account (`users.scholarship_club_id`). Contact Number is stored on `users.cellphone_number`. An internal unique `users.scholar_id` (`STAFF-{ULID}`) is generated for the database only and is not shown on staff registration, Admin Staff, or Staff Settings. Staff can edit the club name, address, and contact number in `/staff/settings`. Any valid club name is allowed, but a name is reserved only while an existing Scholar Staff account owns that club (`scholarship_clubs.name_key`, case-insensitive and trimmed). Duplicate attempts show a single alert: “This Scholarship Club name is already registered. Please use a different name.” Orphaned club rows with no staff owner are purged and do not block registration. When the owning Scholar Staff account is permanently deleted and no other staff still owns the club, the club row is removed and the name becomes available again. Other staff accounts, their clubs, and scholar user records are preserved (scholars are only unlinked from a released club).
 2. Account is `scholar_staff` + `pending`. Admin is notified only via the admin **Scholar Staff** pending list and sidebar badge.
 3. Other staff never see pending staff details.
-4. Admin **Approve** sets `approved` and calls `User::activateFreshStaffEventList()` (sets `events_visible_from` to now if it is still null). Admin **Reject** sets `rejected` (account remains; login is blocked).
-5. On **All Scholar Staff Accounts**, **More** can **Activate** (`approved`), **Deactivate** (`inactive`, login blocked, record kept), or **Delete** (permanent `AccountService::permanentlyDelete`). Deactivate and Delete ask for confirmation first.
+4. Admin **Approve** sets `approved` and calls `User::activateFreshStaffEventList()` (sets `events_visible_from` to now if it is still null). Admin **Reject** permanently deletes the pending account (`AccountService::permanentlyDelete`), releasing the email and any sole-owned Scholarship Club name so the applicant can register again.
+5. On **All Scholar Staff Accounts**, **More** can **Activate** (`approved`), **Deactivate** (`inactive`, login blocked, record kept), or **Delete** (permanent `AccountService::permanentlyDelete`, same identifier/club-name release rules as Reject). Deactivate and Delete ask for confirmation first.
 6. That new staff account starts with an empty Events list until an event is created after they became active. Existing staff whose `created_at` is earlier than those events still see the full program history. Event rows are not deleted.
 
 ### 4.3 Event, attendance, and service hours
@@ -417,7 +630,7 @@ Global academic year/semester can be updated from the scholar profile **only by 
 | Section | What it does |
 |---------|----------------|
 | **Dashboard** | Live Scholarship Club stats (not fake numbers): scholars, events, pending attendance, hours, documents, pending approvals, recent activity, upcoming events — all from `StaffDashboardService` + `scholarship_program_id`. Event totals and upcoming events use `visibleToStaff` for that signed-in staff account |
-| **Scholars** | Lists **approved** scholars in the assigned Scholarship Club only (`users.status = approved`). Pending and rejected accounts stay in the database and appear under **Approval Requests** (pending) but are excluded from this list, search, pagination, and presence polling. Total Scholars on this page is the approved count. The scholar name (`.staff-scholar-name-link`) is the only view action — it opens the existing profile (`GET /staff/scholars/{scholar}`, `canManageScholar`). There is no eye/view column. Beside each name: green-dot **Active Now** when that scholar’s current session heartbeat is fresh, otherwise **Offline**. Status polls `GET /staff/scholar-presence` about every 10s (no manual refresh). Presence is **not** “approved” and **not** a past login |
+| **Scholars** | Lists **approved** scholars in the assigned Scholarship Club only (`users.status = approved`). Pending accounts appear under **Approval Requests** and are excluded from this list, search, pagination, and presence polling. Reject permanently removes the pending account. Total Scholars on this page is the approved count. The scholar name (`.staff-scholar-name-link`) is the only view action — it opens the existing profile (`GET /staff/scholars/{scholar}`, `canManageScholar`). There is no eye/view column. Beside each name: green-dot **Active Now** when that scholar’s current session heartbeat is fresh, otherwise **Offline**. Status polls `GET /staff/scholar-presence` about every 10s (no manual refresh). Presence is **not** “approved” and **not** a past login |
 | **Scholar detail** | Account overview for one scholar in the same Scholarship Club, including the club name and the same live **Active Now** / **Offline** indicator. Staff can set the scholar’s **Start Academic Year** (`program_start_year`). **Service Hours** shows Academic Year, current semester, approved hours, **Approved of 30.00 required hours**, pending, and remaining (`30 − approved` for the current semester). **4-Year Service Hour Progress** lists Year 1–4 from `program_start_year` / `startingAcademicYear` with 1st/2nd Semester completed / pending / remaining kept separate. **Service Hour Records** is view-only (Event, Check In / Out, Hours, Status, Notes — no Actions). Approve / reject hours stays on Attendance |
 | **Approval Requests** | Pending scholar registrations; **Approve** (status `approved` + notify) or **Reject** (permanent delete via `AccountService::permanentlyDelete`). The Actions column stacks labeled **VIEW** (blue), **APPROVE** (green), and **REJECT** (red) buttons vertically in that order (`.staff-approval-actions`). The Pending badge stays on one line. Sidebar red badge = pending count |
 | **Events** | List events visible to this staff account; **Create Event** (`title`, `description`, `location`, `starts_at`, `ends_at` after start, `service_hours` 0–999, `organizer`, JPG/PNG ≤5MB) on `.staff-event-create-card` (max-width 760px). Start/end use native `datetime-local` inside `.date-input-wrap` in `.staff-datetime-grid`. New event `status` = `confirmed`, attendance **closed**. Per-row **status dropdown** sets Pending / Confirmed / Cancelled (`staff.events.status`); Completed appears when the schedule auto-completes. Status changes notify scholars. Event detail + registration count. Visibility: `created_at >= events_visible_from` (set on admin approval or approved-at-register), or `created_at >=` the staff `created_at` when that column is null. Empty table: **No events found.** Cancelled-only remove; other event rows are not deleted |
@@ -432,8 +645,8 @@ Global academic year/semester can be updated from the scholar profile **only by 
 | Section | What it does |
 |---------|----------------|
 | **Dashboard** | **Location** card with Province then Municipality/City (no Current Admin Scope banner, no Scholarship category, no Scholarship Clubs list). Cards: Total Scholars, Approved Scholars, Pending Scholars, Rejected Scholars, Scholar Staff, Pending Staff, Total Scholarship Clubs, Documents, Completed Scholars, **Events** (count of events with status `completed` for the selected location / overall when none selected). Stats include only records in the selected Province (or that Municipality/City). Empty locations show **0**. Below: **Quick Actions** beside a compact **Overall Reports** card with **one pie chart** (two slices: Total Scholars and Total Scholar Staff across all locations via `AdminDashboardService::overallReportSummary()`), plus **View Overall Reports** → `GET /admin/reports`. Quick Actions: View Scholars, View Scholar Staff, View Events, Open Reports |
-| **Scholars** | Unified list (City Scholar and Province Scholar together). Filters: Province, Municipality/City, Scholarship Club (all registered clubs except the retired **Batang Surigaonon Scholars Club**), plus search by name / email / scholar ID. Table columns: Scholar, Scholar ID, Scholarship Club, Course, School, Status. Click a scholar name (`.admin-scholar-name-link`) to open a view-only profile (`GET /admin/scholars/{scholar}`). No approve/reject here |
-| **Scholar Staff** | Unified list (no City Scholar / Province Scholar split). Filters: Region (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, Scholarship Club (all registered clubs; selecting a club fills Province and Municipality/City from the club record), plus search by name / email / contact number. **All Scholar Staff Accounts** columns: Staff Member, Email, Contact Number, Scholarship Club, Status, Actions (**View**, **More**). View opens a dedicated page (`GET /admin/staff/{staffMember}`) with registration details and **Update Started Year** (`staff_started_year`). **More** opens a centered `#admin-staff-more-modal` with **Activate** / **Deactivate** / **Delete**. Pending registrations (Approve → `approved` and sets `events_visible_from`; Reject sets `rejected`, account kept). All Scholar Staff Accounts shows approved/rejected/inactive, **not** pending. Empty filter results show **No records found** |
+| **Scholars** | Unified list (City Scholar and Province Scholar together). Filters: Province, Municipality/City, Scholarship Club (all registered clubs), plus search by name / email / scholar ID. Table columns: Scholar, Scholar ID, Scholarship Club, Course, School, Status. Click a scholar name (`.admin-scholar-name-link`) to open a view-only profile (`GET /admin/scholars/{scholar}`). No approve/reject here |
+| **Scholar Staff** | Unified list (no City Scholar / Province Scholar split). Filters: Region (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, Scholarship Club (all registered clubs; selecting a club fills Province and Municipality/City from the club record), plus search by name / email / contact number. **All Scholar Staff Accounts** columns: Staff Member, Email, Contact Number, Scholarship Club, Status, Actions (**View**, **More**). View opens a dedicated page (`GET /admin/staff/{staffMember}`) with registration details and **Update Started Year** (`staff_started_year`). **More** opens a centered `#admin-staff-more-modal` with **Activate** / **Deactivate** / **Delete**. Pending registrations (Approve → `approved` and sets `events_visible_from`; Reject permanently deletes the pending account via `AccountService::permanentlyDelete`, releasing email and sole-owned Scholarship Club names). All Scholar Staff Accounts shows approved/rejected/inactive, **not** pending. Empty filter results show **No records found** |
 | **Events** | Unified list (no City Scholar / Province Scholar split). Filters: Region (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, Scholarship Club (all registered clubs from the database; selecting a club fills Province and Municipality/City from the club record), plus search by event title. Events are filtered by `events.scholarship_program_id` (club filter uses that club’s program). Table columns: Event, Scholarship Club (clubs registered on the event’s program; a selected club filter shows that club), **Participants** (count of scholars with `attendances.status = approved` and a check-in; pending, rejected, failed check-in, and unverified records are excluded), Schedule, Status, Service Hours. Empty results show **No events found**. Click an event title (`.admin-event-name-link`) to open attendees (`GET /admin/events/{event}`): Scholar, Attendance Status, Check-In, Service Hours Earned, **Attendance Photo**. Event details show Scholarship Club and Participants instead of Scholar Program / Program Type. The photo column shows only **approved** participation photos for that scholar and event. Pending, rejected, and unverified photos are hidden (`No approved photo`). Click a thumbnail to open the existing photo preview modal. Photo files are served at `GET /admin/events/{event}/attendances/{attendance}/photo` (`admin.events.attendances.photo`) only when the attendance is approved and belongs to that event |
 | **Service Hours** | Unified list (no City Scholar / Province Scholar split). Filters: Region (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, Scholarship Club (all registered clubs from the database; selecting a club fills Province and Municipality/City from the club record), plus search by name / email / scholar ID. Rows come from `StaffDashboardService::serviceHoursReport` using geographic program IDs (`directoryProgramIds`) and optional `scholarship_club_id`. Table columns: Scholar, Scholarship Club, Location, Approved, Pending, Remaining, Status. Empty results show **No records found**. Existing hour totals, completed counts, and attendance status rules are unchanged |
 | **Documents** | Unified list (no City Scholar / Province Scholar split). Filters: Region (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, Scholarship Club (all registered clubs from the database; selecting a club fills Province and Municipality/City from the club record), plus search by name / email / scholar ID / document type. Rows come from scholar `documents` via geographic program IDs and optional `scholarship_club_id`. Table columns: Scholar, Document Type, Scholarship Club, Submitted, Status. Empty results show **No documents found**. Click a scholar name to open that scholar’s submissions (`GET /admin/documents/scholars/{scholar}`): type, submitted date, status, Preview/Download when a file exists. Admin does not approve/reject documents (staff still does) |
@@ -477,7 +690,9 @@ Flash messages use `partials/flash-messages.blade.php` (`success`, `error`, vali
 
 ## 8. Backend architecture
 
-Laravel 12 MVC. There is **no** `routes/api.php` public API. A few JSON responses support the UI. When Expo is added, wrap these same controllers/services — see [§31](#31-laravel-api-for-the-mobile-client). Do not introduce a second data store.
+Laravel 12 **MVC + service layer** (PHP 8.2+). Entry points are `routes/web.php` → middleware aliases in `bootstrap/app.php` → controllers → services/models → Blade (or redirect/JSON). There is **no** `routes/api.php` public API. A few JSON responses support the UI. When Expo is added, wrap these same controllers/services — see [§31](#31-laravel-api-for-the-mobile-client) *(planned)*. Do not introduce a second data store.
+
+Stack overview: [§0.3](#03-backend-technologies) and [§0.6](#06-system-architecture).
 
 ### Controllers
 
@@ -521,7 +736,7 @@ Laravel 12 MVC. There is **no** `routes/api.php` public API. A few JSON response
 
 ### Models
 
-`User`, `ScholarshipProgram`, `ScholarshipClub`, `ScholarshipClubSchool`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`, `GoogleDriveFolder`, `GoogleDriveConnection`. Scholar register and Profile Course is a typed full official name (`App\Support\CourseCatalog` rejects initials such as BSICT, BSCE, and BSIS). Year-level labels live in `CourseCatalog::yearLevels()`. Course, Year Level, and School are saved on `users.course_year_level`, `users.year_level`, `users.scholarship_club_school_id`, and `users.school_university` and shown from that account in User Settings, Staff/Admin scholar records, and registration. Admin Reports map programs to Luzon, Visayas, or Mindanao with `App\Support\PhilippineIslandGroup` from `region_name` and PSGC codes.
+`User`, `ScholarshipProgram`, `ScholarshipClub`, `ScholarshipClubSchool`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`, `GoogleDriveFolder`, `GoogleDriveConnection`, `AdminBackupEmail`, `ScholarSuspension`. Scholar register and Profile Course is a typed full official name (`App\Support\CourseCatalog` rejects initials such as BSICT, BSCE, and BSIS). Year-level labels live in `CourseCatalog::yearLevels()`. Course, Year Level, and School are saved on `users.course_year_level`, `users.year_level`, `users.scholarship_club_school_id`, and `users.school_university` and shown from that account in User Settings, Staff/Admin scholar records, and registration. Admin Reports map programs to Luzon, Visayas, or Mindanao with `App\Support\PhilippineIslandGroup` from `region_name` and PSGC codes.
 
 Passwords use the Eloquent `hashed` cast. `User::updatePassword()` and `User::register()` set the password through that cast (not mass assignment of `password`).
 
@@ -533,11 +748,14 @@ Scholar live presence lives on `User` (`last_seen_at`, `PRESENCE_SECONDS`, `mark
 
 ## 9. Frontend architecture
 
-- **Blade** templates under `resources/views/` (`layouts/app.blade.php`, `user`, `staff`, `admin`, `auth`).
-- **Vite** bundles `resources/css/styles.css`, `resources/css/app.css`, `resources/js/app.js`, `resources/js/user-app.js` (sidebar, attendance poll ~12s, scholar presence heartbeat ~20s, staff scholar-presence poll ~10s, avatar preview).
-- **Tailwind CSS v4** is in the Vite pipeline (`@tailwindcss/vite`). Most staff/admin UI is custom CSS in `public/css/staff-admin.css` and `public/css/admin.css`.
-- Scholar UI: `resources/css/styles.css` plus page CSS (`notifications-page.css`, `dashboard-events.css`, `documents-page.css`, `profile-page.css`, `service-hours-page.css`, `pending-approval-modal.css`, `user-nav.css`).
+See also the stack summary in [§0.2](#02-frontend-technologies).
+
+- **Blade** templates under `resources/views/` (`layouts/app.blade.php`, `user`, `staff`, `admin`, `auth`, `partials`, `mail`, `components`).
+- **Vite** bundles `resources/css/styles.css`, `resources/js/app.js`, `resources/js/user-app.js` (sidebar, attendance poll ~12s, scholar presence heartbeat ~20s, staff scholar-presence poll ~10s, avatar preview).
+- **Tailwind CSS v4** remains in `package.json` / the Vite plugin list but is **not** a Vite entry for portal pages. The **three portals’ visible UI is hand-authored CSS** (`styles.css`, `staff-admin.css`, `admin.css`, page CSS).
+- Scholar UI: `resources/css/styles.css` plus page CSS (`notifications-page.css`, `dashboard-events.css`, `documents-page.css`, `profile-page.css`, `service-hours-page.css`, `pending-approval-modal.css`, `user-nav.css`, `attendance-photo.css`).
 - Static JS: `public/js/notifications-toggle.js` plus inline scripts on some pages (staff password modal, admin dashboard selector).
+- **No SPA framework** (no React/Vue/Livewire/Inertia in the running product).
 
 Layouts:
 
@@ -634,7 +852,6 @@ When adding README screenshots or UI notes, use these hex values. Do not switch 
 | File | Loaded from | Styles |
 |------|-------------|--------|
 | `resources/css/styles.css` | `layouts/app.blade.php` via Vite | Scholar shell: `:root` tokens, sidebar, nav, cards, buttons, tables, badges, forms, calendar, auth pages, alerts, dashboard widgets, `.nav-loading` overlay (skipped when a form `preventDefault`s, has `data-no-loading`, or has `data-confirm` until the user confirms) |
-| `resources/css/app.css` | Laravel welcome / Vite default | Tailwind entry — **not** the scholar/staff/admin product UI |
 | `public/css/user-nav.css` | `layouts/user.blade.php` (`?v=filemtime`) | Nav row + `.nav-notif-badge` (`#ef4444` pill); stacked scholar `.topbar` / `.topbar-dashboard` (title, profile card, welcome, date) |
 | `public/css/pending-approval-modal.css` | User layout (pending) + staff pending view | Centered 16px white panel, `rgba(15, 39, 68, 0.45)` backdrop, amber icon `#fef3c7` / `#d97706` |
 | `public/css/dashboard-events.css` | `user/dashboard.blade.php` | Upcoming-event row grid (date / thumb / details / action) |
@@ -699,7 +916,7 @@ Page layouts that a mobile port must preserve (same data, stacked on small scree
 | `cache`, `cache_locks` | Cache |
 | `jobs`, `job_batches`, `failed_jobs` | Queue |
 | `scholarship_programs` | City/province programs (PSGC fields, type, names) |
-| `scholarship_clubs` | Staff-created Scholarship Club names and official address (`name`, `province`, `city`, `scholarship_program_id`, `created_by`, `is_active`). **Batang Surigaonon Scholars Club** is retired and is not stored or listed |
+| `scholarship_clubs` | Staff-created Scholarship Club names and official address (`name`, `name_key`, `province`, `city`, `scholarship_program_id`, `created_by`, `is_active`). `name_key` is a global unique, case-insensitive key so each club name can be registered only once while owned; permanent staff deletion releases the club/name when no other staff still owns it |
 | `scholarship_club_schools` | School/University names added by staff for a club (`name`, `scholarship_club_id`, `created_by`) |
 | `events` | Events + attendance session columns + `image_path` |
 | `event_registrations` | Scholar ↔ event |
@@ -714,6 +931,8 @@ Page layouts that a mobile port must preserve (same data, stacked on small scree
 | `scholar_notifications` | In-app notifications (`announcement_id`, `event_id`) |
 | `user_activities` | Activity feed |
 | `academic_settings` | Academic years (`year_start` / `year_end` unique, `semester`, `is_active`); only one active year |
+| `admin_backup_emails` | Administrator backup recovery emails (verification + password-reset eligibility) |
+| `scholar_suspensions` | Scholar account suspension records used by account-access middleware |
 
 ### Important `users` fields
 
@@ -862,8 +1081,6 @@ Named routes use prefixes `admin.*`, `staff.*`, `user.*`.
 | PUT | `/admin/settings/password` | `admin.settings.password` |
 | POST | `/admin/settings/academic-years` | `admin.settings.academic-years.store` |
 | PUT | `/admin/settings/academic-years/{academicYear}` | `admin.settings.academic-years.update` |
-| POST | `/admin/settings/academic-years/{academicYear}/activate` | `admin.settings.academic-years.activate` |
-| POST | `/admin/settings/academic-years/{academicYear}/deactivate` | `admin.settings.academic-years.deactivate` |
 | DELETE | `/admin/settings/academic-years/{academicYear}` | `admin.settings.academic-years.destroy` |
 | POST | `/admin/settings/backup-emails` | `admin.settings.backup-emails.store` |
 | PUT | `/admin/settings/backup-emails/{backupEmail}` | `admin.settings.backup-emails.update` |
@@ -968,50 +1185,53 @@ Uploads used by the app:
 
 ## 14. Technologies, languages, and packages
 
+Consolidated stack map: [§0](#0-technical-stack-and-architecture-reference). Versions below are from `composer.json` / `package.json` constraints (lockfiles may pin exact builds).
+
 ### Languages
 
 | Language | Where |
 |----------|--------|
-| PHP 8.2+ | Backend |
-| Blade | Views |
-| JavaScript | Vite bundle + `public/js` |
-| CSS | Vite + `public/css` |
-| SQL | Via Laravel migrations (SQLite or other configured driver) |
-| JSON | PSGC location import |
+| PHP 8.2+ | Backend (`composer.json` `php: ^8.2`) |
+| Blade | Server-rendered views |
+| JavaScript (ES modules) | Vite bundle + `public/js` |
+| CSS | Vite CSS + `public/css` custom sheets |
+| SQL | Via Laravel migrations / Eloquent (SQLite default; MySQL optional) |
+| JSON | PSGC location import (`database/data/psgc-locations.json`) |
 
-### Frameworks and tools (from lock/manifest files)
+### Frameworks and tools (from manifests)
 
-**PHP (`composer.json` / `composer.lock`):**
+**PHP (`composer.json`):**
 
-| Package | Constraint / locked |
-|---------|---------------------|
-| `laravel/framework` | `^12.0` / **v12.62.0** |
-| `google/apiclient` | `^2.15` (Drive OAuth; `Google\Client`) |
-| `laravel/tinker` | `^2.10.1` |
-| `laravel/pint` | `^1.24` (dev) |
-| `laravel/sail` | `^1.41` (dev) |
-| `laravel/pail` | `^1.2.2` (dev) |
-| `phpunit/phpunit` | `^11.5.50` (dev) |
-| `fakerphp/faker` | `^1.23` (dev) |
-| `mockery/mockery` | `^1.6` (dev) |
-| `nunomaduro/collision` | `^8.6` (dev) |
+| Package | Constraint | Purpose |
+|---------|------------|---------|
+| `laravel/framework` | `^12.0` | HTTP kernel, routing, Eloquent, Blade, validation, mail, queues |
+| `google/apiclient` | `^2.15` | Google Drive OAuth + file API (`Drive` service only) |
+| `laravel/tinker` | `^2.10.1` | REPL |
+| `laravel/pint` | `^1.24` (dev) | PHP style fixer |
+| `laravel/sail` | `^1.41` (dev) | Optional Docker environment |
+| `laravel/pail` | `^1.2.2` (dev) | Log tail (`composer dev`) |
+| `phpunit/phpunit` | `^11.5.50` (dev) | Automated tests |
+| `fakerphp/faker` | `^1.23` (dev) | Fake data for factories/tests |
+| `mockery/mockery` | `^1.6` (dev) | Test doubles |
+| `nunomaduro/collision` | `^8.6` (dev) | CLI error presenter |
 
-**JavaScript (`package.json`):**
+**JavaScript (`package.json` `devDependencies`):**
 
-| Package | Version |
-|---------|---------|
-| `vite` | `^7.0.7` |
-| `laravel-vite-plugin` | `^2.0.0` |
-| `tailwindcss` | `^4.0.0` |
-| `@tailwindcss/vite` | `^4.0.0` |
-| `axios` | `^1.11.0` |
-| `concurrently` | `^9.0.1` |
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `vite` | `^7.0.7` | Frontend bundler / HMR |
+| `laravel-vite-plugin` | `^2.0.0` | Laravel ↔ Vite integration |
+| `tailwindcss` | `^4.0.0` | Utility CSS engine (wired; portals mostly custom CSS) |
+| `@tailwindcss/vite` | `^4.0.0` | Tailwind Vite plugin |
+| `axios` | `^1.11.0` | HTTP client for JS |
+| `concurrently` | `^9.0.1` | Run serve + queue + pail + Vite together (`composer dev`) |
 
 **Other runtime pieces**
 
-- Laravel Eloquent ORM, Blade, Vite, session/cache/queue on the database by default.
+- Laravel Eloquent ORM, Blade, Vite, session/cache/queue on the database by default (`.env.example`).
 - Font: Inter (Google Fonts) in `layouts/app.blade.php`.
-- Avatar placeholders: `ui-avatars.com` in some sidebars.
+- Avatar placeholders: `ui-avatars.com` in some sidebars / README badge.
+- Pie charts: CSS `conic-gradient` (no Chart.js dependency).
 
 ---
 
@@ -1299,6 +1519,20 @@ Uncaught exceptions follow Laravel’s default handler (`bootstrap/app.php` has 
 
 ## 24. Troubleshooting
 
+### Running automated tests
+
+```bash
+php artisan test
+# or (clears config, then runs the suite)
+composer test
+```
+
+Feature coverage lives in `tests/Feature/` (password reset, Drive OAuth/folders, admin filters and reports, event status workflow, attendance Drive storage, sidebar layout, account access, academic years, registration, presence, and more). Prefer `php artisan test --filter=ClassName` while iterating.
+
+See also [§0.13](#013-testing-and-troubleshooting).
+
+### Common runtime issues
+
 | Problem | What to check |
 |---------|----------------|
 | Vite CSS/JS missing | Run `npm install` and `npm run build`, or `npm run dev` alongside `artisan serve` |
@@ -1375,7 +1609,7 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 - Login (email + password, remember me, rate limit 5/60s). Password starts masked; the closed-eye / open-eye button only toggles visibility and does not change login POST)
 - Forgot Password (Find Account from DB → Name + recovery email → emailed reset link/code → verify → new password)
 - Scholar register (province/city + Scholarship Club picker from staff-created clubs, unique email/scholar ID, min 8 password)
-- Staff register (location + typed Scholarship Club Name, required Contact Number, unique email, no Scholar Staff Number, status pending, cannot log in until admin approves)
+- Staff register (location + typed Scholarship Club Name, required Contact Number, unique email, no Scholar Staff Number, status pending; can open the pending-approval waiting page until admin approves)
 - Logout (invalidate session; scholar logout also clears `last_seen_at`)
 - Authenticated event image stream
 
@@ -1656,7 +1890,7 @@ BSSA separates **recording** academic years (admin-managed `academic_settings`) 
 | Scholar Staff | Settings → Apply View (year + semester) | Session viewing period for staff pages |
 | Scholar | Profile → Academic Settings | Start Academic Year + viewing year/semester preference |
 
-The orphaned `partials/academic-period-filter.blade.php` is **not** included on portal pages. Staff reports keep their own period filter (`partials/staff-report-period-filter`).
+Portal pages do not show a global Academic Year chrome filter. Staff reports keep their own period filter (`partials/staff-report-period-filter`). Year management for administrators is on **Admin Settings**.
 
 ### Start Academic Year (scholars)
 
@@ -1791,7 +2025,7 @@ Documented against the current codebase and feature tests (not planned work):
 - **Announcement authoring** — scholars can read announcements; no staff/admin create route in `web.php`.
 - **Google Drive Connect in Settings** — connect flow works on `/google-drive`; Settings pages do not embed Connect.
 - **Notification preference keys** — saved on the user; event fan-out does not fully gate each preference flag in every notify path.
-- **`academic-period-filter` partial** — unused leftover; replaced by Settings / report filters.
+- **Dead UI cleanup** — removed unused Laravel `welcome` page, obsolete staff pending-approval views, legacy staff sidebar/topbar stubs, unused admin location/scope partials, and unreachable `AuthController::dashboard` / academic-year activate-deactivate controller methods (routes were already absent). No database schema dropped.
 
 ---
 

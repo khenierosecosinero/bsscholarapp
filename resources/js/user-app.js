@@ -556,6 +556,18 @@ function initProfileEditMode() {
                 return;
             }
 
+            const clubNameInput = form.querySelector('[name="scholarship_club_name"]');
+            if (clubNameInput) {
+                clubNameInput.value = String(clubNameInput.value || '').replace(/\s+/g, ' ').trim();
+                if (clubNameInput.value === '') {
+                    event.preventDefault();
+                    clubNameInput.setCustomValidity('Please enter a Scholarship Club Name.');
+                    clubNameInput.reportValidity();
+                    return;
+                }
+                clubNameInput.setCustomValidity('');
+            }
+
             editableFields().forEach((el) => {
                 el.disabled = false;
                 el.readOnly = false;

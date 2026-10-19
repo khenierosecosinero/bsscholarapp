@@ -79,35 +79,25 @@ Route::get('/dashboard', function () {
             ->with('error', 'Your account has been rejected and can no longer access the system. Please contact Scholar Staff for assistance.');
     }
 
-    if ($user->isPendingApproval()) {
-        Auth::logout();
-        request()->session()->invalidate();
-        request()->session()->regenerateToken();
-
-        return redirect()
-            ->route('login')
-            ->with('warning', 'Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in.');
-    }
-
     if ($user->isAdmin()) {
         return redirect()->route('admin.dashboard');
     }
 
     if ($user->isScholarStaff()) {
-        if ($user->isStaffPendingApproval() || $user->isStaffRejected()) {
-            $isRejected = $user->isStaffRejected();
-
+        if ($user->isStaffRejected()) {
             Auth::logout();
             request()->session()->invalidate();
             request()->session()->regenerateToken();
 
-            $message = $isRejected
-                ? 'Your scholar staff account has been rejected and can no longer access the system. Please contact the system administrator for assistance.'
-                : 'Your scholar staff account is pending administrator approval. You cannot log in until your registration has been approved.';
-
             return redirect()
                 ->route('login')
-                ->with($isRejected ? 'error' : 'warning', $message);
+                ->with('error', 'Your scholar staff account has been rejected and can no longer access the system. Please contact the system administrator for assistance.');
+        }
+
+        if ($user->isStaffPendingApproval()) {
+            return redirect()
+                ->route('staff.pending-approval')
+                ->with('warning', 'Your account is pending approval. Some features will remain unavailable until your account is approved.');
         }
 
         return redirect()->route('staff.dashboard');
@@ -213,15 +203,15 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
 
 Route::middleware(['auth', 'scholar'])->prefix('user')->name('user.')->group(function () {
     Route::get('/dashboard', [UserController::class, 'dashboard'])->name('dashboard');
-    Route::post('/presence', [UserController::class, 'presenceHeartbeat'])->middleware(KeepFlashedAlerts::class)->name('presence');
-    Route::post('/presence/leave', [UserController::class, 'presenceLeave'])->middleware(KeepFlashedAlerts::class)->name('presence.leave');
     Route::post('/dismiss-pending-modal', [UserController::class, 'dismissPendingModal'])->name('dismiss-pending-modal');
-    Route::get('/announcements', [UserController::class, 'announcements'])->name('announcements');
-    Route::get('/announcements/{announcement}', [UserController::class, 'announcementShow'])->name('announcements.show');
-    Route::post('/announcements/read-all', [AnnouncementActionController::class, 'markAllRead'])->name('announcements.read-all');
-    Route::post('/announcements/{announcement}/read', [AnnouncementActionController::class, 'markRead'])->name('announcements.read');
 
     Route::middleware('scholar.approved')->group(function () {
+        Route::post('/presence', [UserController::class, 'presenceHeartbeat'])->middleware(KeepFlashedAlerts::class)->name('presence');
+        Route::post('/presence/leave', [UserController::class, 'presenceLeave'])->middleware(KeepFlashedAlerts::class)->name('presence.leave');
+        Route::get('/announcements', [UserController::class, 'announcements'])->name('announcements');
+        Route::get('/announcements/{announcement}', [UserController::class, 'announcementShow'])->name('announcements.show');
+        Route::post('/announcements/read-all', [AnnouncementActionController::class, 'markAllRead'])->name('announcements.read-all');
+        Route::post('/announcements/{announcement}/read', [AnnouncementActionController::class, 'markRead'])->name('announcements.read');
         Route::get('/events', [UserController::class, 'events'])->name('events');
         Route::get('/attendance-status', [UserController::class, 'attendanceStatus'])->middleware(KeepFlashedAlerts::class)->name('attendance.status');
         Route::get('/calendar', [UserController::class, 'calendar'])->name('calendar');
@@ -229,7 +219,6 @@ Route::middleware(['auth', 'scholar'])->prefix('user')->name('user.')->group(fun
         Route::get('/documents', [UserController::class, 'documents'])->name('documents');
         Route::get('/notifications', [UserController::class, 'notifications'])->name('notifications');
         Route::get('/notifications/more', [UserController::class, 'moreNotifications'])->name('notifications.more');
-        Route::get('/profile', [UserController::class, 'profile'])->name('profile');
 
         Route::post('/events/{event}/register', [EventActionController::class, 'register'])->name('events.register');
         Route::post('/events/{event}/check-in', [EventActionController::class, 'checkIn'])->name('events.check-in');
@@ -247,6 +236,7 @@ Route::middleware(['auth', 'scholar'])->prefix('user')->name('user.')->group(fun
         Route::post('/notifications/read-all', [NotificationActionController::class, 'markAllRead'])->name('notifications.read-all');
         Route::post('/notifications/settings', [NotificationActionController::class, 'updateSettings'])->name('notifications.settings');
 
+        Route::get('/profile', [UserController::class, 'profile'])->name('profile');
         Route::put('/profile', [ProfileActionController::class, 'update'])->name('profile.update');
         Route::post('/profile/avatar', [ProfileActionController::class, 'updateAvatar'])->name('profile.avatar');
         Route::put('/profile/guardian', [ProfileActionController::class, 'updateGuardian'])->name('profile.guardian');

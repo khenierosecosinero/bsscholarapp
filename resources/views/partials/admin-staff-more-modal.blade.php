@@ -54,9 +54,9 @@
     method="POST"
     hidden
     data-no-loading="true"
-    data-confirm="This permanently removes the Scholar Staff account and cannot be undone."
-    data-confirm-title="Delete this scholar staff account?"
-    data-confirm-yes="Delete"
+    data-confirm="This permanently removes the Scholar Staff account and associated records. Their email and Scholarship Club name (if unused by other staff) become available for registration again. This cannot be undone."
+    data-confirm-title="Delete this scholar staff account permanently?"
+    data-confirm-yes="Delete Permanently"
     data-confirm-no="Cancel"
     data-confirm-variant="danger"
 >

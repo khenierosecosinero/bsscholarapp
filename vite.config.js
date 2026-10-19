@@ -55,7 +55,7 @@ const lanHost = lanIPv4();
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/css/app.css', 'resources/css/styles.css', 'resources/js/app.js', 'resources/js/user-app.js'],
+            input: ['resources/css/styles.css', 'resources/js/app.js', 'resources/js/user-app.js'],
             refresh: true,
         }),
         tailwindcss(),

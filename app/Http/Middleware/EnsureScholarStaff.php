@@ -47,13 +47,13 @@ class EnsureScholarStaff
         }
 
         if ($user->isStaffPendingApproval()) {
-            Auth::logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
+            if ($request->routeIs('staff.pending-approval', 'staff.dismiss-pending-modal')) {
+                return $next($request);
+            }
 
             return redirect()
-                ->route('login')
-                ->with('warning', 'Your scholar staff account is pending administrator approval. You cannot log in until your registration has been approved.');
+                ->route('staff.pending-approval')
+                ->with('warning', 'Your account is pending approval. Some features will remain unavailable until your account is approved.');
         }
 
         return $next($request);

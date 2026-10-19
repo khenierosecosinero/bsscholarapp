@@ -8,8 +8,20 @@
 @php
     $activeProfileTab = $activeProfileTab ?? 'profile-info';
     $profileTabUrl = fn (string $tab) => route('user.profile', ['tab' => $tab]);
+    $accountPending = $user->isPendingApproval();
 @endphp
 <div class="page-profile">
+
+@if($accountPending)
+    @include('partials.bssa-alert', [
+        'type' => 'warning',
+        'title' => 'Pending Approval',
+        'message' => 'Your account is pending approval. Profile details are view-only until Scholar Staff approves your registration.',
+        'dismissible' => true,
+        'autoDismiss' => false,
+        'class' => 'bssa-alert--banner',
+    ])
+@endif
 
 <div class="tabs profile-tabs" role="tablist">
     <a href="{{ $profileTabUrl('profile-info') }}" class="tab {{ $activeProfileTab === 'profile-info' ? 'active' : '' }}" data-tab="profile-info" role="tab" aria-selected="{{ $activeProfileTab === 'profile-info' ? 'true' : 'false' }}">Profile Information</a>
@@ -37,13 +49,15 @@
 
                 <div class="card-header profile-section-heading">
                     <span>PROFILE INFORMATION</span>
-                    <button type="button" class="btn blue" data-profile-edit data-profile-edit-for="scholar-profile-form">Edit</button>
+                    @unless($accountPending)
+                        <button type="button" class="btn blue" data-profile-edit data-profile-edit-for="scholar-profile-form">Edit</button>
+                    @endunless
                 </div>
 
                 <div class="profile-header">
                     <div class="profile-avatar-wrap">
                         <x-user-avatar :user="$user" class="profile-avatar" />
-                        <form method="POST" action="{{ route('user.profile.avatar') }}" enctype="multipart/form-data" class="profile-avatar-form">
+                        <form method="POST" action="{{ route('user.profile.avatar') }}" enctype="multipart/form-data" class="profile-avatar-form" @if($accountPending) hidden @endif>
                             @csrf
                             <label class="avatar-edit" for="profile-avatar-input" title="Change/Upload Profile Photo">
                                 <span class="sr-only">Change or upload profile photo</span>
@@ -182,7 +196,9 @@
                     @csrf @method('PUT')
                     <div class="card-header profile-section-heading">
                         <span>GUARDIAN INFORMATION</span>
-                        <button type="button" class="btn blue" data-profile-edit>Edit</button>
+                        @unless($accountPending)
+                            <button type="button" class="btn blue" data-profile-edit>Edit</button>
+                        @endunless
                     </div>
 
                     <div class="profile-section-intro">

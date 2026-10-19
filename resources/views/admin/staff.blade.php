@@ -91,10 +91,10 @@
                                 </form>
                                 <form method="POST" action="{{ route('admin.staff.reject', $member) }}"
                                     data-no-loading="true"
-                                    data-confirm="The account will be marked as Rejected and will not be able to log in."
-                                    data-confirm-title="Reject this scholar staff registration?"
+                                    data-confirm="This permanently removes the pending Scholar Staff registration, associated club ownership when unused by other staff, and frees the email for a new registration. This cannot be undone."
+                                    data-confirm-title="Reject and permanently remove this registration?"
                                     data-confirm-name="{{ $member->full_name }}"
-                                    data-confirm-yes="Reject"
+                                    data-confirm-yes="Reject Permanently"
                                     data-confirm-no="Cancel"
                                     data-confirm-variant="danger">
                                     @csrf

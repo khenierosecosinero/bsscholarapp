@@ -34,13 +34,9 @@ class EnsureScholar
             }
 
             if ($user->isStaffPendingApproval()) {
-                Auth::logout();
-                $request->session()->invalidate();
-                $request->session()->regenerateToken();
-
                 return redirect()
-                    ->route('login')
-                    ->with('warning', 'Your scholar staff account is pending administrator approval. You cannot log in until your registration has been approved.');
+                    ->route('staff.pending-approval')
+                    ->with('warning', 'Your account is pending approval. Some features will remain unavailable until your account is approved.');
             }
 
             return redirect()->route('staff.dashboard');
@@ -56,16 +52,7 @@ class EnsureScholar
                 ->with('error', 'Your account has been rejected and can no longer access the system. Please contact Scholar Staff for assistance.');
         }
 
-        if ($user && $user->isPendingApproval()) {
-            Auth::logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
-            return redirect()
-                ->route('login')
-                ->with('warning', 'Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in.');
-        }
-
+        // Pending scholars may continue to the restricted user dashboard.
         return $next($request);
     }
 }

@@ -98,14 +98,28 @@ class UserSequenceService
     }
 
     /**
-     * Move leftover user FKs (deleted accounts) out of the 1..n range so they
-     * are not attached to a remapped living user.
+     * Owned child rows for deleted users are removed. Nullable reverse references
+     * (reviewed_by, opened_by, …) are cleared so remapping never attaches them
+     * to a different living user.
      *
      * @param  array<int, int>  $liveIds
      */
     private function parkOrphanReferences(array $liveIds): void
     {
-        foreach (self::USER_REFERENCES as [$table, $column]) {
+        $ownedColumns = [
+            ['event_registrations', 'user_id'],
+            ['attendances', 'user_id'],
+            ['documents', 'user_id'],
+            ['user_activities', 'user_id'],
+            ['scholar_notifications', 'user_id'],
+            ['announcement_reads', 'user_id'],
+            ['scholar_suspensions', 'user_id'],
+            ['admin_backup_emails', 'user_id'],
+            ['attendance_session_logs', 'staff_id'],
+            ['sessions', 'user_id'],
+        ];
+
+        foreach ($ownedColumns as [$table, $column]) {
             if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
                 continue;
             }
@@ -116,7 +130,33 @@ class UserSequenceService
                 $query->whereNotIn($column, $liveIds);
             }
 
-            $query->update([$column => DB::raw($column.' + 100000')]);
+            $query->delete();
+        }
+
+        $nullableRefs = [
+            ['documents', 'reviewed_by'],
+            ['events', 'attendance_opened_by'],
+            ['events', 'attendance_closed_by'],
+            ['academic_settings', 'updated_by'],
+            ['google_drive_connections', 'connected_by'],
+            ['scholarship_clubs', 'created_by'],
+            ['scholarship_club_schools', 'created_by'],
+            ['scholar_suspensions', 'issued_by'],
+            ['scholar_suspensions', 'lifted_by'],
+        ];
+
+        foreach ($nullableRefs as [$table, $column]) {
+            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
+                continue;
+            }
+
+            $query = DB::table($table)->whereNotNull($column);
+
+            if ($liveIds !== []) {
+                $query->whereNotIn($column, $liveIds);
+            }
+
+            $query->update([$column => null]);
         }
     }
 

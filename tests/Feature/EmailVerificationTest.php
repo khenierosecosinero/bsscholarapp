@@ -80,7 +80,7 @@ class EmailVerificationTest extends TestCase
             ->assertRedirect(route('login'))
             ->assertSessionHas(
                 'success',
-                'You have successfully created an account! Your account is currently pending approval from the authorized scholar staff. Please wait for your account to be reviewed and approved before logging in. Thank you for your patience!'
+                'You have successfully created an account! Your account is currently pending approval from the authorized scholar staff. You can log in to view your restricted dashboard while you wait for approval.'
             )
             ->assertSessionMissing('warning');
 
@@ -99,12 +99,11 @@ class EmailVerificationTest extends TestCase
                 'email' => $user->email,
                 'password' => 'password123',
             ])
-            ->assertRedirect(route('login'))
-            ->assertSessionHasErrors('email');
+            ->assertRedirect(route('user.dashboard'));
 
-        $this->assertGuest();
-        $this->assertStringNotContainsString('verification', strtolower((string) session('errors')->first('email')));
+        $this->assertAuthenticatedAs($user->fresh());
 
+        auth()->logout();
         $user->forceFill(['status' => User::STATUS_APPROVED])->save();
 
         $this->post(route('login.post'), [

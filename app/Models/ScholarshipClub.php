@@ -7,12 +7,16 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\QueryException;
 use Illuminate\Validation\ValidationException;
 
 class ScholarshipClub extends Model
 {
+    public const DUPLICATE_NAME_MESSAGE = 'This Scholarship Club name is already registered. Please use a different name.';
+
     protected $fillable = [
         'name',
+        'name_key',
         'province',
         'city',
         'street',
@@ -26,6 +30,15 @@ class ScholarshipClub extends Model
         return [
             'is_active' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $club): void {
+            if ($club->isDirty('name') || blank($club->name_key)) {
+                $club->name_key = static::nameKey((string) $club->name);
+            }
+        });
     }
 
     public function program(): BelongsTo
@@ -54,17 +67,13 @@ class ScholarshipClub extends Model
     }
 
     /**
-     * Names retired from the system. They must not appear as selectable Scholarship Clubs.
+     * Historical names removed by a one-time migration. Empty so any unique club name may be registered.
      *
      * @return list<string>
      */
     public static function retiredNames(): array
     {
-        return [
-            'batang surigaonon scholars club',
-            "batang surigaonon scholar's club",
-            'batang surigaonon scholar club',
-        ];
+        return [];
     }
 
     public static function isRetiredName(?string $name): bool
@@ -76,13 +85,82 @@ class ScholarshipClub extends Model
         return in_array(mb_strtolower(static::normalizeName($name)), static::retiredNames(), true);
     }
 
-    public static function assertNameIsAvailable(string $name): void
+    /**
+     * Reject names still owned by an existing Scholar Staff account (case-insensitive, trimmed).
+     * Orphaned club rows (no staff owner) are purged so the name can be reused.
+     */
+    public static function assertNameIsUnique(string $name, ?int $exceptId = null): void
     {
-        if (static::isRetiredName($name)) {
+        $key = static::nameKey($name);
+
+        if ($key === '') {
             throw ValidationException::withMessages([
-                'scholarship_club_name' => 'That Scholarship Club is no longer available.',
+                'scholarship_club_name' => 'Please enter a Scholarship Club Name.',
             ]);
         }
+
+        static::purgeOrphanedClubs($key, $exceptId);
+
+        if (static::nameIsOwnedByStaff($key, $exceptId)) {
+            throw ValidationException::withMessages([
+                'scholarship_club_name' => self::DUPLICATE_NAME_MESSAGE,
+            ]);
+        }
+    }
+
+    /**
+     * True when an existing Scholar Staff account still owns a club with this name key.
+     */
+    public static function nameIsOwnedByStaff(string $nameKey, ?int $exceptId = null): bool
+    {
+        $query = static::query()
+            ->where('name_key', $nameKey)
+            ->whereHas('members', function (Builder $members) {
+                $members->where('role', User::ROLE_SCHOLAR_STAFF);
+            });
+
+        if ($exceptId) {
+            $query->whereKeyNot($exceptId);
+        }
+
+        return $query->exists();
+    }
+
+    /**
+     * Remove club rows that no longer have any Scholar Staff owner so their names can be reused.
+     * Scholar accounts are preserved and only unlinked.
+     */
+    public static function purgeOrphanedClubs(?string $nameKey = null, ?int $exceptId = null): int
+    {
+        $query = static::query()
+            ->whereDoesntHave('members', function (Builder $members) {
+                $members->where('role', User::ROLE_SCHOLAR_STAFF);
+            });
+
+        if ($nameKey !== null) {
+            $query->where('name_key', $nameKey);
+        }
+
+        if ($exceptId) {
+            $query->whereKeyNot($exceptId);
+        }
+
+        $removed = 0;
+
+        foreach ($query->orderBy('id')->get() as $club) {
+            User::query()
+                ->where('scholarship_club_id', $club->id)
+                ->update([
+                    'scholarship_club_id' => null,
+                    'scholarship_club_school_id' => null,
+                ]);
+
+            $club->schools()->delete();
+            $club->delete();
+            $removed++;
+        }
+
+        return $removed;
     }
 
     public function scopeNotRetired(Builder $query): Builder
@@ -96,7 +174,7 @@ class ScholarshipClub extends Model
 
     public function scopeAvailable(Builder $query): Builder
     {
-        return $query->active()->notRetired();
+        return $query->active();
     }
 
     public static function selectableId(?int $id): ?int
@@ -133,6 +211,43 @@ class ScholarshipClub extends Model
         }
 
         return $removed;
+    }
+
+    /**
+     * Free a club name after its owning Scholar Staff account is permanently deleted.
+     * Keeps the club (and name) if another Scholar Staff account still owns it.
+     * Scholar user rows are preserved; they are only unlinked from the released club.
+     */
+    public static function releaseAfterStaffPermanentDeletion(?int $clubId, int $deletedStaffId): bool
+    {
+        if ($clubId) {
+            $club = static::query()->find($clubId);
+
+            if ($club) {
+                $otherStaffRemain = User::query()
+                    ->where('role', User::ROLE_SCHOLAR_STAFF)
+                    ->where('scholarship_club_id', $clubId)
+                    ->whereKeyNot($deletedStaffId)
+                    ->exists();
+
+                if (! $otherStaffRemain) {
+                    User::query()
+                        ->where('scholarship_club_id', $clubId)
+                        ->update([
+                            'scholarship_club_id' => null,
+                            'scholarship_club_school_id' => null,
+                        ]);
+
+                    $club->schools()->delete();
+                    $club->delete();
+
+                    return true;
+                }
+            }
+        }
+
+        // Catch clubs left behind when staff was removed without a club_id link.
+        return static::purgeOrphanedClubs() > 0;
     }
 
     /**
@@ -191,6 +306,11 @@ class ScholarshipClub extends Model
         return trim(preg_replace('/\s+/', ' ', $name) ?? $name);
     }
 
+    public static function nameKey(string $name): string
+    {
+        return mb_strtolower(static::normalizeName($name));
+    }
+
     public static function createForProgram(string $name, int $programId, ?int $createdBy = null, ?string $street = null): self
     {
         $name = static::normalizeName($name);
@@ -201,7 +321,7 @@ class ScholarshipClub extends Model
             ]);
         }
 
-        static::assertNameIsAvailable($name);
+        static::assertNameIsUnique($name);
 
         $program = ScholarshipProgram::query()->active()->find($programId);
 
@@ -213,26 +333,26 @@ class ScholarshipClub extends Model
 
         $location = $program->registrationLocation();
 
-        $exists = static::query()
-            ->where('scholarship_program_id', $programId)
-            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
-            ->exists();
-
-        if ($exists) {
-            throw ValidationException::withMessages([
-                'scholarship_club_name' => 'That Scholarship Club Name is already used in this area.',
+        try {
+            return static::create([
+                'name' => $name,
+                'name_key' => static::nameKey($name),
+                'city' => $location['city'],
+                'province' => $location['province'],
+                'street' => LocationAddress::normalizeStreet($street),
+                'scholarship_program_id' => $program->id,
+                'created_by' => $createdBy,
+                'is_active' => true,
             ]);
-        }
+        } catch (QueryException $exception) {
+            if (static::isUniqueNameConstraintViolation($exception)) {
+                throw ValidationException::withMessages([
+                    'scholarship_club_name' => self::DUPLICATE_NAME_MESSAGE,
+                ]);
+            }
 
-        return static::create([
-            'name' => $name,
-            'city' => $location['city'],
-            'province' => $location['province'],
-            'street' => LocationAddress::normalizeStreet($street),
-            'scholarship_program_id' => $program->id,
-            'created_by' => $createdBy,
-            'is_active' => true,
-        ]);
+            throw $exception;
+        }
     }
 
     public function rename(string $name): void
@@ -250,7 +370,7 @@ class ScholarshipClub extends Model
             ]);
         }
 
-        static::assertNameIsAvailable($name);
+        static::assertNameIsUnique($name, (int) $this->id);
 
         $program = ScholarshipProgram::query()->active()->find($programId);
 
@@ -260,33 +380,41 @@ class ScholarshipClub extends Model
             ]);
         }
 
-        $exists = static::query()
-            ->where('scholarship_program_id', $program->id)
-            ->whereKeyNot($this->id)
-            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
-            ->exists();
-
-        if ($exists) {
-            throw ValidationException::withMessages([
-                'scholarship_club_name' => 'That Scholarship Club Name is already used in this area.',
-            ]);
-        }
-
         $location = $program->registrationLocation();
 
         $this->name = $name;
+        $this->name_key = static::nameKey($name);
         $this->city = $location['city'];
         $this->province = $location['province'];
         if ($syncStreet) {
             $this->street = LocationAddress::normalizeStreet($street);
         }
         $this->scholarship_program_id = $program->id;
-        $this->save();
+
+        try {
+            $this->save();
+        } catch (QueryException $exception) {
+            if (static::isUniqueNameConstraintViolation($exception)) {
+                throw ValidationException::withMessages([
+                    'scholarship_club_name' => self::DUPLICATE_NAME_MESSAGE,
+                ]);
+            }
+
+            throw $exception;
+        }
 
         User::query()
             ->where('scholarship_club_id', $this->id)
             ->update([
                 'scholarship_program_id' => $program->id,
             ]);
+    }
+
+    private static function isUniqueNameConstraintViolation(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+
+        return str_contains($message, 'scholarship_clubs_name_key_unique')
+            || (str_contains($message, 'unique') && str_contains($message, 'name_key'));
     }
 }

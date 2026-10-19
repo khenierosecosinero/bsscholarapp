@@ -576,6 +576,10 @@ class StaffController extends Controller
     {
         $staff = Auth::user()->load('scholarshipClub', 'scholarshipProgram');
 
+        $request->merge([
+            'scholarship_club_name' => ScholarshipClub::normalizeName((string) $request->input('scholarship_club_name', '')),
+        ]);
+
         $validated = $request->validate([
             'scholarship_club_name' => ['required', 'string', 'max:255'],
             'scholarship_program_id' => [
@@ -592,6 +596,11 @@ class StaffController extends Controller
             'scholarship_program_id.required' => 'Please select the Province and Municipality or City where the Scholarship Club is located.',
             'scholarship_program_id.exists' => 'Please select a valid Municipality or City for the Scholarship Club address.',
         ]);
+
+        ScholarshipClub::assertNameIsUnique(
+            $validated['scholarship_club_name'],
+            $staff->scholarship_club_id ? (int) $staff->scholarship_club_id : null
+        );
 
         $assignment = $this->programAssignment->resolveRegistrationAssignment((int) $validated['scholarship_program_id']);
         $street = LocationAddress::normalizeStreet($validated['street'] ?? null);
@@ -775,24 +784,16 @@ class StaffController extends Controller
             return $this->approvalActionFailed($request, 'Only pending scholar accounts can be rejected.', 422);
         }
 
-        $scholar->update(['status' => User::STATUS_REJECTED]);
-        $scholar->forceFill(['last_seen_at' => null])->save();
+        $name = $scholar->full_name;
+        $deletedId = (int) $scholar->id;
+        $this->accounts->permanentlyDelete($scholar);
 
-        $this->scholar->logActivity($scholar, 'account', 'Account rejected by scholar staff');
-        $this->scholar->notify(
-            $scholar,
-            'Account Rejected',
-            'Your scholar registration was rejected by Scholar Staff. You cannot log in until a new registration is approved.',
-            'system'
-        );
-
-        // Keep the rejected application record for staff review; leave the profile URL safely.
         return $this->approvalActionSucceeded(
             $request,
-            "{$scholar->full_name}'s application has been rejected. The account remains on file for review and is no longer in the active scholar list.",
+            "{$name}'s application was rejected and permanently removed. Their email and scholar ID can be used to register again.",
             [
                 'action' => 'rejected',
-                'scholar_id' => $scholar->id,
+                'scholar_id' => $deletedId,
                 'redirect' => route('staff.scholars'),
             ]
         );
@@ -816,7 +817,10 @@ class StaffController extends Controller
 
         return redirect()
             ->route('staff.scholars')
-            ->with('success', 'Scholar account deleted successfully.');
+            ->with(
+                'success',
+                "{$name}'s scholar account and all associated records were permanently deleted. Their email and scholar ID can be used to register again."
+            );
     }
 
     public function blockScholar(User $scholar)
@@ -925,17 +929,22 @@ class StaffController extends Controller
             return redirect()->route('staff.dashboard');
         }
 
-        Auth::logout();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        if ($staff->isStaffRejected()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
 
-        $message = $staff->isStaffRejected()
-            ? 'Your scholar staff account has been rejected and can no longer access the system. Please contact the system administrator for assistance.'
-            : 'Your scholar staff account is pending administrator approval. You cannot log in until your registration has been approved.';
+            return redirect()
+                ->route('login')
+                ->with('error', 'Your scholar staff account has been rejected and can no longer access the system. Please contact the system administrator for assistance.');
+        }
 
-        return redirect()
-            ->route('login')
-            ->with($staff->isStaffRejected() ? 'error' : 'warning', $message);
+        abort_unless($staff->isStaffPendingApproval(), 403);
+
+        return view('staff.pending-approval', [
+            'staff' => $staff,
+            'showPendingStaffApprovalModal' => $request->session()->get('show_pending_staff_approval_modal', false),
+        ]);
     }
 
     public function dismissPendingStaffModal(Request $request)

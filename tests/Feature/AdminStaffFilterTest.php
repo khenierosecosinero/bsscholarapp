@@ -132,10 +132,9 @@ class AdminStaffFilterTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.staff'))
             ->assertOk()
-            ->assertSee('data-confirm-title="Reject this scholar staff registration?"', false)
+            ->assertSee('data-confirm-title="Reject and permanently remove this registration?"', false)
             ->assertSee('data-no-loading="true"', false)
-            ->assertSee('data-confirm="The account will be marked as Rejected and will not be able to log in."', false)
-            ->assertSee('data-confirm-yes="Reject"', false)
+            ->assertSee('data-confirm-yes="Reject Permanently"', false)
             ->assertSee('data-confirm-no="Cancel"', false);
 
         $this->actingAs($admin)
@@ -190,7 +189,7 @@ class AdminStaffFilterTest extends TestCase
 
         $this->actingAs($admin)
             ->get(route('admin.staff.show', $scholar))
-            ->assertNotFound();
+            ->assertRedirect();
     }
 
     public function test_admin_can_activate_deactivate_and_delete_staff_accounts(): void

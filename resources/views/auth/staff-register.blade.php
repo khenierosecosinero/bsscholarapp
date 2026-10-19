@@ -13,7 +13,7 @@
                 <div class="auth-form-body">
                     <input class="form-input" type="text" name="full_name" placeholder="Name of Scholar Staff" value="{{ old('full_name') }}" required autocomplete="name" />
                     <label class="location-cascade-label" for="scholarship_club_name" style="display:block;font-size:12px;font-weight:600;color:#6b7280;margin:0 0 6px;padding-left:4px">Scholarship Club Name</label>
-                    <input class="form-input" type="text" id="scholarship_club_name" name="scholarship_club_name" placeholder="Scholarship Club Name" value="{{ old('scholarship_club_name') }}" required maxlength="255" />
+                    <input class="form-input" type="text" id="scholarship_club_name" name="scholarship_club_name" placeholder="Scholarship Club Name" value="{{ old('scholarship_club_name') }}" required maxlength="255" pattern=".*\S.*" title="Enter a Scholarship Club Name that is not already registered." autocomplete="organization" />
                     @include('partials.staff-location-select', [
                         'locationTree' => $locationTree,
                         'requireCity' => true,
@@ -38,4 +38,39 @@
         ])
     </div>
 </div>
+@endsection
+
+@section('scripts')
+<script>
+(function () {
+    var form = document.querySelector('form.auth-form');
+    var input = document.getElementById('scholarship_club_name');
+    if (!form || !input) {
+        return;
+    }
+
+    function normalizeClubName(value) {
+        return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    input.addEventListener('blur', function () {
+        input.value = normalizeClubName(input.value);
+    });
+
+    form.addEventListener('submit', function (event) {
+        input.value = normalizeClubName(input.value);
+        if (input.value === '') {
+            event.preventDefault();
+            input.setCustomValidity('Please enter a Scholarship Club Name.');
+            input.reportValidity();
+            return;
+        }
+        input.setCustomValidity('');
+    });
+
+    input.addEventListener('input', function () {
+        input.setCustomValidity('');
+    });
+})();
+</script>
 @endsection
