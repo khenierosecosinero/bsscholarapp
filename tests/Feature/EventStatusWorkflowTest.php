@@ -628,7 +628,8 @@ class EventStatusWorkflowTest extends TestCase
         $this->actingAs($staff)
             ->get(route('staff.attendance', ['event' => $event->id]))
             ->assertOk()
-            ->assertSee('0 checked in')
+            ->assertSee('0 approved')
+            ->assertSee('0 pending')
             ->assertSee('0 failed to check in')
             ->assertDontSee($scholar->full_name);
 

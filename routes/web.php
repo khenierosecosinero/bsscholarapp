@@ -6,7 +6,6 @@ use App\Http\Controllers\AnnouncementActionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DocumentActionController;
 use App\Http\Controllers\EventActionController;
-use App\Http\Controllers\GoogleDriveController;
 use App\Http\Controllers\NotificationActionController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProfileActionController;
@@ -47,17 +46,8 @@ Route::get('/register/staff', [AuthController::class, 'showStaffRegister'])->nam
 Route::post('/register/staff', [AuthController::class, 'registerStaff'])->name('register.staff.post');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-Route::get('/auth/google/callback', [GoogleDriveController::class, 'handleGoogleCallback'])
-    ->name('google.callback');
-
 Route::middleware('auth')->group(function () {
     Route::put('/academic-period', [AcademicPeriodController::class, 'update'])->name('academic.period.update');
-    Route::get('/auth/google', [GoogleDriveController::class, 'redirectToGoogle'])
-        ->name('google.redirect');
-    Route::get('/google-drive', [GoogleDriveController::class, 'showTest'])
-        ->name('google.drive.test');
-    Route::post('/google-drive/upload', [GoogleDriveController::class, 'upload'])
-        ->name('google.drive.upload');
 });
 
 Route::middleware('auth')->get('/events/{event}/image', [EventActionController::class, 'viewEventImage'])->name('events.image');

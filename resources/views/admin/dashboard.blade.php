@@ -4,6 +4,11 @@
 
 @include('partials.admin-dashboard-scope-select')
 
+@include('partials.admin-academic-year-selector', [
+    'title' => 'Viewing Academic Year',
+    'inputId' => 'admin-dashboard-view-year',
+])
+
 <section class="staff-stat-grid">
     <div class="staff-stat-card">
         <div class="staff-stat-icon blue">👥</div>

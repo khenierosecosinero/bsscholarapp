@@ -36,17 +36,16 @@
             @else
                 <div class="table-wrap">
                 <table class="table service-table stack-table">
-                    <thead><tr><th>Event / Activity</th><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours Earned</th><th>Status</th><th>Remarks</th><th>Action</th></tr></thead>
+                    <thead><tr><th>Event / Activity</th><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours Earned</th><th>Status</th><th>Action</th></tr></thead>
                     <tbody>
                         @foreach($records as $rec)
                             <tr>
-                                <td data-label="Event / Activity"><div class="table-event">@if($rec->event?->image_url)<img src="{{ $rec->event->image_url }}" alt="">@endif {{ $rec->event?->title ?? 'N/A' }}</div></td>
+                                <td data-label="Event / Activity"><div class="table-event">@if($rec->event?->image_url)<img src="{{ $rec->event->image_url }}" alt="">@endif<span class="service-event-name">{{ $rec->event?->title ?? 'N/A' }}</span></div></td>
                                 <td data-label="Date">{{ $rec->event?->starts_at?->format('M d Y') ?? '—' }}</td>
                                 <td data-label="Time In">{{ $rec->check_in?->format('g:i A') ?? '—' }}</td>
                                 <td data-label="Time Out">{{ $rec->check_out?->format('g:i A') ?? '—' }}</td>
                                 <td data-label="Hours Earned">{{ $rec->hoursLabel() }}</td>
                                 <td data-label="Status"><span class="badge {{ $rec->status === 'approved' ? 'confirmed' : ($rec->status === 'rejected' || $rec->status === 'failed_to_check_in' ? 'rejected' : 'pending') }}">{{ $rec->statusLabel() }}</span></td>
-                                <td data-label="Remarks">{{ $rec->reviewNote() }}</td>
                                 <td data-label="Action">@if($rec->event_id)<a href="{{ route('user.events', ['event' => $rec->event_id]) }}" class="btn outline small">View</a>@endif</td>
                             </tr>
                         @endforeach
@@ -64,6 +63,16 @@
                 <div class="step"><div class="step-num">3</div><div class="step-icon">&#128269;</div><strong>Verification</strong><p>Scholar Staff reviews your photo, then approves your hours.</p></div>
                 <div class="step"><div class="step-num">4</div><div class="step-icon">&#9201;</div><strong>Earn Hours</strong><p>Approved hours are credited to your account.</p></div>
             </div>
+        </div>
+
+        <div class="card notes-card sh-notes-card">
+            <div class="card-header">NOTES</div>
+            <ul>
+                <li>You are required to complete {{ $hourStats['required'] }} service hours per semester.</li>
+                <li>Service hours are credited only after Scholar Staff verifies your attendance and participation photo.</li>
+                <li>Approved hours beyond the semester requirement are credited to the next semester.</li>
+                <li>Scholars who fail to check in receive 0 service hours for that event.</li>
+            </ul>
         </div>
     </div>
 

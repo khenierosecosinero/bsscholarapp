@@ -15,57 +15,32 @@ use Throwable;
 class DocumentStorageService
 {
     public function __construct(
-        private GoogleDriveService $drive,
+        private LocalArchive $archive,
         private AcademicSettingsService $academic,
     ) {}
 
     public function store(User $scholar, DocumentType $type, UploadedFile $file): Document
     {
-        if (! $this->drive->isConnected()) {
-            app(WorkflowMailService::class)->alertAdministrators(
-                'drive-not-connected',
-                'Google Drive is not connected',
-                'A scholar document could not be stored because Google Drive is not connected. Connect Google Drive from Settings.'
-            );
-
-            throw new RuntimeException('Google Drive is not connected. Ask an administrator or Scholar Staff to open Settings and connect Google Drive first.');
-        }
-
         $existing = Document::query()
             ->where('user_id', $scholar->id)
             ->where('document_type_id', $type->id)
             ->first();
 
-        [$yearStart, $yearEnd, $yearLabel] = $this->resolveAcademicYear($scholar, $existing);
-        $folderId = $this->drive->ensureScholarFolder($scholar, $yearLabel);
-
-        $oldDriveId = $existing?->google_drive_file_id;
+        [$yearStart, $yearEnd] = $this->resolveAcademicYear($scholar, $existing);
+        $directory = $this->archive->documentDirectory($scholar, $yearStart, $yearEnd);
         $oldPath = $existing?->file_path;
-        $driveName = $this->drive->originalUploadName($file);
-
-        if ($oldDriveId) {
-            try {
-                $this->drive->deleteFile($oldDriveId);
-            } catch (Throwable $e) {
-                Log::warning('Could not remove the previous Drive file before replace.', [
-                    'file_id' => $oldDriveId,
-                    'message' => $e->getMessage(),
-                ]);
-            }
-        }
 
         try {
-            $uploaded = $this->drive->uploadFile($file, $folderId, $driveName);
+            $path = $this->archive->storeUpload($file, $directory);
         } catch (Throwable $e) {
-            app(WorkflowMailService::class)->alertAdministrators(
-                'drive-upload-failed',
-                'Google Drive document upload failed',
-                'A scholar document could not be stored in Google Drive. Review the Drive connection in Settings.'
-            );
+            Log::error('Document could not be stored on the local public disk.', [
+                'user_id' => $scholar->id,
+                'document_type_id' => $type->id,
+                'message' => $e->getMessage(),
+            ]);
 
-            throw $e;
+            throw new RuntimeException('The document could not be saved. Please try again.');
         }
-        $path = $file->store('documents/'.$scholar->id, 'public');
 
         try {
             $document = Document::updateOrCreate(
@@ -74,8 +49,6 @@ class DocumentStorageService
                     'academic_year_start' => $yearStart,
                     'academic_year_end' => $yearEnd,
                     'file_path' => $path,
-                    'google_drive_file_id' => $uploaded->getId(),
-                    'google_drive_web_link' => $uploaded->getWebViewLink(),
                     'original_name' => $file->getClientOriginalName(),
                     'status' => 'pending',
                     'uploaded_at' => now(),
@@ -85,22 +58,12 @@ class DocumentStorageService
                 ]
             );
         } catch (Throwable $e) {
-            Log::error('Document metadata save failed after Drive upload.', [
-                'drive_file_id' => $uploaded->getId(),
-                'message' => $e->getMessage(),
-            ]);
-
-            try {
-                $this->drive->deleteFile((string) $uploaded->getId());
-            } catch (Throwable) {
-            }
-
             Storage::disk('public')->delete($path);
 
             throw new RuntimeException('The document could not be saved after upload.');
         }
 
-        if ($oldPath && $oldPath !== $path) {
+        if ($oldPath && $oldPath !== $path && str_starts_with($oldPath, 'bssa/')) {
             Storage::disk('public')->delete($oldPath);
         }
 
@@ -109,29 +72,12 @@ class DocumentStorageService
 
     public function stream(Document $document, bool $asDownload = false): Response
     {
-        if ($document->google_drive_file_id) {
-            try {
-                $file = $this->drive->downloadFile($document->google_drive_file_id);
-                $response = response($file['contents'])
-                    ->header('Content-Type', $file['mime']);
-
-                $name = $document->original_name ?: $file['name'];
-
-                return $asDownload
-                    ? $response->header('Content-Disposition', 'attachment; filename="'.$name.'"')
-                    : $response->header('Content-Disposition', 'inline; filename="'.$name.'"');
-            } catch (Throwable $e) {
-                Log::warning('Streaming from Google Drive failed; trying local file.', [
-                    'document_id' => $document->id,
-                    'message' => $e->getMessage(),
-                ]);
-            }
-        }
-
         if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
+            $name = $document->original_name ?: 'document';
+
             return $asDownload
-                ? Storage::disk('public')->download($document->file_path, $document->original_name ?? 'document')
-                : Storage::disk('public')->response($document->file_path, $document->original_name ?? 'document');
+                ? Storage::disk('public')->download($document->file_path, $name)
+                : Storage::disk('public')->response($document->file_path, $name);
         }
 
         abort(404, 'File not found.');
@@ -139,18 +85,7 @@ class DocumentStorageService
 
     public function deleteStoredFile(Document $document): void
     {
-        if ($document->google_drive_file_id) {
-            try {
-                $this->drive->deleteFile($document->google_drive_file_id);
-            } catch (Throwable $e) {
-                Log::warning('Google Drive file delete during document removal failed.', [
-                    'document_id' => $document->id,
-                    'message' => $e->getMessage(),
-                ]);
-            }
-        }
-
-        if ($document->file_path) {
+        if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
             Storage::disk('public')->delete($document->file_path);
         }
 
@@ -168,7 +103,7 @@ class DocumentStorageService
     }
 
     /**
-     * @return array{0: int, 1: int, 2: string}
+     * @return array{0: int, 1: int}
      */
     private function resolveAcademicYear(User $scholar, ?Document $existing = null): array
     {
@@ -176,15 +111,11 @@ class DocumentStorageService
         $end = (int) ($existing?->academic_year_end ?? 0);
 
         if ($start >= 2000) {
-            $end = $end === $start + 1 ? $end : $start + 1;
-
-            return [$start, $end, $this->drive->driveYearFolderName($start, $end)];
+            return [$start, $end === $start + 1 ? $end : $start + 1];
         }
 
         $period = $this->academic->forUser($scholar);
-        $start = (int) $period->year_start;
-        $end = (int) $period->year_end;
 
-        return [$start, $end, $this->drive->driveYearFolderName($start, $end)];
+        return [(int) $period->year_start, (int) $period->year_end];
     }
 }

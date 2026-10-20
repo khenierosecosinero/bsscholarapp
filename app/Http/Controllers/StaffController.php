@@ -13,6 +13,7 @@ use App\Services\AcademicSettingsService;
 use App\Services\AccountAccessService;
 use App\Services\AccountService;
 use App\Services\AttendanceSessionService;
+use App\Services\LocalArchive;
 use App\Services\ScholarService;
 use App\Services\ScholarshipProgramAssignmentService;
 use App\Services\StaffDashboardService;
@@ -304,9 +305,17 @@ class StaffController extends Controller
             'image.max' => 'The event image must not be larger than 5MB.',
         ]);
 
-        $imagePath = $request->hasFile('image')
-            ? $request->file('image')->store('event_images', 'public')
-            : null;
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $program = $staff->scholarshipProgram;
+            $period = $this->academic->current();
+            $imagePath = $program
+                ? app(LocalArchive::class)->storeUpload(
+                    $request->file('image'),
+                    app(LocalArchive::class)->eventImageDirectory($program, $data['title'], (int) $period->year_start, (int) $period->year_end)
+                )
+                : $request->file('image')->store('event_images', 'public');
+        }
 
         $event = Event::create([
             'title' => $data['title'],
@@ -1118,7 +1127,12 @@ class StaffController extends Controller
             ->orderByDesc('starts_at')
             ->get()
             ->each(function (Event $event) {
-                $event->setAttribute('checked_in_count', $event->attendances->filter(fn ($attendance) => $attendance->hasCheckedIn())->count());
+                $event->setAttribute('checked_in_count', $event->attendances->filter(
+                    fn ($attendance) => $attendance->hasCheckedIn() && $attendance->status === Attendance::STATUS_APPROVED
+                )->count());
+                $event->setAttribute('pending_count', $event->attendances->filter(
+                    fn ($attendance) => $attendance->hasCheckedIn() && $attendance->status === Attendance::STATUS_PENDING
+                )->count());
                 $event->setAttribute('failed_count', $event->registrations->filter(function ($registration) use ($event) {
                     $attendance = $event->attendances->firstWhere('user_id', $registration->user_id);
 
@@ -1130,7 +1144,8 @@ class StaffController extends Controller
             ? $events->firstWhere('id', $selectedEventId)
             : null;
 
-        $checkedIn = collect();
+        $approved = collect();
+        $pending = collect();
         $failed = collect();
 
         if ($selected) {
@@ -1155,7 +1170,11 @@ class StaffController extends Controller
                 ];
 
                 if ($attendance?->hasCheckedIn()) {
-                    $checkedIn->push($row);
+                    if ($attendance->status === Attendance::STATUS_APPROVED) {
+                        $approved->push($row);
+                    } elseif ($attendance->status === Attendance::STATUS_PENDING) {
+                        $pending->push($row);
+                    }
                 } elseif (
                     $selected->hasEnded()
                     || $selected->attendanceSessionClosed()
@@ -1166,18 +1185,17 @@ class StaffController extends Controller
                 }
             }
 
-            $checkedIn = $checkedIn
-                ->filter(fn (array $row) => $this->staffData->userMatchesSchoolFilter($row['user'] ?? null, $schoolFilter))
-                ->values();
-            $failed = $failed
-                ->filter(fn (array $row) => $this->staffData->userMatchesSchoolFilter($row['user'] ?? null, $schoolFilter))
-                ->values();
+            $matchesSchool = fn (array $row) => $this->staffData->userMatchesSchoolFilter($row['user'] ?? null, $schoolFilter);
+            $approved = $approved->filter($matchesSchool)->values();
+            $pending = $pending->filter($matchesSchool)->values();
+            $failed = $failed->filter($matchesSchool)->values();
         }
 
         return [
             'events' => $events,
             'selected' => $selected,
-            'checkedIn' => $checkedIn,
+            'approved' => $approved,
+            'pending' => $pending,
             'failed' => $failed,
         ];
     }

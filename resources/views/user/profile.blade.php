@@ -92,7 +92,7 @@
                         <div class="form-group"><label for="scholar_id">Scholar ID</label><input id="scholar_id" type="text" value="{{ $user->scholar_id }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group form-group-wide"><label for="email">Login Email</label><input id="email" type="email" value="{{ $user->email }}" readonly disabled aria-readonly="true"></div>
                         <div class="form-group form-group-wide" data-profile-address>
-                            <label for="street">No./Street</label>
+                            <label for="street">No./Street & Barangay</label>
                             <input id="street" type="text" name="street" value="{{ old('street', $user->streetName()) }}" maxlength="255" autocomplete="address-line1" placeholder="House number and street name" data-profile-editable data-saved-value="{{ $user->streetName() }}">
                             <small class="muted">House number and street name.</small>
                             @error('street')
@@ -228,6 +228,29 @@
             @endphp
 
             <div class="card">
+                <div class="card-header">ACADEMIC INFORMATION</div>
+                <p class="muted small">These details come from your account. Scholarship Club assignment is controlled by the Administrator and Scholar Staff. Update your school, course, and year level from Profile.</p>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="academic-club">Scholarship Club</label>
+                        <input id="academic-club" type="text" value="{{ filled($user->scholarshipClubName()) ? $user->scholarshipClubName() : 'Not on file' }}" readonly disabled>
+                    </div>
+                    <div class="form-group">
+                        <label for="academic-school">School/University</label>
+                        <input id="academic-school" type="text" value="{{ filled($user->school_university) ? $user->school_university : 'Not on file' }}" readonly disabled>
+                    </div>
+                    <div class="form-group">
+                        <label for="academic-course">Course</label>
+                        <input id="academic-course" type="text" value="{{ filled($user->course_year_level) ? $user->course_year_level : 'Not on file' }}" readonly disabled>
+                    </div>
+                    <div class="form-group">
+                        <label for="academic-year-level">Year Level</label>
+                        <input id="academic-year-level" type="text" value="{{ filled($user->year_level) ? $user->year_level : 'Not on file' }}" readonly disabled>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top:16px">
                 <div class="card-header">START ACADEMIC YEAR</div>
                 <p class="muted small">This is the academic year when you originally began the scholarship. Year 1–Year 4 are calculated from this year and stay fixed. Changing the viewing Academic Year and Semester below does not change your Start Academic Year.</p>
                 <form method="POST" action="{{ route('user.profile.academic') }}">
@@ -243,7 +266,7 @@
                                 @endforeach
                             </select>
                             @error('program_start_year')
-                                <p class="field-error">{{ $message }}</p>
+                                <p class="bssa-field-error">{{ $message }}</p>
                             @enderror
                         </div>
                     </div>
@@ -253,7 +276,7 @@
 
             <div class="card" style="margin-top:16px">
                 <div class="card-header">CURRENT ACADEMIC PERIOD</div>
-                <p class="muted small">Choose an academic year and semester to filter your service hours and records. This does not change your Start Academic Year, saved attendance, or the administrator's academic years.</p>
+                <p class="muted small">Choose an academic year and semester to filter your service hours and records. The choice is saved to your account and restored the next time you sign in. It does not change your Start Academic Year, saved attendance, or the administrator's academic years.</p>
                 <form method="POST" action="{{ route('academic.period.update') }}">
                     @csrf
                     @method('PUT')
@@ -265,6 +288,9 @@
                                     <option value="{{ $year }}" @selected($selectedYearStart === (int) $year)>AY {{ $label }}</option>
                                 @endforeach
                             </select>
+                            @error('year_start')
+                                <p class="bssa-field-error">{{ $message }}</p>
+                            @enderror
                         </div>
                         <div class="form-group">
                             <label for="semester">Semester</label>
@@ -273,6 +299,9 @@
                                     <option value="{{ $option }}" @selected($selectedSemester === $option)>{{ $option }}</option>
                                 @endforeach
                             </select>
+                            @error('semester')
+                                <p class="bssa-field-error">{{ $message }}</p>
+                            @enderror
                         </div>
                     </div>
                     <div class="form-actions-right"><button type="submit" class="btn blue">Apply View</button></div>
@@ -291,10 +320,29 @@
         <div class="tab-panel {{ $activeProfileTab === 'account-settings' ? 'active' : '' }}" id="account-settings" @if($activeProfileTab !== 'account-settings') hidden @endif>
             <div class="card">
                 <div class="card-header">LOGIN CREDENTIALS</div>
-                <p class="muted">For your security, your login email, scholar ID, and password are set when you register and cannot be edited from this page.</p>
+                <p class="muted">These are the login details for the account you are signed in with. Your password is stored as a secure hash and is never shown.</p>
                 <div class="form-grid">
-                    <div class="form-group"><label>Login Email</label><input type="email" value="{{ $user->email }}" readonly disabled></div>
-                    <div class="form-group"><label>Scholar ID</label><input type="text" value="{{ $user->scholar_id }}" readonly disabled></div>
+                    <div class="form-group">
+                        <label for="login-email">Login Email</label>
+                        @if(filled($user->email))
+                            <input id="login-email" type="email" value="{{ $user->email }}" readonly disabled autocomplete="username">
+                        @else
+                            <p class="bssa-field-error">This account has no login email on file. Ask Scholar Staff to update your account before signing in with email.</p>
+                        @endif
+                    </div>
+                    <div class="form-group">
+                        <label for="login-scholar-id">Scholar ID</label>
+                        @if(filled($user->scholar_id))
+                            <input id="login-scholar-id" type="text" value="{{ $user->scholar_id }}" readonly disabled autocomplete="off">
+                        @else
+                            <p class="bssa-field-error">This account has no Scholar ID on file.</p>
+                        @endif
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input id="login-password" type="text" value="Hidden" readonly disabled autocomplete="off" aria-describedby="login-password-note">
+                        <p id="login-password-note" class="muted small">Your password, its hash, and your session token are never displayed. Use Change Password to replace it.</p>
+                    </div>
                 </div>
                 <p class="muted small">To change your password, go to the <a href="{{ $profileTabUrl('security') }}#security" class="link tab-trigger" data-tab="security">Security</a> tab. To remove your account entirely, use the Danger Zone on the right.</p>
             </div>
@@ -303,13 +351,28 @@
         <div class="tab-panel {{ $activeProfileTab === 'security' ? 'active' : '' }}" id="security" @if($activeProfileTab !== 'security') hidden @endif>
             <div class="card">
                 <div class="card-header">CHANGE PASSWORD</div>
-                <p class="muted small">You must enter your current password to set a new one.</p>
-                <form method="POST" action="{{ route('user.profile.password') }}">
+                <p class="muted small">Enter your current password, then a new password of at least 8 characters. The new password and confirmation must match.</p>
+                <form method="POST" action="{{ route('user.profile.password') }}" id="change-password-form" autocomplete="off">
                     @csrf @method('PUT')
                     <div class="form-grid">
-                        <div class="form-group"><label for="current_password">Current Password</label><input id="current_password" type="password" name="current_password" required autocomplete="current-password"></div>
-                        <div class="form-group"><label for="password">New Password</label><input id="password" type="password" name="password" required autocomplete="new-password" minlength="8"></div>
-                        <div class="form-group"><label for="password_confirmation">Confirm New Password</label><input id="password_confirmation" type="password" name="password_confirmation" required autocomplete="new-password" minlength="8"></div>
+                        <div class="form-group">
+                            <label for="current_password">Current Password</label>
+                            <input id="current_password" type="password" name="current_password" required autocomplete="current-password">
+                            @error('current_password')
+                                <p class="bssa-field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div class="form-group">
+                            <label for="password">New Password</label>
+                            <input id="password" type="password" name="password" required autocomplete="new-password" minlength="8">
+                            @error('password')
+                                <p class="bssa-field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div class="form-group">
+                            <label for="password_confirmation">Confirm New Password</label>
+                            <input id="password_confirmation" type="password" name="password_confirmation" required autocomplete="new-password" minlength="8">
+                        </div>
                     </div>
                     <div class="form-actions-right"><button type="submit" class="btn blue">Change Password</button></div>
                 </form>
@@ -331,17 +394,17 @@
         <div class="card">
             <div class="card-header">SECURITY SHORTCUTS</div>
             <div class="shortcut-list">
-                <a href="{{ $profileTabUrl('academic-settings') }}#academic-settings" class="shortcut-item" data-tab="academic-settings" data-no-loading="true">
+                <a href="{{ $profileTabUrl('academic-settings') }}#academic-settings" class="shortcut-item {{ $activeProfileTab === 'academic-settings' ? 'is-current' : '' }}" data-tab="academic-settings" data-no-loading="true" @if($activeProfileTab === 'academic-settings') aria-current="page" @endif>
                     <span class="shortcut-icon" aria-hidden="true">&#128218;</span>
                     <span class="shortcut-label">Academic Settings</span>
                     <span class="shortcut-arrow" aria-hidden="true">&#9654;</span>
                 </a>
-                <a href="{{ $profileTabUrl('security') }}#security" class="shortcut-item" data-tab="security" data-no-loading="true">
+                <a href="{{ $profileTabUrl('security') }}#security" class="shortcut-item {{ $activeProfileTab === 'security' ? 'is-current' : '' }}" data-tab="security" data-no-loading="true" @if($activeProfileTab === 'security') aria-current="page" @endif>
                     <span class="shortcut-icon" aria-hidden="true">&#128274;</span>
                     <span class="shortcut-label">Change Password</span>
                     <span class="shortcut-arrow" aria-hidden="true">&#9654;</span>
                 </a>
-                <a href="{{ $profileTabUrl('account-settings') }}#account-settings" class="shortcut-item" data-tab="account-settings" data-no-loading="true">
+                <a href="{{ $profileTabUrl('account-settings') }}#account-settings" class="shortcut-item {{ $activeProfileTab === 'account-settings' ? 'is-current' : '' }}" data-tab="account-settings" data-no-loading="true" @if($activeProfileTab === 'account-settings') aria-current="page" @endif>
                     <span class="shortcut-icon" aria-hidden="true">&#128100;</span>
                     <span class="shortcut-label">View Login Credentials</span>
                     <span class="shortcut-arrow" aria-hidden="true">&#9654;</span>
@@ -380,8 +443,16 @@
 
     const allowed = ['profile-info', 'academic-settings', 'account-settings', 'security'];
 
-    const activateTab = (id, scroll) => {
+    const tabFromLocation = () => {
+        const query = new URLSearchParams(window.location.search).get('tab') || '';
+        const hash = window.location.hash.replace('#', '');
+        const id = allowed.includes(query) ? query : (allowed.includes(hash) ? hash : 'profile-info');
+        return id;
+    };
+
+    const activateTab = (id, scroll, historyMode) => {
         if (!allowed.includes(id)) return false;
+        const current = root.querySelector('.tab-panel.active')?.id || 'profile-info';
 
         root.querySelectorAll('.profile-tabs .tab').forEach((tab) => {
             const isActive = tab.dataset.tab === id;
@@ -395,6 +466,13 @@
             panel.classList.toggle('active', isActive);
         });
 
+        root.querySelectorAll('.shortcut-item[data-tab]').forEach((item) => {
+            const isActive = item.dataset.tab === id;
+            item.classList.toggle('is-current', isActive);
+            if (isActive) item.setAttribute('aria-current', 'page');
+            else item.removeAttribute('aria-current');
+        });
+
         const url = new URL(window.location.href);
         if (id === 'profile-info') {
             url.searchParams.delete('tab');
@@ -403,7 +481,13 @@
             url.searchParams.set('tab', id);
             url.hash = id;
         }
-        history.replaceState(null, '', url);
+        const next = url.pathname + url.search + url.hash;
+        const now = window.location.pathname + window.location.search + window.location.hash;
+        if (historyMode === 'push' && current !== id) {
+            history.pushState({ profileTab: id }, '', next);
+        } else if (historyMode !== 'none' && next !== now) {
+            history.replaceState({ profileTab: id }, '', next);
+        }
 
         if (scroll) {
             const target = document.getElementById(id) || root.querySelector('.profile-tabs');
@@ -421,12 +505,35 @@
         const id = trigger.dataset.tab;
         if (!id || !allowed.includes(id)) return;
         event.preventDefault();
-        activateTab(id, trigger.classList.contains('shortcut-item') || Boolean(trigger.closest('.shortcut-list')) || trigger.classList.contains('tab-trigger'));
+        activateTab(id, trigger.classList.contains('shortcut-item') || Boolean(trigger.closest('.shortcut-list')) || trigger.classList.contains('tab-trigger'), 'push');
     });
 
-    const fromUrl = new URLSearchParams(window.location.search).get('tab') || window.location.hash.replace('#', '');
-    if (fromUrl && allowed.includes(fromUrl)) {
-        activateTab(fromUrl, fromUrl !== 'profile-info');
+    window.addEventListener('popstate', () => {
+        activateTab(tabFromLocation(), true, 'none');
+    });
+
+    activateTab(tabFromLocation(), tabFromLocation() !== 'profile-info', 'replace');
+
+    const passwordForm = document.getElementById('change-password-form');
+    const newPassword = document.getElementById('password');
+    const confirmPassword = document.getElementById('password_confirmation');
+    if (passwordForm && newPassword && confirmPassword) {
+        const syncPasswordMatch = () => {
+            if (confirmPassword.value !== '' && newPassword.value !== confirmPassword.value) {
+                confirmPassword.setCustomValidity('New password and confirmation must match.');
+            } else {
+                confirmPassword.setCustomValidity('');
+            }
+        };
+        newPassword.addEventListener('input', syncPasswordMatch);
+        confirmPassword.addEventListener('input', syncPasswordMatch);
+        passwordForm.addEventListener('submit', (event) => {
+            syncPasswordMatch();
+            if (!passwordForm.checkValidity()) {
+                event.preventDefault();
+                passwordForm.reportValidity();
+            }
+        });
     }
 
     const params = new URLSearchParams(window.location.search);

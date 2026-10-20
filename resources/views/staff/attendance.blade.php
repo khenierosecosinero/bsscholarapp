@@ -21,7 +21,8 @@
             <span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span>
             <span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}" data-attendance-status-badge>{{ $event->attendanceStatusLabel() }}</span>
             <span>Service Hours: {{ number_format((float) $event->service_hours, 2) }}</span>
-            <span class="approved">{{ $panel['checkedIn']->count() }} checked in</span>
+            <span class="approved">{{ $panel['approved']->count() }} approved</span>
+            <span class="pending">{{ $panel['pending']->count() }} pending</span>
             <span class="rejected">{{ $panel['failed']->count() }} failed to check in</span>
         </div>
         @include('partials.staff-attendance-session', ['event' => $event])
@@ -47,9 +48,9 @@
 
     <div class="staff-attendance-split">
         <section class="staff-card staff-attendance-group">
-            <h4>Scholars Who Checked In <span>{{ $panel['checkedIn']->count() }}</span></h4>
-            <p class="staff-muted" style="margin:0 8px 12px">Review each scholar’s check-in time, participation photo, status, and hours before approving service hours.</p>
-            @forelse($panel['checkedIn'] as $row)
+            <h4>Scholars Who Checked In (Approved) <span>{{ $panel['approved']->count() }}</span></h4>
+            <p class="staff-muted" style="margin:0 8px 12px">Scholars who checked in and whose attendance was approved. Service hours are credited only for these records.</p>
+            @forelse($panel['approved'] as $row)
                 @php $attendance = $row['attendance']; @endphp
                 <article class="staff-attendance-record">
                     <div class="staff-scholar-cell">
@@ -69,21 +70,56 @@
                             <dd>{{ $attendance?->check_out?->format('g:i A') ?? '—' }}</dd>
                         </div>
                         <div>
-                            <dt>Hours</dt>
+                            <dt>Service hours</dt>
                             <dd>{{ $attendance?->hoursLabel() ?? '0.00 hrs' }}</dd>
                         </div>
                         <div>
                             <dt>Status</dt>
-                            <dd>
-                                @php
-                                    $statusClass = match($attendance?->status) {
-                                        'approved' => 'green',
-                                        'rejected', 'failed_to_check_in' => 'red',
-                                        default => 'orange',
-                                    };
-                                @endphp
-                                <span class="staff-badge {{ $statusClass }}">{{ $attendance?->statusLabel() ?? 'Pending' }}</span>
-                            </dd>
+                            <dd><span class="staff-badge green">Approved</span></dd>
+                        </div>
+                    </dl>
+                    <div class="staff-attendance-record-proof">
+                        <span class="staff-muted">Proof / photo</span>
+                        @include('partials.staff-attendance-photo', [
+                            'attendance' => $attendance,
+                            'photoUrl' => $attendance?->hasPhoto() ? route('staff.attendances.photo', $attendance) : null,
+                        ])
+                    </div>
+                </article>
+            @empty
+                <p class="staff-muted">{{ $selectedSchoolKey === 'all' ? 'No approved check-ins for this event.' : 'No approved check-ins from '.$selectedSchoolLabel.' for this event.' }}</p>
+            @endforelse
+        </section>
+
+        <section class="staff-card staff-attendance-group pending">
+            <h4>Pending Scholars (For Verification) <span>{{ $panel['pending']->count() }}</span></h4>
+            <p class="staff-muted" style="margin:0 8px 12px">Scholars who checked in and are waiting for verification. Recorded hours are not credited until you approve the record.</p>
+            @forelse($panel['pending'] as $row)
+                @php $attendance = $row['attendance']; @endphp
+                <article class="staff-attendance-record">
+                    <div class="staff-scholar-cell">
+                        <x-user-avatar :user="$row['user'] ?? null" class="staff-scholar-avatar" />
+                        <div class="staff-scholar-meta">
+                            <strong>{{ $row['user']?->full_name ?? '—' }}</strong>
+                            <small>{{ $row['user']?->scholar_id }}</small>
+                        </div>
+                    </div>
+                    <dl class="staff-attendance-facts">
+                        <div>
+                            <dt>Check in</dt>
+                            <dd>{{ $attendance?->check_in?->format('g:i A') ?? '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Check out</dt>
+                            <dd>{{ $attendance?->check_out?->format('g:i A') ?? '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Recorded hours</dt>
+                            <dd>{{ $attendance?->hoursLabel() ?? '0.00 hrs' }}</dd>
+                        </div>
+                        <div>
+                            <dt>Status</dt>
+                            <dd><span class="staff-badge orange">Pending</span></dd>
                         </div>
                     </dl>
                     <div class="staff-attendance-record-proof">
@@ -100,7 +136,7 @@
                     </div>
                 </article>
             @empty
-                <p class="staff-muted">{{ $selectedSchoolKey === 'all' ? 'No scholars have checked in for this event.' : 'No scholars from '.$selectedSchoolLabel.' have checked in for this event.' }}</p>
+                <p class="staff-muted">{{ $selectedSchoolKey === 'all' ? 'No attendance records are waiting for verification.' : 'No attendance records from '.$selectedSchoolLabel.' are waiting for verification.' }}</p>
             @endforelse
         </section>
 
@@ -173,7 +209,8 @@
                             <p class="staff-attendance-event-where">{{ $event->location }}</p>
                             <div class="staff-doc-type-counts">
                                 <span>Service Hours: {{ number_format((float) $event->service_hours, 2) }}</span>
-                                <span class="approved">{{ $event->checked_in_count }} checked in</span>
+                                <span class="approved">{{ $event->checked_in_count }} approved</span>
+                                <span class="pending">{{ $event->pending_count }} pending</span>
                                 <span class="rejected">{{ $event->failed_count }} failed to check in</span>
                             </div>
                         </div>

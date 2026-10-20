@@ -17,10 +17,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use Throwable;
 
 class ScholarService
 {
@@ -32,7 +30,7 @@ class ScholarService
     public function __construct(
         private AcademicSettingsService $academic,
         private ProgramScopeService $programScope,
-        private AttendanceDriveStorageService $attendanceDrive,
+        private AttendanceArchiveService $attendanceArchive,
     ) {}
 
     public function scopeEventsForUser(Builder $query, User $user): Builder
@@ -1097,20 +1095,7 @@ class ScholarService
         ]);
 
         $attendance = $attendance->fresh(['user', 'event']);
-
-        try {
-            $this->attendanceDrive->storeApprovedPhoto($attendance);
-        } catch (Throwable $e) {
-            Log::warning('Verified attendance was approved but the BSSA Attendance Drive upload failed.', [
-                'attendance_id' => $attendance->id,
-                'message' => $e->getMessage(),
-            ]);
-            app(WorkflowMailService::class)->alertAdministrators(
-                'attendance-drive:'.$attendance->id,
-                'Google Drive attendance upload failed',
-                "Attendance for {$attendance->event?->title} was approved, but the participation photo could not be stored in Google Drive. Reconnect Google Drive from Settings and review that attendance record."
-            );
-        }
+        $this->attendanceArchive->storeApprovedPhoto($attendance);
 
         $user = $attendance->user;
         $event = $attendance->event;
@@ -1139,7 +1124,8 @@ class ScholarService
             throw new \InvalidArgumentException('This attendance record can no longer accept a new photo.');
         }
 
-        $path = $file->store("attendance_photos/{$attendance->user_id}", 'public');
+        $attendance->loadMissing(['user', 'event']);
+        $path = $this->attendanceArchive->storePhoto($attendance, $file);
         $oldPath = $attendance->photo_path;
         $wasRejected = $attendance->status === Attendance::STATUS_REJECTED;
         $hours = $attendance->check_out
@@ -1155,7 +1141,7 @@ class ScholarService
             'hours_earned' => $hours,
         ]);
 
-        if ($oldPath && $oldPath !== $path && Storage::disk('public')->exists($oldPath)) {
+        if ($oldPath && $oldPath !== $path && str_starts_with((string) $oldPath, 'bssa/attendance/') && Storage::disk('public')->exists($oldPath)) {
             Storage::disk('public')->delete($oldPath);
         }
 
@@ -1178,17 +1164,6 @@ class ScholarService
 
         if ($attendance->status === Attendance::STATUS_APPROVED) {
             throw new \InvalidArgumentException('Approved attendance cannot be rejected.');
-        }
-
-        if (filled($attendance->google_drive_file_id)) {
-            try {
-                $this->attendanceDrive->removeStoredPhoto($attendance);
-            } catch (Throwable $e) {
-                Log::warning('Could not remove a BSSA Attendance Drive file after rejection.', [
-                    'attendance_id' => $attendance->id,
-                    'message' => $e->getMessage(),
-                ]);
-            }
         }
 
         $attendance->update([

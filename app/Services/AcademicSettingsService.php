@@ -12,9 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
-use Throwable;
 
 class AcademicSettingsService
 {
@@ -66,8 +64,9 @@ class AcademicSettingsService
     }
 
     /**
-     * Academic year and semester used only to filter what the signed-in user sees.
-     * It is stored in the session and does not change academic years or attendance.
+     * Academic year and semester used to filter what the signed-in user sees.
+     * A scholar's saved choice is restored after login. It does not change
+     * the administrator's academic years or stamped attendance.
      */
     public function selectedPeriod(): AcademicSetting
     {
@@ -77,11 +76,23 @@ class AcademicSettingsService
         $options = $this->yearOptions();
 
         if (! isset($options[$year]) || ! in_array($semester, self::SEMESTERS, true)) {
-            $current = $this->current();
-            $year = (int) $current->year_start;
-            $semester = in_array($current->semester, self::SEMESTERS, true)
-                ? $current->semester
-                : self::SEMESTERS[0];
+            $saved = $this->savedScholarView();
+            if ($saved !== null) {
+                $year = $saved['year_start'];
+                $semester = $saved['semester'];
+                session([
+                    self::SESSION_KEY => [
+                        'year_start' => $year,
+                        'semester' => $semester,
+                    ],
+                ]);
+            } else {
+                $current = $this->current();
+                $year = (int) $current->year_start;
+                $semester = in_array($current->semester, self::SEMESTERS, true)
+                    ? $current->semester
+                    : self::SEMESTERS[0];
+            }
         }
 
         return new AcademicSetting([
@@ -89,6 +100,28 @@ class AcademicSettingsService
             'year_end' => $year + 1,
             'semester' => $semester,
         ]);
+    }
+
+    /**
+     * @return array{year_start: int, semester: string}|null
+     */
+    private function savedScholarView(): ?array
+    {
+        $user = auth()->user();
+        if (! $user instanceof User || ! $user->isScholar()) {
+            return null;
+        }
+
+        $year = (int) $user->academic_year_start;
+        $semester = (string) $user->semester;
+        if (! isset($this->yearOptions()[$year]) || ! in_array($semester, self::SEMESTERS, true)) {
+            return null;
+        }
+
+        return [
+            'year_start' => $year,
+            'semester' => $semester,
+        ];
     }
 
     public function rememberSelectedPeriod(int $yearStart, string $semester): AcademicSetting
@@ -192,8 +225,6 @@ class AcademicSettingsService
             $this->clearCache();
         }
 
-        $this->syncAttendanceDriveYears();
-
         return $setting;
     }
 
@@ -209,7 +240,6 @@ class AcademicSettingsService
         ]);
 
         $this->clearCache();
-        $this->syncAttendanceDriveYears();
 
         return $setting->fresh();
     }
@@ -230,7 +260,6 @@ class AcademicSettingsService
 
         $this->clearCache();
         $this->forgetReportYearSessions();
-        $this->syncAttendanceDriveYears();
 
         return $setting->fresh();
     }
@@ -266,7 +295,6 @@ class AcademicSettingsService
 
         $this->clearCache();
         $this->forgetReportYearSessions();
-        $this->syncAttendanceDriveYears();
 
         return $setting->fresh();
     }
@@ -292,7 +320,6 @@ class AcademicSettingsService
 
         $this->clearCache();
         $this->forgetReportYearSessions();
-        $this->syncAttendanceDriveYears();
     }
 
     /**
@@ -435,17 +462,6 @@ class AcademicSettingsService
     private function forgetReportYearSessions(): void
     {
         session()->forget(['admin_report_year', 'staff_report_year']);
-    }
-
-    private function syncAttendanceDriveYears(): void
-    {
-        try {
-            app(AttendanceDriveStorageService::class)->syncConfiguredYearFolders();
-        } catch (Throwable $e) {
-            Log::warning('Could not sync BSSA Attendance folders after an academic year change.', [
-                'message' => $e->getMessage(),
-            ]);
-        }
     }
 
     public function updateUserPreference(User $user, array $data): User

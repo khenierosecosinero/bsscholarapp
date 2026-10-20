@@ -12,7 +12,6 @@ use App\Support\CourseCatalog;
 use App\Services\AcademicSettingsService;
 use App\Services\AnnouncementService;
 use App\Services\AttendanceSessionService;
-use App\Services\GoogleDriveService;
 use App\Services\ScholarService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -25,7 +24,6 @@ class UserController extends Controller
         private AnnouncementService $announcements,
         private AcademicSettingsService $academic,
         private AttendanceSessionService $attendanceSessions,
-        private GoogleDriveService $drive,
     ) {}
 
     private function layoutData(string $active, string $title, string $subtitle = ''): array
@@ -248,7 +246,6 @@ class UserController extends Controller
                 'scholarCode' => $user->scholar_id,
                 'scholarName' => $user->full_name,
                 'academicYearLabel' => $period->year_start.'-'.$period->year_end,
-                'driveReady' => $this->drive->isConnected(),
             ]
         ));
     }

@@ -360,7 +360,8 @@
 }
 
 .page-profile .shortcut-item:hover,
-.page-profile .shortcut-item:focus-visible {
+.page-profile .shortcut-item:focus-visible,
+.page-profile .shortcut-item.is-current {
     background: #f0fdf4;
     border-color: #b6ebb9;
     outline: none;
@@ -368,6 +369,68 @@
 
 .page-profile .shortcut-item:active {
     background: #ecfdf3;
+}
+
+.page-profile .profile-sidebar .danger-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.page-profile .profile-sidebar .danger-zone .card-header {
+    margin: 0 0 10px;
+    padding: 0;
+}
+
+.page-profile .profile-sidebar .danger-zone > p {
+    margin: 0 0 16px;
+    padding: 0;
+    line-height: 1.6;
+}
+
+.page-profile .profile-sidebar .danger-zone form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.page-profile .profile-sidebar .danger-zone .form-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+}
+
+.page-profile .profile-sidebar .danger-zone .form-group input,
+.page-profile .profile-sidebar .danger-zone .btn.danger {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.page-profile .profile-sidebar .danger-zone .btn.danger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
 }
 
 @media (max-width: 600px) {

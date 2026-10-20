@@ -83,6 +83,16 @@ function initProfileTabs() {
             p.classList.toggle('active', p.id === id);
         });
 
+        const url = new URL(window.location.href);
+        if (id === 'profile-info') {
+            url.searchParams.delete('tab');
+            url.hash = '';
+        } else {
+            url.searchParams.set('tab', id);
+            url.hash = id;
+        }
+        history.replaceState({ profileTab: id }, '', url.pathname + url.search + url.hash);
+
         if (scroll) {
             const panel = document.getElementById(id);
             requestAnimationFrame(() => {
@@ -102,6 +112,9 @@ function initProfileTabs() {
             activate(id, tab.classList.contains('shortcut-item') || tab.classList.contains('tab-trigger'));
         });
     });
+
+    const fromUrl = new URLSearchParams(window.location.search).get('tab') || window.location.hash.replace('#', '');
+    if (fromUrl) activate(fromUrl, false);
 
     root.dataset.tabsReady = '1';
 }

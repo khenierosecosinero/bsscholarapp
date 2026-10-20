@@ -6,6 +6,9 @@
 
 <div class="card hours-overview service-hours-sidebar-card">
     <div class="card-header">SERVICE HOURS OVERVIEW</div>
+    @if(!empty($semesterInfo['academic_year']))
+        <p class="muted small" style="margin:0 0 12px">{{ $semesterInfo['academic_year'] }} · {{ $semesterInfo['semester'] }}</p>
+    @endif
 
     <div class="progress-wrap compact sh-sidebar-progress">
         <div class="progress-circle sh-donut">

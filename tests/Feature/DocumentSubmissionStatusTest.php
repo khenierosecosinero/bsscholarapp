@@ -9,6 +9,7 @@ use App\Models\ScholarshipProgram;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class DocumentSubmissionStatusTest extends TestCase
@@ -17,6 +18,7 @@ class DocumentSubmissionStatusTest extends TestCase
 
     public function test_staff_can_open_and_close_each_document_type_without_changing_records(): void
     {
+        Storage::fake('public');
         [$staff, $otherStaff, $scholar, $birth, $studentId, $document] = $this->makeDocuments();
 
         $this->actingAs($staff)
@@ -138,12 +140,13 @@ class DocumentSubmissionStatusTest extends TestCase
                 'document_type_id' => $birth->id,
                 'file' => UploadedFile::fake()->create('replacement.pdf', 100, 'application/pdf'),
             ])
-            ->assertRedirect(route('user.documents'));
+            ->assertRedirect(route('user.documents'))
+            ->assertSessionHas('success');
 
-        $this->assertStringNotContainsString('currently closed', (string) session('error'));
         $document->refresh();
         $this->assertSame('pending', $document->status);
-        $this->assertSame('birth.pdf', $document->original_name);
+        $this->assertSame('replacement.pdf', $document->original_name);
+        $this->assertStringStartsWith('bssa/documents/', (string) $document->file_path);
     }
 
     /**

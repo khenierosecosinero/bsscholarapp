@@ -8,12 +8,11 @@ use App\Support\CourseCatalog;
 use App\Support\LocationAddress;
 use App\Services\AccountService;
 use App\Services\AcademicSettingsService;
-use App\Services\GoogleDriveService;
 use App\Services\ScholarService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -25,7 +24,6 @@ class ProfileActionController extends Controller
         private ScholarService $scholar,
         private AcademicSettingsService $academic,
         private AccountService $accounts,
-        private GoogleDriveService $drive,
     ) {}
 
     /**
@@ -152,17 +150,6 @@ class ProfileActionController extends Controller
 
         $user->update($updates);
 
-        if ($user->isScholar()) {
-            try {
-                $this->drive->syncStudentFolderName($user->fresh());
-            } catch (\Throwable $e) {
-                Log::warning('Could not rename the scholar Drive folder after a name change.', [
-                    'scholar_id' => $user->scholar_id,
-                    'message' => $e->getMessage(),
-                ]);
-            }
-        }
-
         $this->scholar->logActivity($user, 'profile', 'Profile information updated');
 
         return redirect()
@@ -253,11 +240,21 @@ class ProfileActionController extends Controller
     {
         $this->ensurePasswordChangeIsNotRateLimited($request);
 
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'current_password' => 'required|string',
             'password' => ['required', 'confirmed', 'different:current_password', Password::min(8)],
+        ], [
+            'password.confirmed' => 'New password and confirmation must match.',
+            'password.different' => 'The new password must be different from the current password.',
+            'password.min' => 'The new password must be at least 8 characters.',
         ]);
 
+        if ($validator->fails()) {
+            throw (new ValidationException($validator))
+                ->redirectTo(route('user.profile', ['tab' => 'security']));
+        }
+
+        $validated = $validator->validated();
         $user = Auth::user();
 
         if (! Hash::check($validated['current_password'], $user->password)) {
@@ -333,7 +330,7 @@ class ProfileActionController extends Controller
 
             throw ValidationException::withMessages([
                 'current_password' => "Too many attempts. Please try again in {$seconds} seconds.",
-            ]);
+            ])->redirectTo(route('user.profile', ['tab' => 'security']));
         }
     }
 

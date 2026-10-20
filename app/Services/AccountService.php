@@ -305,17 +305,6 @@ class AccountService
 
     private function deleteAttendanceFiles(Attendance $attendance): void
     {
-        try {
-            if (app()->bound(AttendanceDriveStorageService::class) && filled($attendance->google_drive_file_id)) {
-                app(AttendanceDriveStorageService::class)->removeStoredPhoto($attendance);
-            }
-        } catch (Throwable $e) {
-            Log::warning('Attendance Drive cleanup during account deletion failed.', [
-                'attendance_id' => $attendance->id,
-                'message' => $e->getMessage(),
-            ]);
-        }
-
         if ($attendance->photo_path && Storage::disk('public')->exists($attendance->photo_path)) {
             Storage::disk('public')->delete($attendance->photo_path);
         }

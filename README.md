@@ -95,7 +95,7 @@ The visual language below is taken from the live stylesheets — not a new theme
 31. [Laravel API for the mobile client](#31-laravel-api-for-the-mobile-client) *(planned — no versioned REST API today)*
 32. [Scholarship program isolation](#32-scholarship-program-isolation)
 33. [Academic year and period management](#33-academic-year-and-period-management)
-34. [Google Drive integration](#34-google-drive-integration)
+34. [Local file storage](#34-local-file-storage)
 35. [Event lifecycle statuses](#35-event-lifecycle-statuses)
 36. [Recent verified changes](#36-recent-verified-changes)
 
@@ -142,9 +142,9 @@ The product code lives under `app/`, `resources/views/`, `database/`, and `route
 | **Framework** | **Laravel 12** (`laravel/framework ^12.0`) |
 | **Architecture** | Classic **MVC + service layer**: routes → controllers → services/models → Blade responses |
 | **Routing** | `routes/web.php` only (no `routes/api.php`). Health: `GET /up` |
-| **Controllers** | `app/Http/Controllers/` (e.g. `AuthController`, `PasswordResetController`, `UserController`, `StaffController`, `AdminController`, `EventActionController`, `GoogleDriveController`, …) |
+| **Controllers** | `app/Http/Controllers/` (e.g. `AuthController`, `PasswordResetController`, `UserController`, `StaffController`, `AdminController`, `EventActionController`, `DocumentActionController`, …) |
 | **Models** | Eloquent under `app/Models/` (see [§0.4](#04-database) and [§8](#8-backend-architecture)) |
-| **Services** | Domain logic in `app/Services/` (`ScholarService`, `StaffDashboardService`, `AdminDashboardService`, `PasswordResetService`, `GoogleDriveService`, …) |
+| **Services** | Domain logic in `app/Services/` (`ScholarService`, `StaffDashboardService`, `AdminDashboardService`, `PasswordResetService`, `DocumentStorageService`, `LocalArchive`, …) |
 | **Middleware** | Aliases in `bootstrap/app.php`: `scholar`, `scholar.approved`, `scholar.staff`, `scholar.staff.approved`, `admin`; global web append `EnsureAccountAccess` |
 | **Support** | `app/Support/` (e.g. `CourseCatalog`, `PhilippineIslandGroup`, `MissingResourceRedirect`, `OutboundAppUrl`) |
 | **Mail** | Laravel Mail + Gmail SMTP. Password reset (`PasswordResetCodeMail`), admin backup-email verification, and workflow notices (`WorkflowNotificationMail` via `WorkflowMailService`). Sent immediately, not through a queue worker |
@@ -161,9 +161,9 @@ The product code lives under `app/`, `resources/views/`, `database/`, and `route
 | **Seeders** | `DatabaseSeeder` → `ScholarshipProgramSeeder` (PSGC JSON import) + `AdminSeeder` + active `academic_settings` row |
 | **Factories** | `database/factories/UserFactory.php` (tests) |
 
-**Core tables (implemented):** `users`, `password_reset_tokens`, `sessions`, `cache` / `cache_locks`, `jobs` / `job_batches` / `failed_jobs`, `scholarship_programs`, `scholarship_clubs`, `scholarship_club_schools`, `events`, `event_registrations`, `attendances`, `attendance_session_logs`, `document_types`, `documents`, `announcements`, `announcement_reads`, `scholar_notifications`, `user_activities`, `academic_settings`, `google_drive_folders`, `google_drive_connections`, `admin_backup_emails`, `scholar_suspensions`.
+**Core tables (implemented):** `users`, `password_reset_tokens`, `sessions`, `cache` / `cache_locks`, `jobs` / `job_batches` / `failed_jobs`, `scholarship_programs`, `scholarship_clubs`, `scholarship_club_schools`, `events`, `event_registrations`, `attendances`, `attendance_session_logs`, `document_types`, `documents`, `announcements`, `announcement_reads`, `scholar_notifications`, `user_activities`, `academic_settings`, `admin_backup_emails`, `scholar_suspensions`. Older `google_drive_folders` and `google_drive_connections` tables may still exist from a previous migration. The application no longer reads or writes them.
 
-**Eloquent models:** `User`, `ScholarshipProgram`, `ScholarshipClub`, `ScholarshipClubSchool`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`, `GoogleDriveFolder`, `GoogleDriveConnection`, `AdminBackupEmail`, `ScholarSuspension`.
+**Eloquent models:** `User`, `ScholarshipProgram`, `ScholarshipClub`, `ScholarshipClubSchool`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`, `AdminBackupEmail`, `ScholarSuspension`.
 
 High-level relationships and field notes: [§11](#11-database).
 
@@ -195,19 +195,19 @@ Laravel HTTP kernel (web middleware + role aliases)
     ├─ Controllers  ──► Services  ──► Eloquent Models  ──► SQLite/MySQL
     │                      │
     │                      ├─ Mail (Gmail SMTP) ──► scholar/staff/admin inboxes
-    │                      └─ Google API Client ──► Google Drive (org OAuth)
+    │                      └─ Storage public disk ──► storage/app/public
     │
     └─ Blade views + public/css + Vite JS
 ```
 
 - **Request flow:** `routes/web.php` → middleware → controller → service/model → Blade (or redirect/JSON).
-- **Files:** local `storage/app/public` (via `storage:link`) and optional **Google Drive** under `BSSA/DOCUMENTS` and `BSSA/ATTENDANCE`.
+- **Files:** Laravel `public` disk at `storage/app/public`, served through `public/storage` after `php artisan storage:link`. Folder layout is in [§34](#34-local-file-storage).
 - **Background:** `QUEUE_CONNECTION=database`. Password reset and workflow emails are sent in the request. Closing attendance finishes missed check-ins in a queued follow-up, so `php artisan queue:listen` (included in `composer dev`) should be running for that step. `routes/console.php` schedules expired-suspension release every 15 minutes and `events:complete-expired` every minute; those need `php artisan schedule:work` or a system cron entry for `schedule:run`.
 - **No separate frontend server in production** — `npm run build` emits assets Laravel serves; local `npm run dev` is Vite HMR only.
 
 ### 0.7 Libraries and dependencies
 
-**Composer (production):** `laravel/framework`, `laravel/tinker`, `google/apiclient` (Drive only via `extra.google/apiclient-services`).
+**Composer (production):** `laravel/framework`, `laravel/tinker`.
 
 **Composer (dev):** `phpunit/phpunit`, `fakerphp/faker`, `mockery/mockery`, `nunomaduro/collision`, `laravel/pint`, `laravel/sail`, `laravel/pail`.
 
@@ -236,9 +236,9 @@ Timezone default: `Asia/Manila` (`.env.example`).
 
 | Role | Implemented capabilities (summary) |
 |------|-------------------------------------|
-| **Scholar** | Dashboard, events/register/check-in/out + photo, calendar, service hours, documents upload/view/download, notifications, profile/settings, announcements (incl. pending), presence heartbeat; pending accounts limited until approval |
-| **Scholar Staff** | Dashboard, scholars (approve/reject/view), events CRUD + attendance sessions + status workflow, documents review, approval requests, calendar, settings (club/schools), four report pages (service hours, attendance, participation, completion), Google Drive connect (with admin) |
-| **Administrator** | Dashboard (location filters + Overall Reports pie + Events completed card), scholars/staff/events/service hours/documents directories, regional reports (Luzon/Visayas/Mindanao pies), admin settings (profile, password, backup emails, academic years), staff approve/reject/block/suspend/delete, Drive OAuth |
+| **Scholar** | Dashboard, events/register/check-in/out + photo, calendar, service hours, documents upload/view/download, notifications, profile/settings, security shortcuts (academic settings, password, login credentials), announcements (incl. pending), presence heartbeat; pending accounts limited until approval |
+| **Scholar Staff** | Dashboard, scholars (approve/reject/view), events CRUD + attendance sessions + status workflow, documents review, approval requests, calendar, settings (club/schools), four report pages (service hours, attendance, participation, completion) |
+| **Administrator** | Dashboard (location filters, viewing academic year, Overall Reports pie, Events completed card), scholars/staff/events/service hours/documents directories, regional reports (Luzon/Visayas/Mindanao pies), admin settings (profile, password, backup emails, academic years), staff approve/reject/block/suspend/delete |
 
 Full portal matrices: [§3](#3-user-roles-and-permissions), [§6](#6-features-by-portal).
 
@@ -247,13 +247,12 @@ Full portal matrices: [§3](#3-user-roles-and-permissions), [§6](#6-features-by
 | Integration | Status | Notes |
 |-------------|--------|-------|
 | **Gmail SMTP** | Implemented | Forgot Password codes / reset mail; backup-email verification |
-| **Google Drive API** | Implemented | Org OAuth (`GOOGLE_*`); folders under `BSSA/DOCUMENTS` and `BSSA/ATTENDANCE`; encrypted token in `google_drive_connections` |
-| **Local public disk** | Implemented | Event images, attendance photos, documents under `storage/app/public` |
+| **Local public disk** | Implemented | Documents, attendance photos, and event images under `storage/app/public` ([§34](#34-local-file-storage)) |
 | **PSGC locations** | Implemented | `database/data/psgc-locations.json` imported by seeder |
 | **ui-avatars.com** | Used in some UI placeholders | External avatar image URLs |
 | **Versioned mobile API** | **Not implemented** | Web routes + a few JSON XHR endpoints only |
 
-Drive deep dive: [§34](#34-google-drive-integration).
+File layout: [§34](#34-local-file-storage).
 
 ### 0.11 Installation and setup
 
@@ -274,7 +273,7 @@ php artisan serve --host=0.0.0.0 --port=8000
 
 Or: `composer setup` (install, `.env`, key, migrate, npm install + build) then run `db:seed`, `storage:link`, and serve separately.
 
-Configure `MAIL_*` and optional `GOOGLE_*` in `.env` ([§17](#17-environment-configuration)). Seeded admin: [§21](#21-seeded-administrator-account).
+Configure `MAIL_*` in `.env` ([§17](#17-environment-configuration)). Uploaded files need `php artisan storage:link` and a writable `storage/app/public` directory. Seeded admin: [§21](#21-seeded-administrator-account).
 
 ### 0.12 Security and validation
 
@@ -283,9 +282,8 @@ Configure `MAIL_*` and optional `GOOGLE_*` in `.env` ([§17](#17-environment-con
 | **Passwords** | Eloquent `hashed` cast; `Password::min(8)` on register/reset; `User::updatePassword()` |
 | **CSRF** | Laravel web middleware on form posts |
 | **Authorization** | Role middleware + ownership checks (e.g. document owner-only view/download) |
-| **Uploads** | Size/type validation; `PostTooLargeException` → friendly 10 MB message; Drive or local storage |
+| **Uploads** | Size/type validation; `PostTooLargeException` → friendly message; files stay on the Laravel `public` disk |
 | **Password reset** | Hashed one-time codes, expiry, attempt limits, rate limiting; no password/hash exposure in UI |
-| **Drive tokens** | Encrypted at rest in DB; secrets only in `.env` |
 | **Mass assignment** | Sensitive flags (`is_permanent`, `last_seen_at`, `events_visible_from`) not freely fillable |
 
 Details: [§22](#22-security-features), [§23](#23-validation-and-error-handling).
@@ -300,9 +298,9 @@ php artisan test
 composer test
 ```
 
-**Feature tests** live under `tests/Feature/` (40+ files), including password reset, Google Drive folders/OAuth, admin filters/reports, event status workflow, attendance Drive storage, sidebar layout, account access, academic year settings, and more.
+**Feature tests** live under `tests/Feature/` (40+ files), including password reset, local document and attendance storage, admin filters/reports, event status workflow, sidebar layout, account access, academic year settings, and more.
 
-**Common issues:** SMTP App Password / `config:clear`; Vite LAN host (`VITE_DEV_HOST`); missing `storage:link`; SQLite file missing; Google OAuth must use `127.0.0.1` not `localhost`. Full list: [§24](#24-troubleshooting).
+**Common issues:** SMTP App Password / `config:clear`; Vite LAN host (`VITE_DEV_HOST`); missing `storage:link`; SQLite file missing. Full list: [§24](#24-troubleshooting).
 
 ---
 
@@ -396,12 +394,12 @@ Account status (`users.status`):
 - Staff **Active Now** / **Offline** on Scholars (and the scholar profile) uses `users.last_seen_at` for that program only. It is not “approved” and not `last_login_at`.
 - A staff account’s **Events**, **Calendar**, **Attendance** event picker, and dashboard upcoming-event counts only include events created at or after `User::staffEventsVisibleFrom()` (`events_visible_from` when set, otherwise the staff `created_at`). Older program events stay in the `events` table for other staff, scholars, reports, and admin. `Event::scopeVisibleToStaff` applies the filter; `User::canViewStaffManagedEvent` blocks show/attendance on hidden events.
 - Staff **cannot** approve other staff accounts, cannot open another program’s events (`403` on `showEvent`), and cannot review document types outside their program (`ProgramScopeService::assertDocumentTypeManagedByStaff`).
-- `staff/pending-approval` exists in `web.php` but `EnsureScholarStaff` logs pending staff out at login, so that page is not reachable in normal use.
+- Pending staff who pass login are sent to `GET /staff/pending-approval`. `EnsureScholarStaff` allows that page and `POST /staff/dismiss-pending-modal`, and redirects every other staff URL back there until an administrator approves the account. Rejected and inactive staff are logged out.
 
 ### 3.3 Administrator
 
 - Full `/admin` portal (`EnsureAdmin`).
-- Can filter most admin pages by location. **Admin → Scholars**, **Scholar Staff**, **Events**, **Service Hours**, and **Documents** do not use a City Scholar / Province Scholar split: they list records with **Region** (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, and **Scholarship Club** filters. Selecting a club fills Province and Municipality/City from the club’s stored address. No admin page shows the **📍 City Scholar — All Locations** location pill (or any replacement location chip) in the header. **Admin Settings** has neither the Viewing form nor the **Current Admin Scope** banner. **Reports** has neither the Viewing form nor the scope banner; it uses an **Academic Year** dropdown and always shows Luzon, Visayas, and Mindanao together. The **Admin Dashboard** uses Province and Municipality/City only (no scope banner, no Scholarship category, no Scholarship Clubs list). There is **no Admin Locations page**.
+- Can filter most admin pages by location. **Admin → Scholars**, **Scholar Staff**, **Events**, **Service Hours**, and **Documents** do not use a City Scholar / Province Scholar split: they list records with **Region** (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, and **Scholarship Club** filters. Selecting a club fills Province and Municipality/City from the club’s stored address. No admin page shows the **📍 City Scholar — All Locations** location pill (or any replacement location chip) in the header. **Admin Settings** has neither the Viewing form nor the **Current Admin Scope** banner. **Reports** has neither the Viewing form nor the scope banner; it uses an **Academic Year** dropdown and always shows Luzon, Visayas, and Mindanao together. The **Admin Dashboard** uses Province and Municipality/City only (no scope banner, no Scholarship category, no Scholarship Clubs list) and includes the Viewing Academic Year selector with the “Showing Administration data for” banner. There is **no Admin Locations page**.
 - Approves or rejects **scholar staff** only (not scholar accounts — those are staff’s job).
 - On a staff detail page, can set **Started Year** (`users.staff_started_year` via `PUT /admin/staff/{staffMember}/started-year`). Started Year is **not** collected on staff registration.
 - Manages **backup emails** for admin password recovery (add / update / resend verification / delete; signed verify link `GET /backup-email/verify/{backupEmail}`).
@@ -479,7 +477,7 @@ flowchart TD
 - Staff **Open Attendance** / **Close Attendance** write timestamps, actor IDs, and `attendance_session_logs`, and notify scholars.
 - While open **and** the event is Confirmed/Ongoing, scholars may submit attendance. While closed (or Pending/Cancelled/Completed), they cannot submit or change it.
 - Staff approve or reject hours. Scholars see **Pending / Approved / Rejected**. Staff no longer have a free-form “Edit Attendance Record” form.
-- When Scholar Staff (or an administrator) **verifies/approves** attendance, `AttendanceDriveStorageService` uploads that scholar’s photo under the org Drive tree documented in [§34](#34-google-drive-integration) (`BSSA/ATTENDANCE/...`). Pending, rejected, failed-to-check-in, and unverified photos are **not** uploaded. The same attendance record is not uploaded twice. This tree is not mixed with `BSSA/DOCUMENTS`.
+- When Scholar Staff (or an administrator) **verifies/approves** attendance, `AttendanceArchiveService` copies that scholar’s photo into `bssa/attendance/...` on the public disk ([§34](#34-local-file-storage)). The original upload is left in place. Pending, rejected, and failed-to-check-in photos stay at the path where they were uploaded and are not mixed into the documents tree.
 - Live status for scholars: `GET /user/attendance-status` polled about every 12 seconds (`resources/js/user-app.js`).
 - Confirmed → Pending / Cancelled / Completed status changes notify approved scholars in the program (`ScholarService::notifyScholarsOfEventStatusChange`, deduped by user + event + title).
 
@@ -490,10 +488,9 @@ flowchart TD
 3. **Open Submissions** and **Close Submissions** apply to one document type. The matching button is disabled for the current state. Closing blocks upload, replace, resubmit, and delete of that type in `DocumentActionController`. Other types stay unchanged. Previously uploaded files, review status, and notes stay visible.
 4. A deadline in the past blocks uploads even if the manual status is still open, until staff extends or removes that deadline. If the deadline itself closed submissions and staff later sets a future deadline or clears it, submissions open again. A manual close before the deadline is not reopened by a name or description edit. `ScholarService::syncDocumentDeadlines` closes an open type whose deadline has passed and was not reopened after that deadline, and it notifies once.
 5. Deadline reminders: within 24 hours of a deadline that still accepts submissions, scholars get one “Deadline approaching” notice. Passed, closed, reopened, extended, changed, removed, and newly set deadlines each notify once per scholar, title, and body. The scholar Documents page shows the deadline or **No deadline set**. It does not show a “Submissions are currently closed” banner; closure text is in Notifications.
-6. Scholar upload is a PDF, JPG, or PNG up to 5MB, started from the table **Upload**, **Replace**, or **Resubmit** action. There is no right-hand **UPLOAD NEW DOCUMENT** panel. Laravel stores a local copy and uploads to Google Drive under `BSSA/DOCUMENTS/{AY YYYY–YYYY}/{Province}/{Municipality}/{scholar_id} – {full_name}/` (en-dash between code and name). Academic year comes from `AcademicSettingsService` / `GoogleDriveService::driveYearFolderName`. Scholar Code (`users.scholar_id`) is the folder identity. A second upload of the same type **replaces** the previous Drive file and local file. Approved files cannot be replaced or deleted. Verified attendance photos use `BSSA/ATTENDANCE/...` and are never stored in the documents tree. Upload requires an org Drive connection; if Drive is disconnected, the upload fails on the server and administrators can receive one rate-limited email.
-7. Staff review: approve, reject, or return to pending, with optional notes. View and download go through Laravel (Drive first, local fallback). The submissions table can be filtered by school or university (including **No School Specified**), search, status, and document type. Counts follow the school filter. Admin Preview/Download uses the same stream. Admin does **not** change document status.
-8. An administrator or approved staff member must connect Google Drive once via `/google-drive` (OAuth). The token is stored encrypted in `google_drive_connections`. See [§34](#34-google-drive-integration).
-9. The scholar Documents page shows the overview, status cards, document table, guidelines, and help card. It does not show a STUDENT INFORMATION card or a “Google Drive is not connected” banner.
+6. Scholar upload is a PDF, JPG, or PNG up to 5MB, started from the table **Upload**, **Replace**, or **Resubmit** action. There is no right-hand **UPLOAD NEW DOCUMENT** panel. Laravel stores the file on the `public` disk under `bssa/documents/{AY YYYY–YYYY}/{Province}/{Municipality}/{scholar_id} – {full_name}/` (en-dash between code and name). Academic year comes from the document row or `AcademicSettingsService::current()`. Scholar Code (`users.scholar_id`) is the folder identity. A second upload of the same type replaces the previous archived file. An older file that was stored outside `bssa/` is left on disk as a backup. Approved files cannot be replaced or deleted. Attendance photos use `bssa/attendance/...` and are never stored in the documents tree. See [§34](#34-local-file-storage).
+7. Staff review: approve, reject, or return to pending, with optional notes. View and download stream the file from the public disk. The submissions table can be filtered by school or university (including **No School Specified**), search, status, and document type. Counts follow the school filter. Admin Preview/Download uses the same stream. Admin does **not** change document status.
+8. The scholar Documents page shows the overview, status cards, document table, guidelines, and help card. It does not show a STUDENT INFORMATION card or a cloud-storage connection message.
 
 ### 4.5 Forgot password (Scholar, Scholar Staff, and Administrator)
 
@@ -613,7 +610,7 @@ Scholar **email verification is not used**. Routes `verification.notice` / `veri
 
 | Section | What it does |
 |---------|----------------|
-| **Dashboard** | Header is **☰ Dashboard**, then the scholar profile card (avatar + full name + menu), then **Welcome back, [name]!** and **Here's what's happening in [city], [province] — [Scholarship Club].**, then the current date on the right. Hour stats (approved / pending / remaining vs **30** required), upcoming events, pending attendances, announcements, recent activity, attendance OPEN/CLOSED cards, sidebar hour/calendar widgets, quick links |
+| **Dashboard** | Header is **☰ Dashboard**, then the scholar profile card (avatar + full name + menu), then **Welcome back, [name]!** and **Here's what's happening in [city], [province] — [Scholarship Club].**, then the current date on the right. Hour stats (approved / pending / remaining vs **30** required), upcoming events, pending attendances, announcements, recent activity, attendance OPEN/CLOSED cards, sidebar hour/calendar widgets, quick links. The sidebar **Service Hours Overview** names the viewing period (`AY {start}–{end}` and the semester) that those hour totals belong to |
 | **Events** | List/select events for the scholar's program that are still in window after activation (`visibleToAccount` on `ends_at`); **Attend / Register** only when Confirmed/Ongoing and rules allow; Pending/Cancelled/Completed show a blocked message instead of the register button; check in; attach participation photo (JPG/PNG, 5MB) while the session is open, then **Check Out** under **Attach Photo**; view own photo; lifecycle + participation badges |
 | **Attendance live status** | JSON poll (~12s) for open/closed sessions and unread notification count (`#attendance-live-root`, `user-app.js`) |
 | **Calendar** | Month calendar (`year` / `month`) using the same scholar visibility rules. Fresh calendars also apply an upcoming date window. Historical `events` rows stay for other scholars, staff, and reports. **Upcoming Events** sits below **My Schedule Summary**. Selecting a day event opens the event-detail sidebar |
@@ -621,7 +618,7 @@ Scholar **email verification is not used**. Routes `verification.notice` / `veri
 | **Documents** | Overview + status grid + upload/replace/delete for types in the scholar's program; approved / pending / rejected / not submitted; view/download own file. No student-information header card; no Drive-disconnected banner on the page |
 | **Notifications** | All / Unread / Important; mark one or all read; preference toggles; show 5 latest then **See More Notifications** / **See Less Notifications**. Document deadlines appear here, not as a closed banner on Documents |
 | **Announcements** | List, show, mark one or all read. Available to pending scholars. Not a sidebar item — opened from the dashboard or `/user/announcements` |
-| **Profile & Settings** | Profile fields are read-only until **Edit**. In edit mode, only role-permitted fields unlock. **Save Changes** stays hidden/disabled until a field actually changes; Cancel restores the last saved values. After a successful save the form returns to read-only and shows the existing flash success message. Scholar-editable: **City Address** (`users.city`, municipality/city list for the scholar’s province), **Cellphone Number** (`users.cellphone_number`, 10–15 digits when provided), **School/University** (`scholarship_club_school_id` from the club list; `users.school_university` is stored from the selected name), **Course** (`users.course_year_level`, typed full official name; initials such as BSICT are rejected), **Year Level** (`users.year_level`, 1st Year–4th Year), and **Date of Birth**. School, Course, and Year Level updates appear immediately on Scholar Staff scholar records. School/University changes move the scholar in the School/University report aggregates. Guardian has its own Edit / **Save Guardian Info** form. Not editable: **Full Name**, login email, scholar ID, Scholarship Club name, and the club’s Province and Municipality/City. **Academic Settings** tab: **Start Academic Year** (`program_start_year`, fixed Year 1–4 basis) plus viewing Academic Year / Semester for the scholar’s session preference. Password and delete account stay on their own forms. Date of Birth uses a full-width native `type="date"` control (`.date-input-wrap`). The designated Admin account cannot use delete account |
+| **Profile & Settings** | Profile fields are read-only until **Edit**. In edit mode, only role-permitted fields unlock. **Save Changes** stays hidden/disabled until a field actually changes; Cancel restores the last saved values. After a successful save the form returns to read-only and shows the existing flash success message. Scholar-editable: **City Address** (`users.city`, municipality/city list for the scholar’s province), **Cellphone Number** (`users.cellphone_number`, 10–15 digits when provided), **School/University** (`scholarship_club_school_id` from the club list; `users.school_university` is stored from the selected name), **Course** (`users.course_year_level`, typed full official name; initials such as BSICT are rejected), **Year Level** (`users.year_level`, 1st Year–4th Year), and **Date of Birth**. School, Course, and Year Level updates appear immediately on Scholar Staff scholar records. School/University changes move the scholar in the School/University report aggregates. Guardian has its own Edit / **Save Guardian Info** form. Not editable: **Full Name**, login email, scholar ID, Scholarship Club name, and the club’s Province and Municipality/City. **Security Shortcuts** in the sidebar open the matching profile section and stay on that tab after refresh and Back/Forward: **Academic Settings** (`/user/profile?tab=academic-settings#academic-settings`), **Change Password** (`/user/profile?tab=security#security`), and **View Login Credentials** (`/user/profile?tab=account-settings#account-settings`). Academic Settings shows Scholarship Club, school, course, and year level as read-only, saves **Start Academic Year** (`program_start_year`), and saves the viewing year and semester on `users.academic_year_start` and `users.semester`. That viewing choice is restored after logout and login, filters service hours and the account summary, and does not change Start Academic Year, stamped attendance, or the administrator’s active year. A year that is not in the administrator’s list is rejected. Scholars who post the global academic-year update receive `403`. Change Password requires the current password, a new password of at least 8 characters, and a matching confirmation (`Password::min(8)`, same rule as registration). The new value is stored with the `hashed` cast, the session ID is regenerated, and the fields are empty after success. Validation and rate-limit errors return to the Security tab. View Login Credentials shows only the signed-in account’s email and Scholar ID. The password row says **Hidden** and never prints the password, hash, or session token. A blank Scholar ID shows “This account has no Scholar ID on file.” Password and delete account stay on their own forms. Date of Birth uses a full-width native `type="date"` control (`.date-input-wrap`). The designated Admin account cannot use delete account |
 | **Pending modal** | First-login overlay; dismiss via `POST /user/dismiss-pending-modal` |
 | **Presence heartbeat** | Hidden `#scholar-presence-root` on every scholar page (pending included). `user-app.js` posts `POST /user/presence` about every 20s while the tab is visible, and `POST /user/presence/leave` on `pagehide`. Updates `users.last_seen_at` only — not approval status and not `last_login_at` |
 | **Logout** | Sidebar filled red button (`#dc2626`, white icon + label, hover `#b91c1c`) → `POST /logout`. Scholar logout also clears `last_seen_at`. The same `.app-logout-btn` style is used for Scholar, Scholar Staff, and Administrator (sidebar and profile menus) |
@@ -634,10 +631,10 @@ Global academic year/semester can be updated from the scholar profile **only by 
 |---------|----------------|
 | **Dashboard** | Live Scholarship Club stats (not fake numbers): scholars, events, pending attendance, hours, documents, pending approvals, recent activity, upcoming events — all from `StaffDashboardService` + `scholarship_program_id`. Event totals and upcoming events use `visibleToStaff` for that signed-in staff account |
 | **Scholars** | Lists **approved** scholars in the assigned Scholarship Club only (`users.status = approved`). Pending accounts appear under **Approval Requests** and are excluded from this list, search, pagination, and presence polling. Reject permanently removes the pending account. Total Scholars on this page is the approved count. The scholar name (`.staff-scholar-name-link`) is the only view action — it opens the existing profile (`GET /staff/scholars/{scholar}`, `canManageScholar`). There is no eye/view column. Beside each name: green-dot **Active Now** when that scholar’s current session heartbeat is fresh, otherwise **Offline**. Status polls `GET /staff/scholar-presence` about every 10s (no manual refresh). Presence is **not** “approved” and **not** a past login |
-| **Scholar detail** | Account overview for one scholar in the same Scholarship Club, including the club name and the same live **Active Now** / **Offline** indicator. Staff can set the scholar’s **Start Academic Year** (`program_start_year`). **Service Hours** shows Academic Year, current semester, approved hours, **Approved of 30.00 required hours**, pending, and remaining (`30 − approved` for the current semester). **4-Year Service Hour Progress** lists Year 1–4 from `program_start_year` / `startingAcademicYear` with 1st/2nd Semester completed / pending / remaining kept separate. **Service Hour Records** is view-only (Event, Check In / Out, Hours, Status, Notes — no Actions). Approve / reject hours stays on Attendance |
+| **Scholar detail** | Account overview for one scholar in the same Scholarship Club, including the club name and the same live **Active Now** / **Offline** indicator. Staff can set the scholar’s **Start Academic Year** (`program_start_year`). Pending accounts show **Approve Account** and **Reject Application**. Restricted accounts show **Reactivate** only. This page does not show Block, Suspend, or Delete Account. **Service Hours** shows Academic Year, current semester, approved hours, **Approved of 30.00 required hours**, pending, and remaining (`30 − approved` for the current semester). **4-Year Service Hour Progress** lists Year 1–4 from `program_start_year` / `startingAcademicYear` with 1st/2nd Semester completed / pending / remaining kept separate. **Service Hour Records** is view-only (Event, Check In / Out, Hours, Status, Notes — no Actions). Approve / reject hours stays on Attendance |
 | **Approval Requests** | Pending scholar registrations; **Approve** (status `approved` + notify) or **Reject** (permanent delete via `AccountService::permanentlyDelete`). The Actions column stacks labeled **VIEW** (blue), **APPROVE** (green), and **REJECT** (red) buttons vertically in that order (`.staff-approval-actions`). The Pending badge stays on one line. Sidebar red badge = pending count |
-| **Events** | List events visible to this staff account; **Create Event** (`title`, `description`, `location`, `starts_at`, `ends_at` after start, `service_hours` 0–999, `organizer`, JPG/PNG ≤5MB) on `.staff-event-create-card` (max-width 760px). Start/end use native `datetime-local` inside `.date-input-wrap` in `.staff-datetime-grid`. New event `status` = `confirmed`, attendance **closed**. Per-row **status dropdown** sets Pending / Confirmed / Cancelled (`staff.events.status`); Completed appears when the schedule auto-completes. Status changes notify scholars. Event detail + registration count. Visibility: `created_at >= events_visible_from` (set on admin approval or approved-at-register), or `created_at >=` the staff `created_at` when that column is null. Empty table: **No events found.** Cancelled-only remove; other event rows are not deleted |
-| **Attendance** | Per-event lists: checked in vs failed to check in; **Open / Close Attendance** with `.staff-confirm-modal`; Approve / Reject hours; view photos (`staff.attendances.photo`). No scholar-style edit-record form |
+| **Events** | List events visible to this staff account; **Create Event** (`title`, `description`, `location`, `starts_at`, `ends_at` after start, `service_hours` 0–999, `organizer`, JPG/PNG ≤5MB) on `.staff-event-create-card` (max-width 760px). Start/end use native `datetime-local` inside `.date-input-wrap` in `.staff-datetime-grid`. New event `status` = `pending`, attendance **closed**, and registered-scholar count **0**. Staff must confirm the event before scholars can register. Per-row **status dropdown** sets Pending / Confirmed / Cancelled (`staff.events.status`); Completed appears when the schedule auto-completes. Status changes notify scholars. Event detail + registration count. Visibility: `created_at >= events_visible_from` (set on admin approval or approved-at-register), or `created_at >=` the staff `created_at` when that column is null. Empty table: **No events found.** Cancelled-only remove; other event rows are not deleted |
+| **Attendance** | Event cards can be filtered by School/University (`all`, a club school, or **No School Specified**). **Scholars Who Checked In (Approved)** are checked-in rows with status `approved`. **Pending Scholars (For Verification)** are checked-in rows still `pending`. **Failed to Check In** are registered scholars who did not check in after the event ended, the attendance session closed, or the registration/attendance is already `failed_to_check_in`. A rejected checked-in row is in none of those three lists and earns 0 hours. **Open / Close Attendance** uses `.staff-confirm-modal`. **Approve** credits hours; **Reject** does not delete the local photo. Photos are viewed at `staff.attendances.photo`. There is no scholar-style edit-record form |
 | **Documents** | CRUD document types (`name`, `description`, `required`) scoped to the staff program; provision placeholders for existing scholars; notify scholars. Review submissions: search, status filter, view, download, patch status + notes. The type-review table (`.staff-documents-table`) keeps Status as its own centered column (`min` space for the Pending / Approved / Rejected badge) so it does not collapse into Date Submitted or Actions. Approve / reject still work from Actions |
 | **Calendar** | Staff calendar of program events (redirect target after create). Uses the same `events_visible_from` filter as Events so a new staff account does not inherit older calendar items |
 | **Reports** | Four pages: service hours, attendance, participation, completion — same Scholarship Club IDs only. Reports are **School/University aggregates** (no individual scholar or attendance tables). **Academic Year Setup** (`partials/staff-report-period-filter`) filters every pie, stat, and school card by `year` + `semester` (`all` / `1st Semester` / `2nd Semester`) and **School/University** (`All Schools/Universities` or one school). Grouping uses the scholar’s current registered school (`users.scholarship_club_school_id` / `users.school_university`). **All Schools/Universities** is the combined overview plus **School/University Reports**: each school has its own percentage (scholar share, totaling 100%), Total, status counts, and chart. Hours/Completion: Completed / In Progress / Not Started. Attendance: Present / Attended, Failed to Check In, Absent. Participation: Participated / Completed, In Progress, Not Started. Choosing one school shows only that school. Changing a scholar’s School/University updates the reports. Values come from stamped `attendances` / period events (`StaffDashboardService` + `ScholarService::periodHourStatsFromRecords`). Session remembers the last period and school across the four report pages |
@@ -647,14 +644,14 @@ Global academic year/semester can be updated from the scholar profile **only by 
 
 | Section | What it does |
 |---------|----------------|
-| **Dashboard** | **Location** card with Province then Municipality/City (no Current Admin Scope banner, no Scholarship category, no Scholarship Clubs list). Cards: Total Scholars, Approved Scholars, Pending Scholars, Rejected Scholars, Scholar Staff, Pending Staff, Total Scholarship Clubs, Documents, Completed Scholars, **Events** (count of events with status `completed` for the selected location / overall when none selected). Stats include only records in the selected Province (or that Municipality/City). Empty locations show **0**. Below: **Quick Actions** beside a compact **Overall Reports** card with **one pie chart** (two slices: Total Scholars and Total Scholar Staff across all locations via `AdminDashboardService::overallReportSummary()`), plus **View Overall Reports** → `GET /admin/reports`. Quick Actions: View Scholars, View Scholar Staff, View Events, Open Reports |
+| **Dashboard** | **Location** card with Province then Municipality/City (no Current Admin Scope banner, no Scholarship category, no Scholarship Clubs list). **Viewing Academic Year** (`#admin-dashboard-view-year`) posts to `academic.period.update` and shows **Showing Administration data for** the selected year with **All Semesters**. The choice is stored in the session and does not rewrite attendance or the active `academic_settings` row. Cards: Total Scholars, Approved Scholars, Pending Scholars, Rejected Scholars, Scholar Staff, Pending Staff, Total Scholarship Clubs, Documents, Completed Scholars, **Events** (count of events with status `completed` for the selected location / overall when none selected). Stats include only records in the selected Province (or that Municipality/City) and the selected academic year. Empty locations show **0**. Below: **Quick Actions** beside a compact **Overall Reports** card with **one pie chart** (two slices: Total Scholars and Total Scholar Staff across all locations via `AdminDashboardService::overallReportSummary()`), plus **View Overall Reports** → `GET /admin/reports`. Quick Actions: View Scholars, View Scholar Staff, View Events, Open Reports |
 | **Scholars** | Unified list (City Scholar and Province Scholar together). Filters: Province, Municipality/City, Scholarship Club (all registered clubs), plus search by name / email / scholar ID. Table columns: Scholar, Scholar ID, Scholarship Club, Course, School, Status. Click a scholar name (`.admin-scholar-name-link`) to open a view-only profile (`GET /admin/scholars/{scholar}`). No approve/reject here |
 | **Scholar Staff** | Unified list (no City Scholar / Province Scholar split). Filters: Region (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, Scholarship Club (all registered clubs; selecting a club fills Province and Municipality/City from the club record), plus search by name / email / contact number. **All Scholar Staff Accounts** columns: Staff Member, Email, Contact Number, Scholarship Club, Status, Actions (**View**, **More**). View opens a dedicated page (`GET /admin/staff/{staffMember}`) with registration details and **Update Started Year** (`staff_started_year`). **More** opens a centered `#admin-staff-more-modal` with **Activate** / **Deactivate** / **Delete**. Pending registrations (Approve → `approved` and sets `events_visible_from`; Reject permanently deletes the pending account via `AccountService::permanentlyDelete`, releasing email and sole-owned Scholarship Club names). All Scholar Staff Accounts shows approved/rejected/inactive, **not** pending. Empty filter results show **No records found** |
 | **Events** | Unified list (no City Scholar / Province Scholar split). Filters: Region (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, Scholarship Club (all registered clubs from the database; selecting a club fills Province and Municipality/City from the club record), plus search by event title. Events are filtered by `events.scholarship_program_id` (club filter uses that club’s program). Table columns: Event, Scholarship Club (clubs registered on the event’s program; a selected club filter shows that club), **Participants** (count of scholars with `attendances.status = approved` and a check-in; pending, rejected, failed check-in, and unverified records are excluded), Schedule, Status, Service Hours. Empty results show **No events found**. Click an event title (`.admin-event-name-link`) to open attendees (`GET /admin/events/{event}`): Scholar, Attendance Status, Check-In, Service Hours Earned, **Attendance Photo**. Event details show Scholarship Club and Participants instead of Scholar Program / Program Type. The photo column shows only **approved** participation photos for that scholar and event. Pending, rejected, and unverified photos are hidden (`No approved photo`). Click a thumbnail to open the existing photo preview modal. Photo files are served at `GET /admin/events/{event}/attendances/{attendance}/photo` (`admin.events.attendances.photo`) only when the attendance is approved and belongs to that event |
 | **Service Hours** | Unified list (no City Scholar / Province Scholar split). Filters: Region (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, Scholarship Club (all registered clubs from the database; selecting a club fills Province and Municipality/City from the club record), plus search by name / email / scholar ID. Rows come from `StaffDashboardService::serviceHoursReport` using geographic program IDs (`directoryProgramIds`) and optional `scholarship_club_id`. Table columns: Scholar, Scholarship Club, Location, Approved, Pending, Remaining, Status. Empty results show **No records found**. Existing hour totals, completed counts, and attendance status rules are unchanged |
 | **Documents** | Unified list (no City Scholar / Province Scholar split). Filters: Region (All Regions / Luzon / Visayas / Mindanao), Province, Municipality/City, Scholarship Club (all registered clubs from the database; selecting a club fills Province and Municipality/City from the club record), plus search by name / email / scholar ID / document type. Rows come from scholar `documents` via geographic program IDs and optional `scholarship_club_id`. Table columns: Scholar, Document Type, Scholarship Club, Submitted, Status. Empty results show **No documents found**. Click a scholar name to open that scholar’s submissions (`GET /admin/documents/scholars/{scholar}`): type, submitted date, status, Preview/Download when a file exists. Admin does not approve/reject documents (staff still does) |
 | **Reports** | No Viewing filter, no Current Admin Scope, no City/Province Scholarship Program Data columns. **Academic Year** dropdown (`AcademicSettingsService::reportYearOptions` / `resolveReportFilter`, session `admin_report_year`) applies to all three island groups at once. **LUZON**, **VISAYAS**, and **MINDANAO** stay visible together. Each region has four stats and **four separate pie charts** (12 charts total): Scholars (approved/pending/rejected), Scholarship Clubs (registered clubs), Completed Students (scholars who reached `ScholarService::REQUIRED_HOURS` (30) approved hours in that Academic Year), Participation (attendance records for that year). Region comes from `scholarship_programs.region_name` / PSGC (`App\Support\PhilippineIslandGroup`); Province and Municipality/City data are not deleted. Empty regions show **0** and **No data available** on the chart. Changing Academic Year refreshes every stat and chart |
-| **Admin Settings** | No Viewing filter, no Current Admin Scope banner, no location pill (the pill is removed from every admin page). Account Information uses the same Edit → Save Changes workflow: name and email stay read-only until **Edit**; Role and Scholar ID stay locked. Save stays hidden/disabled until a value changes; Cancel restores the last saved name and email. Update admin `full_name` / `email` (unique); change password (`Password::min(8)`, current required, session regenerate). **Backup emails** for password recovery (add / edit / resend verification / delete; signed public verify route). **Academic Year** card lists years from `academic_settings` (`2026–2027` / Drive `AY 2026–2027` labels). Admin can add, edit, activate, deactivate, and delete years. Only one row has `is_active`. Activating a year deactivates the previous one and clears report year sessions so recording uses `AcademicSettingsService::current()`. The active year cannot be deleted until another year is activated. Delete uses `.staff-confirm-modal`; stamped records for that year stay. User preferences for a deleted year are cleared so those accounts follow the active year. Adding or changing years (and connecting Google Drive) creates matching year folders under `BSSA/DOCUMENTS` and `BSSA/ATTENDANCE` when Drive is connected. Duplicate years and invalid formats are rejected. Viewing Academic Year selector lives on Settings only (`partials/admin-academic-year-selector`); list pages no longer show a global Semester picker chrome (`AdminPortalAcademicYearConsistencyTest`) |
+| **Admin Settings** | No Viewing filter, no Current Admin Scope banner, no location pill (the pill is removed from every admin page). Account Information uses the same Edit → Save Changes workflow: name and email stay read-only until **Edit**; Role and Scholar ID stay locked. Save stays hidden/disabled until a value changes; Cancel restores the last saved name and email. Update admin `full_name` / `email` (unique); change password (`Password::min(8)`, current required, session regenerate). **Backup emails** for password recovery (add / edit / resend verification / delete; signed public verify route). **Academic Year** card lists years from `academic_settings` (`2026–2027`). Admin can add, edit, activate, deactivate, and delete years. Only one row has `is_active`. Activating a year deactivates the previous one and clears report year sessions so recording uses `AcademicSettingsService::current()`. The active year cannot be deleted until another year is activated. Delete uses `.staff-confirm-modal`; stamped records for that year stay. User preferences for a deleted year are cleared so those accounts follow the active year. New uploads use that active year in the local folder name. Duplicate years and invalid formats are rejected. The same Viewing Academic Year selector (`partials/admin-academic-year-selector`) is on Admin Settings and the Admin Dashboard. Scholars, Staff, Events, Service Hours, and Documents lists do not show a Semester picker in the page chrome (`AdminPortalAcademicYearConsistencyTest`) |
 | **Sidebar badge** | Polls `GET /admin/sidebar-badges` — JSON `{ staff: <pending count> }`. Red `.staff-nav-badge` only on **Scholar Staff**. Other admin keys may show `.staff-notif-badge` if a count is passed |
 
 Admin scope is stored in session: `admin_location`, `admin_program_type` (`city_municipality` or `province` only). List/report queries use `AdminDashboardService::resolveAdminProgramIds()`. Scholarship Clubs for those pages come from `AdminDashboardService::clubsForAdminLocation()`. The Admin Dashboard ignores Scholarship category and uses `resolveGeographicProgramIds()` plus `geographicClubs()` so Province / Municipality/City drive the cards, including **Total Scholarship Clubs**.
@@ -705,7 +702,6 @@ Emails that are connected:
 - Document submitted, approved, rejected, required-document posted, deadline within 24 hours, deadline passed, close, reopen, and deadline set, changed, extended, or removed.
 - Attendance opened and closed, check-in, attendance submitted, photo required or submitted, failed check-in, participation confirmed, and attendance not verified.
 - Service hours credited, or not credited, on those attendance outcomes.
-- Google Drive not connected or a document upload failing, and an approved attendance photo that could not be copied to Drive. Each incident is limited so it does not mail on every request.
 
 Not emailed, because the application has no such trigger:
 
@@ -734,7 +730,6 @@ Stack overview: [§0.3](#03-backend-technologies) and [§0.6](#06-system-archite
 | Controller | Responsibility |
 |------------|----------------|
 | `AuthController` | Login, register scholar/staff, logout (scholar logout also clears `last_seen_at`), rate limits |
-| `GoogleDriveController` | Google Drive OAuth start/callback, temporary test page, and Drive upload via `GoogleDriveService` |
 | `PasswordResetController` | Forgot-password email, verify code, set new password |
 | `UserController` | Scholar pages + attendance status JSON + presence heartbeat/leave + notification pages |
 | `StaffController` | Staff pages, scholar list/profile, program-scoped presence JSON, scholar approve/reject, attendance open/close/approve/reject, password change |
@@ -763,18 +758,17 @@ Stack overview: [§0.3](#03-backend-technologies) and [§0.6](#06-system-archite
 | `ScholarshipProgramImportService` | Import programs from `database/data/psgc-locations.json` |
 | `PasswordResetService` | Generate one reset code, email it, verify the same hash, update that account’s password |
 | `MailConfigService` | Read SMTP settings from config, process environment, or `.env` without logging secrets. `mail:inspect` uses it |
-| `WorkflowMailService` | Send `WorkflowNotificationMail` after commit, honor notification preferences, dedupe, and alert administrators on repeated mail or Drive failures |
+| `WorkflowMailService` | Send `WorkflowNotificationMail` after commit, honor notification preferences, dedupe, and alert administrators on repeated mail failures |
 | `AccountAccessService` | Suspend a scholar for 7 days, block, reactivate, and release expired suspensions |
 | `OperationalDataResetService` | Clean-slate wipe of operational/test data (`php artisan app:reset-operational-data`). Keeps schema, `scholarship_programs`, academic-settings structure, and the permanent admin |
-| `GoogleDriveService` | Org Drive under `BSSA/` → `DOCUMENTS` and `ATTENDANCE` → `AY YYYY–YYYY` → Province → Municipality → `{scholar_id} – {full_name}` (+ event folder for attendance), upload/download/delete, token persist + refresh |
 | `AdminBackupEmailService` | Admin backup email staging, verification mail, password-recovery eligibility |
-| `AttendanceDriveStorageService` | After verified/approved attendance, create `BSSA/ATTENDANCE` folders (AY / province / municipality / scholar / event) and upload the photo; skip pending/rejected/unverified; no duplicate files; cache Drive IDs on `attendances` |
-| `DocumentStorageService` | Scholar document store/replace/stream/delete: Drive plus local `file_path` fallback |
-| `GoogleApiClientFactory` | Builds `Google\Client` with credentials from `services.google` and Guzzle TLS verify via `certs/cacert.pem` (fixes Windows cURL error 60) |
+| `LocalArchive` | Builds the public-disk folder names for documents, attendance photos, and event images |
+| `AttendanceArchiveService` | Stores a new attendance photo in `bssa/attendance/...` and, on approval, copies an older photo into that tree without deleting the original |
+| `DocumentStorageService` | Scholar document store/replace/stream/delete on the public disk |
 
 ### Models
 
-`User`, `ScholarshipProgram`, `ScholarshipClub`, `ScholarshipClubSchool`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`, `GoogleDriveFolder`, `GoogleDriveConnection`, `AdminBackupEmail`, `ScholarSuspension`. Scholar register and Profile Course is a typed full official name (`App\Support\CourseCatalog` rejects initials such as BSICT, BSCE, and BSIS). Year-level labels live in `CourseCatalog::yearLevels()`. Course, Year Level, and School are saved on `users.course_year_level`, `users.year_level`, `users.scholarship_club_school_id`, and `users.school_university` and shown from that account in User Settings, Staff/Admin scholar records, and registration. Admin Reports map programs to Luzon, Visayas, or Mindanao with `App\Support\PhilippineIslandGroup` from `region_name` and PSGC codes.
+`User`, `ScholarshipProgram`, `ScholarshipClub`, `ScholarshipClubSchool`, `Event`, `EventRegistration`, `Attendance`, `AttendanceSessionLog`, `Document`, `DocumentType`, `Announcement`, `AnnouncementRead`, `ScholarNotification`, `UserActivity`, `AcademicSetting`, `AdminBackupEmail`, `ScholarSuspension`. Scholar register and Profile Course is a typed full official name (`App\Support\CourseCatalog` rejects initials such as BSICT, BSCE, and BSIS). Year-level labels live in `CourseCatalog::yearLevels()`. Course, Year Level, and School are saved on `users.course_year_level`, `users.year_level`, `users.scholarship_club_school_id`, and `users.school_university` and shown from that account in User Settings, Staff/Admin scholar records, and registration. Admin Reports map programs to Luzon, Visayas, or Mindanao with `App\Support\PhilippineIslandGroup` from `region_name` and PSGC codes.
 
 Passwords use the Eloquent `hashed` cast. `User::updatePassword()` and `User::register()` set the password through that cast (not mass assignment of `password`).
 
@@ -958,12 +952,10 @@ Page layouts that a mobile port must preserve (same data, stacked on small scree
 | `scholarship_club_schools` | School/University names added by staff for a club (`name`, `scholarship_club_id`, `created_by`) |
 | `events` | Title, schedule, location, service hours, `status` (`pending` on create), attendance session columns, `image_path`, `scholarship_program_id` |
 | `event_registrations` | One row per scholar and event after Attend / Register. Unique `(user_id, event_id)`. Status is not created automatically when the event is saved |
-| `attendances` | Check-in/out, hours, status, photo, academic period, `BSSA/ATTENDANCE` Drive folder/file IDs |
+| `attendances` | Check-in/out, hours, status, `photo_path` on the public disk, academic period. Older `google_drive_*` columns may still exist and are not written |
 | `attendance_session_logs` | Open/close audit |
 | `document_types` | Program requirements: name, slug, description, `required`, `submissions_open`, opened/closed timestamps, optional `submission_deadline` |
-| `documents` | One row per scholar and type. File path, Drive ids, review status, notes, academic year. Existing rows are kept when the type name or deadline changes |
-| `google_drive_folders` | Cached Drive folder IDs for document keys (`root`, `year:*`) and attendance keys (`attendance_root`, `attendance_year:*`, `attendance_scholar:*`, `attendance_event:*`) |
-| `google_drive_connections` | Encrypted org OAuth token (`connected_by`) |
+| `documents` | One row per scholar and type. `file_path` on the public disk, review status, notes, academic year. Existing rows are kept when the type name or deadline changes |
 | `announcements` | Notices (optional program + announcement reads) |
 | `announcement_reads` | Read receipts |
 | `scholar_notifications` | In-app notifications (`announcement_id`, `event_id`) |
@@ -974,11 +966,11 @@ Page layouts that a mobile port must preserve (same data, stacked on small scree
 
 ### Important `users` fields
 
-`full_name`, `scholar_id`, `email`, `password`, `role`, `is_admin`, `is_permanent`, `status`, `scholarship_program_id`, `scholarship_club_id`, `scholarship_club_school_id`, `city`, `province`, school/contact/guardian fields, `notification_preferences`, `academic_year_start`, `semester`, `program_start_year`, `staff_started_year`, `last_login_at`, `last_seen_at`, `events_visible_from`, `avatar_path`, `google_drive_folder_id`.
+`full_name`, `scholar_id`, `email`, `password`, `role`, `is_admin`, `is_permanent`, `status`, `scholarship_program_id`, `scholarship_club_id`, `scholarship_club_school_id`, `city`, `province`, school/contact/guardian fields, `notification_preferences`, `academic_year_start`, `semester`, `program_start_year`, `staff_started_year`, `last_login_at`, `last_seen_at`, `events_visible_from`, `avatar_path`.
 
-`scholar_id` is the Scholar Code for scholars (authoritative identity) and `ADMIN-001` for the permanent admin. Scholar staff no longer enter a Scholar Staff Number; registration generates an internal unique `STAFF-{ULID}` so the column stays unique. Drive student folders are named `{scholar_id} – {full_name}` (en-dash). Name changes rename the same folder ID; they do not create a second student.
+`scholar_id` is the Scholar Code for scholars (authoritative identity) and `ADMIN-001` for the permanent admin. Scholar staff no longer enter a Scholar Staff Number; registration generates an internal unique `STAFF-{ULID}` so the column stays unique. New document and attendance folders are named `{scholar_id} – {full_name}` (en-dash) at the time of upload. A later name change does not move files that were already stored.
 
-`program_start_year` is the scholar’s fixed Start Academic Year for Year 1–4 service-hour progress. `staff_started_year` is the administrator-managed Started Year on Scholar Staff profiles (not collected at staff registration).
+`program_start_year` is the scholar’s fixed Start Academic Year for Year 1–4 service-hour progress. For a scholar, `academic_year_start` and `semester` are the saved **viewing** period from Profile → Academic Settings. They are restored on the next login and do not rewrite attendance stamps or `program_start_year`. `staff_started_year` is the administrator-managed Started Year on Scholar Staff profiles (not collected at staff registration).
 
 `last_seen_at` is **not** mass-assignable. Migration `2026_09_23_000003_add_last_seen_at_to_users` adds the nullable timestamp. Scholar heartbeats (`User::markPresence`) write it; logout / leave (`User::clearPresence`) null it. Staff **Active Now** requires `last_seen_at` within `User::PRESENCE_SECONDS` (90). Approved status and `last_login_at` never imply online.
 
@@ -1012,7 +1004,7 @@ A full first-use wipe is `php artisan app:reset-operational-data` (`OperationalD
 
 ### Factories
 
-`UserFactory` exists for tests/factories. Product feature tests live under `tests/Feature/` (events status workflow, Drive folders/OAuth, admin filters/reports, academic year consistency, password reset, presence/account access, email verification removal, staff started year, and more).
+`UserFactory` exists for tests/factories. Product feature tests live under `tests/Feature/` (events status workflow, local file storage, admin filters/reports, academic year consistency, password reset, presence/account access, email verification removal, staff started year, and more).
 
 ---
 
@@ -1130,25 +1122,7 @@ Also: `GET /` → login; `GET /dashboard` role redirect; `GET /up` health; signe
 Staff event status (approved staff): `PATCH /staff/events/{event}/status` → `staff.events.status`.  
 Staff scholar Start Academic Year: `PUT /staff/scholars/{scholar}/program-start` → `staff.scholars.program-start`.
 
-### Google OAuth (`GoogleDriveController`)
-
-| Method | Path | Name |
-|--------|------|------|
-| GET | `/auth/google` | `google.redirect` |
-| GET | `/auth/google/callback` | `google.callback` |
-
-These routes match `GOOGLE_REDIRECT_URI` (default `http://127.0.0.1:8000/auth/google/callback`). Credentials come from `config('services.google')`. The controller uses `google/apiclient` (`Google\Client`, Drive file scope). Admin or approved staff connect once; the token is stored encrypted in `google_drive_connections` (and the session). Scholars do not connect their own Drive. Files stay private (no “anyone with the link”).
-
-Google Cloud must list Authorized JavaScript origin `http://127.0.0.1:8000` and Authorized redirect URI `http://127.0.0.1:8000/auth/google/callback`. Use `127.0.0.1` in the browser, not `localhost`.
-
-Org Drive connection test (`auth`, admin or approved staff):
-
-| Method | Path | Name |
-|--------|------|------|
-| GET | `/google-drive` | `google.drive.test` |
-| POST | `/google-drive/upload` | `google.drive.upload` |
-
-Full folder layout, OAuth setup, and troubleshooting: [§34](#34-google-drive-integration).
+Uploaded files are served by the owning controller (`user.documents.view`, `user.documents.download`, `staff.documents.view`, `staff.documents.download`, `staff.attendances.photo`, `events.image`). There is no cloud-storage OAuth route. Folder layout: [§34](#34-local-file-storage).
 
 ### Public password recovery (`guest`)
 
@@ -1211,13 +1185,15 @@ scholar/
 └── .env.example
 ```
 
-Uploads used by the app:
+Uploads used by the app live on the Laravel `public` disk (`storage/app/public`):
 
-- Event images: public disk, `event_images/`
-- Attendance photos: public disk, `attendance_photos/{user_id}/` (local copy). Verified/approved photos are also uploaded to Google Drive under `BSSA/ATTENDANCE/` (separate from `BSSA/DOCUMENTS`).
-- Documents: public disk, `documents/{user_id}/`
+- Documents: `bssa/documents/{AY YYYY–YYYY}/{Province}/{Municipality}/{scholar_id} – {full_name}/`
+- Attendance photos: `bssa/attendance/{AY YYYY–YYYY}/{Province}/{Municipality}/{scholar_id} – {full_name}/{event title}/`
+- Event images: `bssa/events/{AY YYYY–YYYY}/{Province}/{Municipality}/{event title}/`
 
-`php artisan storage:link` is required so `/storage/...` can be served.
+Older files that were already stored under `documents/`, `attendance_photos/`, or `event_images/` keep working. A one-time copy moved the existing live photo and event image into the new folders and left the original files on disk. See [§34](#34-local-file-storage).
+
+`php artisan storage:link` is required so `/storage/...` can be served. The web server user must be able to write to `storage/app/public`.
 
 ---
 
@@ -1242,8 +1218,7 @@ Consolidated stack map: [§0](#0-technical-stack-and-architecture-reference). Ve
 
 | Package | Constraint | Purpose |
 |---------|------------|---------|
-| `laravel/framework` | `^12.0` | HTTP kernel, routing, Eloquent, Blade, validation, mail, queues |
-| `google/apiclient` | `^2.15` | Google Drive OAuth + file API (`Drive` service only) |
+| `laravel/framework` | `^12.0` | HTTP kernel, routing, Eloquent, Blade, validation, mail, queues, filesystem |
 | `laravel/tinker` | `^2.10.1` | REPL |
 | `laravel/pint` | `^1.24` (dev) | PHP style fixer |
 | `laravel/sail` | `^1.41` (dev) | Optional Docker environment |
@@ -1330,9 +1305,8 @@ Relevant keys from `.env.example`:
 | `SESSION_DRIVER` | `database`; `SESSION_LIFETIME=5256000` |
 | `QUEUE_CONNECTION` | `database` |
 | `CACHE_STORE` | `database` |
-| `FILESYSTEM_DISK` | `local` (uploads still use the `public` disk in code) |
+| `FILESYSTEM_DISK` | `local` (private app files). Scholar documents, attendance photos, and event images use the `public` disk explicitly |
 | `MAIL_*` | Gmail SMTP for password reset, backup-email verification, and workflow notices. See [§17.1](#171-gmail-smtp) |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Read by `config/services.php` as `services.google`. Do not put the client secret in git or Blade |
 | `VITE_APP_NAME`, `VITE_DEV_HOST` | Vite app name; optional HMR host pin |
 
 If you use SQLite, ensure `database/database.sqlite` exists (Laravel’s create-project script can create it; otherwise `touch database/database.sqlite` or create the file manually).
@@ -1523,7 +1497,7 @@ No other demo scholar or staff passwords are defined in seeders.
 - Login/register rate limiting.
 - Forgot Password: empty registered-email lookup → Find Account loads **Name** + recovery emails from the database (Scholar/Staff primary; Admin primary or verified backup) → Send Reset Link emails a 6-digit code (hashed in `password_reset_tokens`) via Gmail SMTP, 10-minute expiry, single-use. Success is shown only after delivery succeeds. SMTP credentials stay in `.env` only.
 - Session regeneration after login and after password change.
-- Password change requires current password; new password must differ, be confirmed, and meet `Password::min(8)` (staff also requires letters + numbers).
+- Password change requires the current password. The new password must differ, be confirmed, and meet `Password::min(8)`. Scholar Staff also requires letters and numbers. Scholar errors return to `/user/profile?tab=security`. The password, its hash, and the session token are never rendered on View Login Credentials.
 - Account delete (scholar) requires current password and is rate limited. After delete, remaining `users.id` values are compacted (`UserSequenceService`).
 - The designated Admin account cannot be deleted (`is_permanent` / `User::isPermanentAdmin()`). `is_permanent` is not fillable; Eloquent `saving` keeps the flag and admin role; `deleting` is blocked.
 - Staff approve/reject of other staff is admin-only; route binding hides staff IDs from non-admins.
@@ -1565,7 +1539,7 @@ php artisan test
 composer test
 ```
 
-Feature coverage lives in `tests/Feature/` (password reset, Drive OAuth/folders, admin filters and reports, event status workflow, attendance Drive storage, sidebar layout, account access, academic years, registration, presence, and more). Prefer `php artisan test --filter=ClassName` while iterating.
+Feature coverage lives in `tests/Feature/` (password reset, local file storage, admin filters and reports, event status workflow, sidebar layout, account access, academic years, registration, presence, and more). Prefer `php artisan test --filter=ClassName` while iterating.
 
 See also [§0.13](#013-testing-and-troubleshooting).
 
@@ -1593,10 +1567,8 @@ See also [§0.13](#013-testing-and-troubleshooting).
 | Scholar cannot register for Cancelled or Completed events | Intended. New registration and attendance are blocked on UI and backend |
 | User IDs changed after a delete | Intended. Remaining accounts are renumbered `1, 2, 3, …`; user foreign keys are rewritten. Event/document IDs are not compacted |
 | Events, scholars, documents, hours, and reports are empty after a clean-slate reset | Intended. `php artisan app:reset-operational-data` wiped operational/test data. Register new Scholar / Scholar Staff accounts and create new events. The permanent admin and scholarship programs remain |
-| Google **Access blocked** / Error 403 `access_denied` / app not verified | Google Cloud OAuth is in **Testing**. Only emails listed as test users can authorize. In [Google Auth Platform → Audience](https://console.cloud.google.com/auth/audience) add the Google account you sign in with (for example the project owner). Publishing the app without verification does not replace test users for Drive. This is not a Laravel bug |
-| cURL error 60 / unable to get local issuer certificate when calling `oauth2.googleapis.com/token` | Windows PHP (WAMP) had empty `curl.cainfo`. The app verifies TLS with `certs/cacert.pem` (`GoogleApiClientFactory`). `php.ini` also sets `curl.cainfo` and `openssl.cafile` to that file. Restart `php artisan serve` after a php.ini change |
-| POST data is too large / `PostTooLargeException` | PHP `upload_max_filesize` was 2M and `post_max_size` was 8M. They are now 12M / 16M so Laravel’s 10 MB Drive test and 5 MB scholar/event uploads can pass PHP before app validation. Restart `php artisan serve` after a php.ini change. Oversized posts redirect back with an error instead of a stack trace |
-| Scholar document upload says Google Drive is not connected | Log in as admin or approved staff, open `/google-drive`, connect Google, then scholars can upload. The org token is stored in `google_drive_connections` |
+| POST data is too large / `PostTooLargeException` | PHP `upload_max_filesize` and `post_max_size` must be larger than the 5 MB application limit (12M / 16M is enough). Restart `php artisan serve` after a php.ini change. Oversized posts redirect back with an error instead of a stack trace |
+| Uploaded file cannot be opened | Run `php artisan storage:link`. Confirm the path in `documents.file_path`, `attendances.photo_path`, or `events.image_path` exists under `storage/app/public` and the web server can read it |
 | Phone cannot open `http://0.0.0.0:8000` | Use the LAN IPv4 URL Artisan prints (see [§19](#19-how-to-run-the-application)) |
 | New Scholar Staff Events list is empty | Intended if that account’s `created_at` / `events_visible_from` is after the existing events. Those events remain for other staff, scholars, reports, and admin. Create a new event with **+ Add Event** |
 | New Scholar calendar / Events page is empty | Intended when every program event already ended before the scholar’s `events_visible_from`. Ongoing/upcoming events that end after activation remain visible even if created earlier. Other scholars, staff, and reports still see the full program history |
@@ -1643,7 +1615,6 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 
 ### Public / auth
 
-- Google Drive OAuth (`/auth/google`) and temporary upload test (`/google-drive`, auth)
 - Login (email + password, remember me, rate limit 5/60s). Password starts masked; the closed-eye / open-eye button only toggles visibility and does not change login POST)
 - Forgot Password (Find Account from DB → Name + recovery email → emailed reset link/code → verify → new password)
 - Scholar register (province/city + Scholarship Club picker from staff-created clubs, unique email/scholar ID, min 8 password)
@@ -1667,7 +1638,7 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 - Live attendance JSON poll
 - Calendar (same visibility + fresh upcoming window)
 - Service hours overview (stamped periods; Start Academic Year on Profile Academic Settings)
-- Documents: table **Upload** / **Replace** / **Resubmit**, view, download, and delete when that type accepts submissions (Google Drive + local copy; Scholar Code folders). No side upload panel
+- Documents: table **Upload** / **Replace** / **Resubmit**, view, download, and delete when that type accepts submissions (local public disk; Scholar Code folders). No side upload panel
 - Notifications list/filters/settings/see more
 - Profile, guardian, Academic Settings (start year + viewing period), password, delete account
 - Program-scoped data only
@@ -1680,7 +1651,7 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 - Scholars list + detail (click the scholar name to open the profile; no eye/view button), including live **Active Now** / **Offline** (program-scoped poll). Profile is view-only except pending Approve / Reject and Start Academic Year
 - Approve / reject scholars (Approval Requests and pending profile still use those action buttons)
 - Events list / create / show / status dropdown (list scoped by `visibleToStaff`; empty copy **No events found.**)
-- Attendance open/close, approve/reject hours, view photos (approve uploads the verified photo to `BSSA/ATTENDANCE` on Drive)
+- Attendance open/close, approve/reject hours, view photos (approve copies a verified photo into `bssa/attendance` on the public disk)
 - Document types: create, edit name/description/deadline, open/close submissions, school filter, review files. Deleting a type also deletes its scholar files
 - Calendar (same `visibleToStaff` start time as Events)
 - Four report pages (Academic Year / Semester / School filters)
@@ -1701,7 +1672,7 @@ This catalog matches `routes/web.php` and the controllers. The Expo app must exp
 
 ### Backend services that must stay authoritative
 
-`ScholarService`, `StaffDashboardService`, `AdminDashboardService`, `AttendanceSessionService`, `AccountService`, `AccountAccessService`, `UserSequenceService`, `PasswordResetService`, `AnnouncementService`, `AcademicSettingsService`, `ProgramScopeService`, `ScholarshipProgramAssignmentService`, `OperationalDataResetService`, `GoogleDriveService`, `AttendanceDriveStorageService`, `DocumentStorageService`, `GoogleApiClientFactory`, `AdminBackupEmailService`.
+`ScholarService`, `StaffDashboardService`, `AdminDashboardService`, `AttendanceSessionService`, `AccountService`, `AccountAccessService`, `UserSequenceService`, `PasswordResetService`, `AnnouncementService`, `AcademicSettingsService`, `ProgramScopeService`, `ScholarshipProgramAssignmentService`, `OperationalDataResetService`, `LocalArchive`, `AttendanceArchiveService`, `DocumentStorageService`, `AdminBackupEmailService`.
 
 Mobile screens must consume their results. **Do not hardcode** scholar counts, hour totals, events, documents, or notifications.
 
@@ -1918,17 +1889,19 @@ BSSA separates **recording** academic years (admin-managed `academic_settings`) 
 - Exactly one year is active (`AcademicSettingsService::current()`).
 - Activating a year deactivates the previous one and clears report-year session keys so hours/documents/reports follow the new active year.
 - Attendance rows store `academic_year_start` / `academic_year_end` / `semester` stamps; later viewing changes do **not** rewrite those stamps.
-- Adding/activating years also ensures matching Drive year folders when Google Drive is connected ([§34](#34-google-drive-integration)).
+- New uploads use the active year's `AY {start}–{end}` folder ([§34](#34-local-file-storage)). Adding a year does not move files that were already stored.
 
-### Viewing period (session)
+### Viewing period
 
 | Who | Where | Effect |
 |-----|--------|--------|
-| Admin | Settings Viewing Academic Year selector only | Filters admin list/report queries via session; **not** shown as a Semester picker on Dashboard / Scholars / Staff / Events / Hours / Documents (`AdminPortalAcademicYearConsistencyTest`) |
-| Scholar Staff | Settings → Apply View (year + semester) | Session viewing period for staff pages |
-| Scholar | Profile → Academic Settings | Start Academic Year + viewing year/semester preference |
+| Admin | Dashboard and Settings → Viewing Academic Year | Session key `academic_period_view`. Dashboard banner reads **Showing Administration data for** that year and **All Semesters**. It does not change the active `academic_settings` row or attendance stamps. Scholars, Staff, Events, Hours, and Documents lists do not show a Semester picker (`AdminPortalAcademicYearConsistencyTest`) |
+| Scholar Staff | Settings → Apply View (year + semester) | Session viewing period for staff pages. Not written onto the staff user row |
+| Scholar | Profile → Academic Settings → Apply View | Saves `users.academic_year_start` and `users.semester`, and the same session key. After logout, `AcademicSettingsService::selectedPeriod()` restores that pair when the year is still in the administrator’s list. Service hours and the account summary follow it |
 
-Portal pages do not show a global Academic Year chrome filter. Staff reports keep their own period filter (`partials/staff-report-period-filter`). Year management for administrators is on **Admin Settings**.
+A scholar cannot post `user.profile.academic.global` (`403`). Choosing a year that is not in `academic_settings` is rejected and does not change the saved preference. Deleting an academic year clears matching user viewing columns (`AcademicSettingsService::deleteYear`).
+
+Portal pages do not show a global Academic Year chrome filter. Staff reports keep their own period filter (`partials/staff-report-period-filter`). Creating and deleting years stays on **Admin Settings**.
 
 ### Start Academic Year (scholars)
 
@@ -1950,68 +1923,62 @@ Portal pages do not show a global Academic Year chrome filter. Staff reports kee
 
 ---
 
-## 34. Google Drive integration
+## 34. Local file storage
 
-Org-wide Google Drive is implemented with `google/apiclient`, `GoogleDriveController`, `GoogleDriveService`, `DocumentStorageService`, and `AttendanceDriveStorageService`.
+Documents, attendance photos, and event images use Laravel's `public` disk. `config/filesystems.php` points that disk at `storage/app/public` and its URL at `APP_URL/storage`. `FILESYSTEM_DISK=local` remains the default for private application files. Upload code passes `'public'` explicitly, so changing the default disk does not move these files.
 
-### OAuth configuration
+### Deployment
 
-1. Create a Google Cloud OAuth client (Web application).
-2. Authorized JavaScript origin: `http://127.0.0.1:8000` (or your production origin).
-3. Authorized redirect URI: must match `GOOGLE_REDIRECT_URI` (default `http://127.0.0.1:8000/auth/google/callback`).
-4. Put `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` in `.env` only — never in git, Blade, or chat.
-5. For OAuth apps in **Testing**, add the connecting Google account under Audience → Test users.
-6. Sign in as **Admin** or **approved Scholar Staff**, open `/google-drive`, and complete Connect.
-7. Token is stored encrypted in `google_drive_connections` (refresh token preserved on reconnect). Scholars never OAuth individually.
+1. `php artisan storage:link` creates `public/storage` → `storage/app/public`.
+2. The process that runs PHP must be able to create directories and write files under `storage/app/public`.
+3. On a new server, copy `storage/app/public` with the database. Paths stored in `documents.file_path`, `attendances.photo_path`, and `events.image_path` are relative to that disk.
+4. No Google client ID, client secret, redirect URI, access token, or refresh token is required. Those settings are not read by the application.
 
-Routes: `GET /auth/google`, `GET /auth/google/callback`, `GET /google-drive`, `POST /google-drive/upload`.
+### Folder layout
 
-**Note:** Connect UI lives on `/google-drive` today. Admin/Staff Settings pages do not yet embed a Connect button; error copy that says “connect from Settings” should be treated as pointing operators to `/google-drive` until Settings is wired.
-
-### Folder structure (current code)
+New files are stored under `storage/app/public`:
 
 ```
-BSSA/
-├── DOCUMENTS/
+bssa/
+├── documents/
 │   └── AY 2026–2027/
 │       └── {Province}/
 │           └── {Municipality}/
 │               └── {scholar_id} – {full_name}/
-│                   └── (uploaded document files)
-└── ATTENDANCE/
+│                   └── (document file)
+├── attendance/
+│   └── AY 2026–2027/
+│       └── {Province}/
+│           └── {Municipality}/
+│               └── {scholar_id} – {full_name}/
+│                   └── {event title}/
+│                       └── (attendance photo)
+└── events/
     └── AY 2026–2027/
         └── {Province}/
             └── {Municipality}/
-                └── {scholar_id} – {full_name}/
-                    └── {event title}/
-                        └── (verified attendance photo)
+                └── {event title}/
+                    └── (event image)
 ```
 
-- Year folders use `GoogleDriveService::driveYearFolderName()` → `AY {start}–{end}` (en-dash).
-- Scholar folders use `studentFolderName()` → `{scholar_id} – {full_name}` (en-dash).
-- Province/Municipality come from the scholar’s program/club location (`locationForScholar()`).
-- Folder IDs are cached in `google_drive_folders`.
-- Document uploads also keep a local copy under `storage` / public disk; view/download prefer Drive then fall back locally.
-- Attendance photos upload to Drive **only after staff/admin approval** of the attendance row.
+- `LocalArchive::yearFolder()` builds `AY {start}–{end}` with an en-dash. The year is the row's academic year, or `AcademicSettingsService::current()` when the row has none.
+- Scholar folders use `{scholar_id} – {full_name}` (en-dash).
+- Province and municipality come from the scholar profile, then the scholarship club. An empty value becomes `Unassigned Province` or `Unassigned Municipality`.
+- Event images use the scholarship program's province and municipality.
+- Folder names drop `\ / : * ? " < > |`, collapse spaces, and stop at 120 characters.
+- A missing province or municipality does not block the upload.
 
-### Document upload workflow
+### Upload, view, and delete
 
-1. Org Drive must be connected (`DocumentStorageService` refuses upload otherwise).
-2. Scholar (or replace flow) posts to `user.documents.upload`.
-3. App ensures DOCUMENTS year → province → municipality → scholar folder, uploads file, stores Drive file id/link + local path, sets document status `pending`.
-4. Staff approve/reject with optional notes. Approved documents cannot be replaced/deleted by the scholar.
+1. A scholar posts a PDF, JPG, or PNG (maximum 5 MB) to `user.documents.upload`.
+2. `DocumentStorageService` stores the file in the documents tree, sets `documents.file_path` and `original_name`, and marks the row `pending`.
+3. Replacing a file stored under `bssa/` deletes that previous archived copy. A file stored at an older path is left on disk.
+4. View and download (`DocumentStorageService::stream`) read `file_path` from the public disk. Staff and admin use the same stream after their own authorization checks.
+5. Deleting a submission removes that local file and clears the path. Approved documents cannot be replaced or deleted by the scholar.
+6. A new attendance photo is stored in the attendance tree immediately. Approving attendance copies an older `attendance_photos/` file into that tree and points `photo_path` at the copy. The original file stays as a backup. Rejecting attendance does not delete the photo.
+7. A new event image is stored in the events tree. Deleting a cancelled event still deletes its current image file.
 
-### Troubleshooting (Drive)
-
-| Problem | Check |
-|---------|--------|
-| Access blocked / `access_denied` | OAuth app in Testing; add the Google account as a test user |
-| cURL error 60 / SSL | Windows CA bundle; app uses `certs/cacert.pem` via `GoogleApiClientFactory` |
-| Upload says Drive not connected | Admin/staff must connect at `/google-drive`; confirm `google_drive_connections` has a token |
-| Wrong folder names | Expect `BSSA` / `DOCUMENTS` / `ATTENDANCE` / `AY …` / Province / Municipality / `{code} – {name}` |
-| Scholar page has no Drive banner | Intended — disconnected state is enforced on upload, not via a Documents banner |
-
-Do not commit client secrets, refresh tokens, or App Passwords.
+Existing accounts, document rows, attendance rows, and event rows are kept. Database columns such as `google_drive_file_id` are left in place so no data is dropped. New uploads do not write those columns. The live database had no document or attendance row that existed only in Google Drive, so nothing needed to be downloaded. The existing attendance photo and event image were copied into the folders above, and their original files were not deleted.
 
 ---
 
@@ -2047,23 +2014,22 @@ Documented against the current codebase and feature tests (not planned work):
 | Scholar registration gates | Pending / Cancelled / Completed cannot register or create attendance; Confirmed follows attendance rules |
 | Event visibility | Scholars: `ends_at >= events_visible_from`; Staff: `created_at >= events_visible_from` |
 | Email verification | Scholar email verification routes removed; unverified scholars can use the portal by status |
-| Academic UI | Global AY/Semester pickers removed from general portal chrome; kept on Academic Settings, Staff Settings Apply View, staff/admin report filters, Admin year CRUD |
+| Academic UI | Global AY/Semester pickers removed from general portal chrome. Scholars save the viewing period on their account. Staff Apply View stays in the session. Admin Dashboard and Admin Settings share the year selector. Admin year CRUD stays on Settings |
 | Scholar Start Year | Profile Academic Settings + staff scholar profile |
 | Staff Started Year | Admin staff detail only |
 | Admin permanent email | Canonical `batangsurigaononscholarsapp@gmail.com`; seeder migrates legacy admin email |
 | Admin backup emails | Settings CRUD + signed verify link |
-| Google Drive layout | `BSSA/DOCUMENTS` and `BSSA/ATTENDANCE` with AY / Province / Municipality / scholar folders |
-| Documents UI | Scholar Documents has no side upload panel, no STUDENT INFORMATION card, and no Drive-disconnected banner. Upload stays on the table. Staff document cards use a responsive grid. Edit Document Type shows **← Back** on the left of the heading |
+| Local files | Documents, attendance photos, and event images use the public disk layout in [§34](#34-local-file-storage). Google Drive OAuth, routes, and the API client are removed |
+| Documents UI | Scholar Documents has no side upload panel and no STUDENT INFORMATION card. Upload stays on the table. Staff document cards use a responsive grid. Edit Document Type shows **← Back** on the left of the heading |
 | Document windows | Per-type open/close, optional deadline, 24-hour approaching notice, and server-side upload checks |
 | Workflow email | `WorkflowNotificationMail` for the account, event, document, attendance, and service-hour triggers in [§7.1](#71-email). SMTP acceptance is not the same as inbox delivery |
 | Dates / copy | UI date formatting without unnecessary commas in several scholar surfaces (verify in views when editing copy) |
-| Tests | Broad Feature suite beyond Laravel examples (events, Drive, admin filters, academic consistency, password reset, etc.) |
+| Tests | Broad Feature suite beyond Laravel examples (events, local storage, admin filters, academic consistency, password reset, etc.) |
 
 ### Incomplete or partially wired (do not treat as finished)
 
 - **Expo / React Native client** — documentation only; no mobile app in this repo.
 - **Announcement authoring** — scholars can read announcements; no staff/admin create route in `web.php`.
-- **Google Drive Connect in Settings** — connect flow works on `/google-drive`; Settings pages do not embed Connect.
 - **Notification preferences** — optional emails follow the saved flags. Some in-app rows, including event status notices, are still created even when that email preference is off. Attendance open/close skips both the in-app row and the email when `attendance_updates` is off.
 - **Upcoming event email reminders, missing-document sweeps, remaining-hour reminders, and a “requirement completed” email** — not implemented. There is no scheduler for them.
 - **Event reschedule** — no edit-event route. Status changes include the saved schedule in the notice.

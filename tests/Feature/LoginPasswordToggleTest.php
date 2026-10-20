@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class LoginPasswordToggleTest extends TestCase
 {
+    use RefreshDatabase;
     public function test_login_page_masks_password_and_shows_closed_eye_by_default(): void
     {
         $html = $this->get(route('login'))

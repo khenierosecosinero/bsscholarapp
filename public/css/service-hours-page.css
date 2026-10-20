@@ -5,7 +5,7 @@
 
 .service-hours-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
     gap: 20px;
     align-items: start;
 }
@@ -212,12 +212,133 @@
     padding-left: 34px;
 }
 
-@media (max-width: 900px) {
-    .service-hours-grid {
+.page-service-hours .service-main > .card {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.page-service-hours .service-main > .sh-notes-card {
+    align-self: stretch;
+    margin: 0;
+}
+
+.page-service-hours .table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.page-service-hours .service-table {
+    width: 100%;
+    min-width: 780px;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+.page-service-hours .service-table th,
+.page-service-hours .service-table td {
+    box-sizing: border-box;
+    vertical-align: middle;
+    text-align: left;
+    padding: 12px 10px;
+    overflow-wrap: anywhere;
+}
+
+.page-service-hours .service-table th {
+    white-space: nowrap;
+}
+
+.page-service-hours .service-table th:nth-child(1),
+.page-service-hours .service-table td:nth-child(1) { width: 26%; }
+.page-service-hours .service-table th:nth-child(2),
+.page-service-hours .service-table td:nth-child(2) { width: 13%; white-space: nowrap; }
+.page-service-hours .service-table th:nth-child(3),
+.page-service-hours .service-table td:nth-child(3),
+.page-service-hours .service-table th:nth-child(4),
+.page-service-hours .service-table td:nth-child(4) { width: 12%; white-space: nowrap; }
+.page-service-hours .service-table th:nth-child(5),
+.page-service-hours .service-table td:nth-child(5) { width: 15%; white-space: nowrap; }
+.page-service-hours .service-table th:nth-child(6),
+.page-service-hours .service-table td:nth-child(6) { width: 14%; }
+.page-service-hours .service-table th:nth-child(7),
+.page-service-hours .service-table td:nth-child(7) { width: 8%; white-space: nowrap; }
+
+.page-service-hours .service-table .table-event {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.page-service-hours .service-table .table-event img {
+    width: 36px;
+    height: 28px;
+    flex-shrink: 0;
+    object-fit: cover;
+}
+
+.page-service-hours .service-event-name {
+    min-width: 0;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.page-service-hours .service-table .badge {
+    white-space: normal;
+    line-height: 1.3;
+}
+
+@media (max-width: 1280px) {
+    .page-service-hours .service-hours-grid {
         grid-template-columns: 1fr;
     }
 
-    .service-sidebar {
+    .page-service-hours .service-sidebar {
         position: static;
+    }
+}
+
+@media (max-width: 800px) {
+    .page-service-hours .service-table {
+        min-width: 780px;
+    }
+
+    .page-service-hours .table.stack-table thead {
+        display: table-header-group;
+    }
+
+    .page-service-hours .table.stack-table,
+    .page-service-hours .table.stack-table tbody {
+        display: table;
+        width: 100%;
+    }
+
+    .page-service-hours .table.stack-table tbody {
+        display: table-row-group;
+    }
+
+    .page-service-hours .table.stack-table tr {
+        display: table-row;
+        border: none;
+        border-radius: 0;
+        padding: 0;
+        margin: 0;
+        background: transparent;
+    }
+
+    .page-service-hours .table.stack-table td {
+        display: table-cell;
+        max-width: none;
+        padding: 12px 10px;
+        border-top: 1px solid #f1f5f9;
+        border-bottom: none;
+    }
+
+    .page-service-hours .table.stack-table td::before {
+        content: none;
+        display: none;
     }
 }

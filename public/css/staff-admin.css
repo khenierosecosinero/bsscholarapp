@@ -2824,8 +2824,9 @@ body:has(.staff-shell) {
 
 .staff-attendance-split {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
     gap: 16px;
+    align-items: start;
 }
 
 .staff-attendance-record {
@@ -2939,6 +2940,11 @@ body:has(.staff-shell) {
     border: 1px solid #bbf7d0;
 }
 
+.staff-attendance-group.pending {
+    background: #fff7ed;
+    border-color: #fed7aa;
+}
+
 .staff-attendance-group.failed {
     background: #fef2f2;
     border-color: #fecaca;
@@ -2952,7 +2958,13 @@ body:has(.staff-shell) {
     color: #15803d;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
+}
+
+.staff-attendance-group.pending h4 {
+    color: #c2410c;
 }
 
 .staff-attendance-group.failed h4 {
@@ -2961,6 +2973,10 @@ body:has(.staff-shell) {
 
 .staff-attendance-group .staff-muted {
     margin: 0 8px;
+}
+
+.staff-attendance-group.pending .staff-muted {
+    font-weight: 400;
 }
 
 @media (max-width: 800px) {

@@ -112,7 +112,7 @@ class ProgramServiceHourProgressTest extends TestCase
         $this->actingAs($fourth)
             ->get(route('user.dashboard'))
             ->assertOk()
-            ->assertSee('AY 2026 - 2027')
+            ->assertSee('AY 2026–2027')
             ->assertSee('2nd Semester')
             ->assertSee('27');
 
