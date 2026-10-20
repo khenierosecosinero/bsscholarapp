@@ -127,8 +127,11 @@ class NotificationUiTest extends TestCase
             ->get(route('user.documents'))
             ->assertOk()
             ->assertSee('id="staff-confirm-modal"', false)
-            ->assertSee('data-confirm-title="Upload document?"', false)
+            ->assertSee('id="upload-form"', false)
+            ->assertSee('id="file-input"', false)
+            ->assertDontSee('UPLOAD NEW DOCUMENT')
             ->assertSee('Why do we need these documents?')
+            ->assertSee('documents-info-card', false)
             ->assertSee('bssa-alert--info', false);
     }
 

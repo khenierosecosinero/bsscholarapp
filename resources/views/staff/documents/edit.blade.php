@@ -3,9 +3,9 @@
 @section('page-content')
 
 <div class="staff-card" style="max-width:760px">
-    <div class="staff-card-header">
+    <div class="staff-card-header staff-doc-edit-heading">
+        <a href="{{ route('staff.documents.show', $documentType) }}" class="staff-card-link staff-doc-back-link">&larr; Back</a>
         <h2>Edit {{ $documentType->name }}</h2>
-        <a href="{{ route('staff.documents.show', $documentType) }}" class="staff-card-link">&larr; Back</a>
     </div>
 
     <form method="POST" action="{{ route('staff.documents.update', $documentType) }}">
@@ -22,6 +22,13 @@
             <label for="description">Description</label>
             <textarea id="description" name="description" rows="4">{{ old('description', $documentType->description) }}</textarea>
             @error('description')<div class="staff-field-error">{{ $message }}</div>@enderror
+        </div>
+
+        <div class="staff-form-group">
+            <label for="submission_deadline">Submission Deadline</label>
+            <input type="datetime-local" id="submission_deadline" name="submission_deadline" value="{{ old('submission_deadline', $documentType->deadlineInputValue()) }}">
+            <small class="staff-muted">Leave blank to remove the deadline. Existing submissions, files, and review history stay unchanged.</small>
+            @error('submission_deadline')<div class="staff-field-error">{{ $message }}</div>@enderror
         </div>
 
         <div class="staff-form-group">

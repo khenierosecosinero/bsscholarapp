@@ -11,7 +11,7 @@
                 </div>
                 <div class="upcoming-item-body">
                     <strong>{{ $ev['title'] }}</strong>
-                    <span class="muted">{{ $ev['starts_at']->format('g:i A') }} &middot; {{ $ev['location'] }}</span>
+                    <span class="muted">{{ $ev['time'] }} &middot; {{ $ev['location'] }}</span>
                     @include('partials.event-status-badge', ['statusClass' => $ev['status_class'], 'statusLabel' => $ev['status_label'], 'small' => true])
                 </div>
             </a>

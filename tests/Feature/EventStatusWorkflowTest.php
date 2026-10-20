@@ -2,10 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\Attendance;
 use App\Models\Event;
+use App\Models\EventRegistration;
 use App\Models\ScholarshipClub;
 use App\Models\ScholarshipProgram;
+use App\Models\ScholarNotification;
 use App\Models\User;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
@@ -110,6 +114,76 @@ class EventStatusWorkflowTest extends TestCase
             ->assertSessionHas('success');
 
         $this->assertDatabaseMissing('events', ['id' => $event->id]);
+    }
+
+    public function test_deleting_an_event_does_not_leave_its_records_on_a_new_event_with_the_same_title(): void
+    {
+        Storage::fake('public');
+        [$staff, $event, $scholar] = $this->makeStaffWithConfirmedEvent([], true);
+        $event->update(['status' => Event::STATUS_CANCELLED]);
+
+        Storage::disk('public')->put('event_images/old-banner.png', 'old-banner');
+        Storage::disk('public')->put('attendance_photos/old-check-in.png', 'old-photo');
+        $event->update(['image_path' => 'event_images/old-banner.png']);
+
+        EventRegistration::create([
+            'user_id' => $scholar->id,
+            'event_id' => $event->id,
+            'status' => EventRegistration::STATUS_CONFIRMED,
+        ]);
+        Attendance::create([
+            'user_id' => $scholar->id,
+            'event_id' => $event->id,
+            'status' => Attendance::STATUS_APPROVED,
+            'hours_earned' => 4,
+            'check_in' => now()->subHour(),
+            'photo_path' => 'attendance_photos/old-check-in.png',
+        ]);
+        $notification = ScholarNotification::create([
+            'user_id' => $scholar->id,
+            'event_id' => $event->id,
+            'title' => 'Old event notice',
+            'body' => 'This notice belongs to the removed event.',
+            'category' => 'event_reminder',
+            'is_read' => false,
+            'is_important' => false,
+        ]);
+
+        $oldId = $event->id;
+
+        $this->actingAs($staff)
+            ->delete(route('staff.events.destroy', $event))
+            ->assertRedirect(route('staff.events'))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('events', ['id' => $oldId]);
+        $this->assertDatabaseMissing('event_registrations', ['event_id' => $oldId]);
+        $this->assertDatabaseMissing('attendances', ['event_id' => $oldId]);
+        $this->assertNull($notification->fresh()->event_id);
+        Storage::disk('public')->assertMissing('event_images/old-banner.png');
+        Storage::disk('public')->assertMissing('attendance_photos/old-check-in.png');
+
+        $replacement = Event::create([
+            'title' => $event->title,
+            'location' => 'New location',
+            'starts_at' => now()->addDays(3),
+            'ends_at' => now()->addDays(3)->addHours(2),
+            'service_hours' => 2,
+            'status' => Event::STATUS_PENDING,
+            'scholarship_program_id' => $event->scholarship_program_id,
+            'attendance_is_open' => false,
+        ]);
+
+        $this->assertNotSame($oldId, $replacement->id);
+        $this->assertDatabaseMissing('event_registrations', ['event_id' => $replacement->id]);
+        $this->assertDatabaseMissing('attendances', ['event_id' => $replacement->id]);
+        $this->assertNull($replacement->image_path);
+
+        $this->actingAs($staff)
+            ->get(route('staff.events.show', $replacement))
+            ->assertOk()
+            ->assertDontSee($scholar->full_name)
+            ->assertDontSee('old-check-in.png');
     }
 
     public function test_status_dropdown_rejects_invalid_transitions(): void
@@ -464,6 +538,120 @@ class EventStatusWorkflowTest extends TestCase
             'user_id' => $scholar->id,
             'event_id' => $freshEvent->id,
         ]);
+    }
+
+    public function test_creating_an_event_starts_with_zero_registrations_and_keeps_attendance_closed(): void
+    {
+        [$staff, , $scholar] = $this->makeStaffWithConfirmedEvent([], true);
+
+        $this->actingAs($staff)
+            ->post(route('staff.events.store'), [
+                'title' => 'Orientation Day',
+                'location' => 'Gymnasium',
+                'starts_at' => now()->addDays(3)->format('Y-m-d H:i:s'),
+                'ends_at' => now()->addDays(3)->addHours(2)->format('Y-m-d H:i:s'),
+                'service_hours' => 3,
+            ])
+            ->assertRedirect();
+
+        $event = Event::query()->where('title', 'Orientation Day')->firstOrFail();
+
+        $this->assertSame(Event::STATUS_PENDING, $event->status);
+        $this->assertFalse($event->isAttendanceOpen());
+        $this->assertDatabaseMissing('event_registrations', [
+            'event_id' => $event->id,
+        ]);
+        $this->assertDatabaseMissing('attendances', [
+            'event_id' => $event->id,
+        ]);
+
+        $pendingHtml = $this->actingAs($scholar)
+            ->get(route('user.events', ['status' => 'pending', 'event' => $event->id]))
+            ->assertOk()
+            ->assertSee('Orientation Day')
+            ->assertSee('Pending')
+            ->assertSee('CLOSED')
+            ->assertDontSee('>Attend / Register</button>', false)
+            ->getContent();
+
+        preg_match('/<div class="event-detail-flags">(.*?)<\\/div>/s', $pendingHtml, $pendingFlags);
+        $this->assertSame(1, substr_count($pendingFlags[1] ?? '', 'class="badge pending">Pending</span>'));
+        $this->assertStringContainsString('CLOSED', $pendingFlags[1] ?? '');
+        $this->assertSame(0, substr_count($pendingHtml, 'class="badge confirmed">Confirmed</span>'));
+
+        $this->actingAs($staff)
+            ->get(route('staff.events', ['status' => 'pending']))
+            ->assertOk()
+            ->assertSee('Orientation Day')
+            ->assertSee('Pending');
+
+        $this->actingAs($staff)
+            ->patch(route('staff.events.status', $event), ['status' => Event::STATUS_CONFIRMED])
+            ->assertRedirect(route('staff.events'))
+            ->assertSessionHas('success');
+
+        $this->assertSame(Event::STATUS_CONFIRMED, $event->fresh()->status);
+        $this->assertFalse($event->fresh()->isAttendanceOpen());
+        $this->assertDatabaseMissing('event_registrations', [
+            'event_id' => $event->id,
+        ]);
+
+        $this->actingAs($staff)
+            ->get(route('staff.events.show', $event))
+            ->assertOk()
+            ->assertSee('<h2>Attend/Register</h2>', false)
+            ->assertSee('No scholars have registered for this event yet.')
+            ->assertDontSee($scholar->full_name);
+
+        $this->actingAs($scholar)
+            ->from(route('user.events', ['event' => $event->id]))
+            ->post(route('user.events.register', $event))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->actingAs($scholar)
+            ->from(route('user.events', ['event' => $event->id]))
+            ->post(route('user.events.register', $event))
+            ->assertRedirect();
+
+        $this->assertSame(1, EventRegistration::query()->where('event_id', $event->id)->where('user_id', $scholar->id)->count());
+        $this->assertDatabaseMissing('attendances', [
+            'user_id' => $scholar->id,
+            'event_id' => $event->id,
+        ]);
+
+        $this->actingAs($staff)
+            ->get(route('staff.events.show', $event))
+            ->assertOk()
+            ->assertSee($scholar->full_name);
+
+        $this->actingAs($staff)
+            ->get(route('staff.attendance', ['event' => $event->id]))
+            ->assertOk()
+            ->assertSee('0 checked in')
+            ->assertSee('0 failed to check in')
+            ->assertDontSee($scholar->full_name);
+
+        $confirmedHtml = $this->actingAs($scholar)
+            ->get(route('user.events', ['status' => 'confirmed', 'event' => $event->id]))
+            ->assertOk()
+            ->assertSee('Confirmed')
+            ->assertSee('CLOSED')
+            ->getContent();
+
+        preg_match('/<div class="event-detail-flags">(.*?)<\\/div>/s', $confirmedHtml, $confirmedFlags);
+        $this->assertSame(1, substr_count($confirmedFlags[1] ?? '', 'class="badge confirmed">Confirmed</span>'));
+        $this->assertStringContainsString('CLOSED', $confirmedFlags[1] ?? '');
+
+        $this->actingAs($staff)
+            ->patch(route('staff.events.status', $event), ['status' => Event::STATUS_CANCELLED])
+            ->assertRedirect(route('staff.events'));
+
+        $this->actingAs($scholar)
+            ->get(route('user.events', ['status' => 'cancelled', 'event' => $event->id]))
+            ->assertOk()
+            ->assertSee('Cancelled')
+            ->assertDontSee('class="badge confirmed">Confirmed</span>', false);
     }
 
     public function test_scholar_page_load_auto_completes_confirmed_but_not_cancelled(): void

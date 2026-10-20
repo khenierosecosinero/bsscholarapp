@@ -28,6 +28,13 @@
         </div>
 
         <div class="staff-form-group">
+            <label for="submission_deadline">Submission Deadline</label>
+            <input type="datetime-local" id="submission_deadline" name="submission_deadline" value="{{ old('submission_deadline') }}">
+            <small class="staff-muted">Leave blank for no deadline. Scholars see “No deadline set”.</small>
+            @error('submission_deadline')<div class="staff-field-error">{{ $message }}</div>@enderror
+        </div>
+
+        <div class="staff-form-group">
             <label class="staff-check-label">
                 <input type="hidden" name="required" value="0">
                 <input type="checkbox" name="required" value="1" @checked(old('required', true))>

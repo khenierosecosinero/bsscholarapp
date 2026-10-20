@@ -77,32 +77,12 @@
                     <button type="submit" class="staff-btn" style="border-color:#ef4444;color:#ef4444">Reject Application</button>
                 </form>
             </div>
-        @else
+        @elseif($scholar->isAccessRestricted())
             <div class="staff-scholar-profile-actions">
-                @if(in_array($scholar->status, ['approved', 'blocked', 'suspended'], true))
-                    @include('partials.account-access-actions', [
-                        'account' => $scholar,
-                        'blockUrl' => route('staff.scholars.block', $scholar),
-                        'suspendUrl' => route('staff.scholars.suspend', $scholar),
-                        'reactivateUrl' => route('staff.scholars.reactivate', $scholar),
-                        'showSuspensionReason' => true,
-                    ])
-                @endif
-                <form
-                    method="POST"
-                    action="{{ route('staff.scholars.destroy', $scholar) }}"
-                    data-confirm="Permanently delete this scholar account and all of their records?"
-                    data-confirm-title="Delete scholar account permanently?"
-                    data-confirm-name="{{ $scholar->full_name }}"
-                    data-confirm-note="This cannot be undone. The scholar account, documents, attendance, service hours, and related files will be permanently removed. Their email and scholar ID will become available for a new registration."
-                    data-confirm-yes="Delete Permanently"
-                    data-confirm-no="Cancel"
-                    data-confirm-variant="danger"
-                >
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit" class="staff-btn" style="border-color:#ef4444;color:#ef4444">Delete Account</button>
-                </form>
+                @include('partials.account-access-actions', [
+                    'account' => $scholar,
+                    'reactivateUrl' => route('staff.scholars.reactivate', $scholar),
+                ])
             </div>
         @endif
     </div>

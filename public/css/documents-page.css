@@ -7,7 +7,61 @@
 }
 
 .page-documents .documents-main {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
     min-width: 0;
+    position: relative;
+}
+
+.page-documents .documents-table-upload {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    opacity: 0;
+    border: 0;
+}
+
+.page-documents .documents-main > .card,
+.page-documents .documents-info-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.page-documents .documents-info-card {
+    margin: 16px 0 0;
+    padding: 14px 16px;
+    align-items: center;
+}
+
+.page-documents .documents-info-card .bssa-alert__icon {
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    margin: 0;
+    align-self: center;
+}
+
+.page-documents .documents-info-card .bssa-alert__body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+}
+
+.page-documents .documents-info-card .bssa-alert__title,
+.page-documents .documents-info-card .bssa-alert__message {
+    margin: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
 }
 
 .page-documents .documents-sidebar {
@@ -68,22 +122,6 @@
     font-weight: 700;
     line-height: 1;
     flex-shrink: 0;
-}
-
-.page-documents .upload-card form {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin: 0;
-}
-
-.page-documents .upload-card .form-select {
-    width: 100%;
-    margin: 0;
-}
-
-.page-documents .upload-zone {
-    margin-bottom: 0;
 }
 
 .page-documents .guidelines-list {
@@ -182,6 +220,13 @@
 .page-documents .doc-actions form {
     margin: 0;
     display: inline-flex;
+}
+
+.page-documents .doc-submission-closed {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: left;
 }
 
 @media (max-width: 800px) {

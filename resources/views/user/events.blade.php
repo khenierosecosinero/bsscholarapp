@@ -45,9 +45,6 @@
                         </div>
                         <div class="event-action event-action-stack">
                             <span class="badge {{ $ev['status_class'] }}">{{ $ev['status_label'] }}</span>
-                            @if(($ev['event_status'] ?? '') !== 'cancelled')
-                                <span class="badge {{ $ev['participation_class'] ?? $ev['status_class'] }}">{{ $ev['participation_label'] ?? '' }}</span>
-                            @endif
                         </div>
                     </a>
                 @empty
@@ -60,11 +57,9 @@
     <div class="event-detail-col">
         @if($selected)
             <div class="card event-detail">
-                <a href="{{ route('user.events', request()->only('search', 'status')) }}" class="back-link">&lt; Back to Events</a>
                 <div class="event-detail-flags">
                     <span class="badge {{ $selected['status_class'] }}">{{ $selected['status_label'] }}</span>
                     @if(empty($selected['is_cancelled']))
-                        <span class="badge {{ $selected['participation_class'] ?? '' }}">{{ $selected['participation_label'] ?? '' }}</span>
                         <span class="badge {{ !empty($selected['attendance_open']) ? 'attendance-open' : 'attendance-closed' }} attendance-status-flag" data-attendance-event-badge>{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
                     @endif
                 </div>

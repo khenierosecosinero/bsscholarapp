@@ -750,7 +750,7 @@ body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica
     border-color:#e2e8f0;
     color:#334155;
 }
-.event-detail-flags{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin:-4px 0 12px}
+.event-detail-flags{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin:0 0 12px}
 .attendance-status-card{margin-bottom:20px}
 .attendance-status-card[hidden]{display:none!important}
 .attendance-status-list{display:flex;flex-direction:column;gap:12px}
@@ -1402,16 +1402,6 @@ body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica
     margin:0 0 16px;
     padding:0;
 }
-.upload-card form{
-    display:flex;
-    flex-direction:column;
-    gap:12px;
-    margin:0;
-}
-.upload-card .form-select{
-    width:100%;
-    margin:0;
-}
 .guidelines-list{list-style:none;padding:0;margin:0;font-size:13px}
 .guidelines-list li{
     display:flex;
@@ -1449,9 +1439,6 @@ body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica
 .info-banner p{margin:4px 0 0;font-size:13px;color:#374151;line-height:1.45}
 .info-icon-lg{font-size:20px;color:#2563eb;flex-shrink:0}
 
-.upload-zone{border:2px dashed #d1d5db;border-radius:12px;padding:32px 16px;text-align:center;margin-bottom:12px;cursor:pointer;background:#fafafa}
-.upload-icon{font-size:32px;color:var(--muted);margin-bottom:8px}
-.upload-zone p{font-size:13px;color:var(--muted);margin:0}
 .doc-help-btn-icon{
     width:20px;
     height:20px;

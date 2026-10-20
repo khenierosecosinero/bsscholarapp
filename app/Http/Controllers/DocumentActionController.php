@@ -33,6 +33,13 @@ class DocumentActionController extends Controller
             'This document requirement belongs to a different scholarship program.'
         );
 
+        $this->scholar->syncDocumentDeadlines([(int) $type->scholarship_program_id]);
+        $type->refresh();
+
+        if (! $type->acceptsSubmissions()) {
+            return back()->with('error', $this->submissionBlockedMessage($type));
+        }
+
         $existing = Document::query()
             ->where('user_id', $user->id)
             ->where('document_type_id', $type->id)
@@ -74,6 +81,17 @@ class DocumentActionController extends Controller
 
         abort_if($document->status === 'approved', 403, 'Approved documents cannot be deleted.');
 
+        $document->loadMissing('documentType');
+
+        if ($document->documentType) {
+            $this->scholar->syncDocumentDeadlines([(int) $document->documentType->scholarship_program_id]);
+            $document->documentType->refresh();
+        }
+
+        if ($document->documentType && ! $document->documentType->acceptsSubmissions()) {
+            return back()->with('error', $this->submissionBlockedMessage($document->documentType));
+        }
+
         if (! $document->hasFile()) {
             return back()->with('error', 'There is no file to delete.');
         }
@@ -89,6 +107,15 @@ class DocumentActionController extends Controller
         $this->scholar->logActivity(Auth::user(), 'document', "Document \"{$typeName}\" deleted");
 
         return back()->with('success', 'Document deleted successfully.');
+    }
+
+    private function submissionBlockedMessage(DocumentType $type): string
+    {
+        if ($type->deadlineHasPassed()) {
+            return "The submission deadline for {$type->name} has passed.";
+        }
+
+        return "Submissions for {$type->name} are closed.";
     }
 
     private function assertOwnDocument(Document $document): void

@@ -93,3 +93,137 @@
         display: none;
     }
 }
+
+/* Calendar of Activities: one shared width for the month, weekdays, and days. */
+.card.calendar {
+    container-type: inline-size;
+}
+
+.card.calendar .mini-calendar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: min(100%, 36rem);
+    max-width: 100%;
+    margin-inline: auto;
+    padding: 2px 0 0;
+    box-sizing: border-box;
+}
+
+.card.calendar .cal-header {
+    width: 100%;
+    margin: 0 0 12px;
+    padding: 0;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: #0f1721;
+}
+
+.card.calendar .cal-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+
+.card.calendar .cal-row {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    align-items: center;
+    justify-items: center;
+    gap: 4px;
+    width: 100%;
+    flex-wrap: nowrap;
+}
+
+.card.calendar .cal-weekdays span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 2.5rem;
+    height: 1.75rem;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+    color: #8a8f98;
+}
+
+.card.calendar .cal-day {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: min(2.25rem, 100%);
+    aspect-ratio: 1;
+    height: auto;
+    margin: 0;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1;
+    color: #55606b;
+}
+
+.card.calendar .cal-day.today {
+    border-radius: 50%;
+    background: var(--green, #2fa76a);
+    color: #fff;
+    font-weight: 700;
+}
+
+.card.calendar .cal-day.empty {
+    color: transparent;
+}
+
+@container (max-width: 280px) {
+    .card.calendar .cal-header {
+        margin-bottom: 8px;
+        font-size: 14px;
+    }
+
+    .card.calendar .cal-grid {
+        gap: 4px;
+    }
+
+    .card.calendar .cal-row {
+        gap: 2px;
+    }
+
+    .card.calendar .cal-weekdays span {
+        height: 1.4rem;
+        font-size: 11px;
+    }
+
+    .card.calendar .cal-day {
+        width: min(1.85rem, 100%);
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .card.calendar .mini-calendar {
+        width: 100%;
+    }
+
+    .card.calendar .cal-header {
+        margin-bottom: 10px;
+        font-size: 14px;
+    }
+
+    .card.calendar .cal-grid {
+        gap: 4px;
+    }
+
+    .card.calendar .cal-weekdays span {
+        height: 1.5rem;
+        font-size: 11px;
+    }
+
+    .card.calendar .cal-day {
+        width: min(2rem, 100%);
+        font-size: 12px;
+    }
+}

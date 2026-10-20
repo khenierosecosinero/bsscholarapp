@@ -27,6 +27,24 @@
         @include('partials.staff-attendance-session', ['event' => $event])
     </div>
 
+    <form method="GET" action="{{ route('staff.attendance') }}" class="staff-filter-bar staff-attendance-school-filter">
+        <input type="hidden" name="event" value="{{ $event->id }}">
+        @if($search !== '')
+            <input type="hidden" name="search" value="{{ $search }}">
+        @endif
+        <div class="staff-report-period-field">
+            <label for="attendance-school">School/University</label>
+            <select id="attendance-school" name="school" class="staff-select" onchange="this.form.submit()">
+                @foreach($schoolOptions as $option)
+                    <option value="{{ $option['key'] }}" @selected($selectedSchoolKey === $option['key'])>{{ $option['label'] }}</option>
+                @endforeach
+            </select>
+        </div>
+        @if($selectedSchoolKey !== 'all')
+            <a href="{{ route('staff.attendance', array_filter(['event' => $event->id, 'search' => $search ?: null])) }}" class="staff-btn">Reset</a>
+        @endif
+    </form>
+
     <div class="staff-attendance-split">
         <section class="staff-card staff-attendance-group">
             <h4>Scholars Who Checked In <span>{{ $panel['checkedIn']->count() }}</span></h4>
@@ -82,7 +100,7 @@
                     </div>
                 </article>
             @empty
-                <p class="staff-muted">No scholars have checked in for this event.</p>
+                <p class="staff-muted">{{ $selectedSchoolKey === 'all' ? 'No scholars have checked in for this event.' : 'No scholars from '.$selectedSchoolLabel.' have checked in for this event.' }}</p>
             @endforelse
         </section>
 
@@ -114,7 +132,7 @@
                     </dl>
                 </article>
             @empty
-                <p class="staff-muted">No failed check-ins for this event.</p>
+                <p class="staff-muted">{{ $selectedSchoolKey === 'all' ? 'No failed check-ins for this event.' : 'No failed check-ins from '.$selectedSchoolLabel.' for this event.' }}</p>
             @endforelse
         </section>
     </div>
@@ -133,24 +151,26 @@
             <p class="staff-muted" style="margin:0">No events found. Create an event first, then scholars can register and check in.</p>
         </div>
     @else
-        <div class="staff-doc-type-grid">
+        <div class="staff-attendance-event-grid">
             @foreach($panel['events'] as $event)
-                <article class="staff-doc-type-card">
-                    <a href="{{ route('staff.attendance', array_filter(['event' => $event->id, 'search' => $search ?: null])) }}" class="staff-doc-type-main">
+                <article class="staff-attendance-event-card">
+                    <a href="{{ route('staff.attendance', array_filter(['event' => $event->id, 'search' => $search ?: null])) }}" class="staff-attendance-event-link">
                         @include('partials.document-icon', ['slug' => 'event', 'size' => 'lg'])
-                        <div class="staff-doc-type-body">
-                            <div class="staff-doc-type-title-row">
+                        <div class="staff-attendance-event-body">
+                            <div class="staff-attendance-event-heading">
                                 <h3>{{ $event->title }}</h3>
                                 <span class="staff-attendance-card-badges">
                                     <span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span>
                                     <span class="staff-badge {{ $event->attendanceStatusBadgeClass() }}">{{ $event->attendanceStatusLabel() }}</span>
                                 </span>
                             </div>
-                            <p>
-                                {{ $event->starts_at?->format('M j, Y') }}
-                                · {{ $event->starts_at?->format('g:i A') }}{{ $event->ends_at ? ' – '.$event->ends_at->format('g:i A') : '' }}
+                            <p class="staff-attendance-event-when">
+                                @if($event->starts_at)
+                                    <span>{{ $event->starts_at->format('M j, Y') }}</span>
+                                    <span>{{ $event->starts_at->format('g:i A') }}{{ $event->ends_at ? ' – '.$event->ends_at->format('g:i A') : '' }}</span>
+                                @endif
                             </p>
-                            <p>{{ $event->location }}</p>
+                            <p class="staff-attendance-event-where">{{ $event->location }}</p>
                             <div class="staff-doc-type-counts">
                                 <span>Service Hours: {{ number_format((float) $event->service_hours, 2) }}</span>
                                 <span class="approved">{{ $event->checked_in_count }} checked in</span>

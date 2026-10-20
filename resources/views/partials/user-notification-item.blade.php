@@ -16,12 +16,14 @@
         <strong>{{ $notif->title }}</strong>
         <p>{{ $notif->body }}</p>
         <span class="badge info">{{ ucfirst(str_replace('_', ' ', $notif->category)) }}</span>
-        @if($notif->announcement_id)
-            <a href="{{ route('user.announcements.show', $notif->announcement_id) }}" class="link small notif-view-link">View Announcement</a>
-        @elseif($notif->event_id)
-            <a href="{{ route('user.events', ['event' => $notif->event_id]) }}" class="link small notif-view-link">View Event</a>
+        @if($notif->announcement_id && $notif->announcement)
+            <a href="{{ route('user.announcements.show', $notif->announcement) }}" class="link small notif-view-link">View Announcement</a>
+        @elseif($notif->event_id && $notif->event)
+            <a href="{{ route('user.events', ['event' => $notif->event]) }}" class="link small notif-view-link">View Event</a>
         @elseif($notif->category === 'event_reminder' || $notif->category === 'attendance')
             <a href="{{ route('user.events') }}" class="link small notif-view-link">View Events</a>
+        @elseif($notif->category === 'documents')
+            <a href="{{ route('user.documents') }}" class="link small notif-view-link">View Documents</a>
         @endif
     </div>
     <div class="notif-meta">

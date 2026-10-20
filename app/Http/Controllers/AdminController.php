@@ -453,7 +453,18 @@ class AdminController extends Controller
         $this->assertStaffInDirectoryScope($request, $staffMember);
 
         $name = $staffMember->full_name;
+        $email = $staffMember->email;
+        $staffId = (int) $staffMember->id;
         $this->accounts->permanentlyDelete($staffMember);
+        app(\App\Services\WorkflowMailService::class)->sendToAddress(
+            $email,
+            $name,
+            'Scholar Staff Account Rejected',
+            'Your scholar staff registration was not approved. You can register again with this email address.',
+            \App\Support\OutboundAppUrl::withRoot(fn () => route('login')),
+            'Go to sign in',
+            'staff-rejected:'.$staffId
+        );
 
         return $this->staffListRedirect($request)
             ->with(

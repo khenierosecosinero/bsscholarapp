@@ -26,6 +26,15 @@ class AccountAccessTest extends TestCase
             ->assertSee('Suspend this account for 7 days?', false);
 
         $this->actingAs($staff)
+            ->get(route('staff.scholars.show', $scholar))
+            ->assertOk()
+            ->assertSee('Start Academic Year')
+            ->assertDontSee('>Block</button>', false)
+            ->assertDontSee('Suspension reason (optional)', false)
+            ->assertDontSee('>Suspend</button>', false)
+            ->assertDontSee('>Delete Account</button>', false);
+
+        $this->actingAs($staff)
             ->post(route('staff.scholars.block', $scholar))
             ->assertRedirect()
             ->assertSessionHas('success');

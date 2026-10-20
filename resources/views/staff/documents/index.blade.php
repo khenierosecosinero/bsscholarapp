@@ -9,7 +9,7 @@
     <div class="staff-stat-card"><div class="staff-stat-icon red">✕</div><div class="staff-stat-body"><h3>Rejected</h3><div class="value">{{ $stats['rejected'] }}</div><div class="sub">Needs resubmission</div></div></div>
 </section>
 
-<form method="GET" class="staff-filter-bar">
+<form method="GET" class="staff-filter-bar staff-documents-toolbar">
     <div class="staff-search">
         <span>🔍</span>
         <input type="search" name="search" value="{{ $search }}" placeholder="Search required documents...">
@@ -32,9 +32,13 @@
                     <div class="staff-doc-type-body">
                         <div class="staff-doc-type-title-row">
                             <h3>{{ $type->name }}</h3>
-                            <span class="staff-badge {{ $type->required ? 'blue' : 'gray' }}">{{ $type->required ? 'Required' : 'Optional' }}</span>
+                            <span class="staff-doc-type-badges">
+                                <span class="staff-badge {{ $type->required ? 'blue' : 'gray' }}">{{ $type->required ? 'Required' : 'Optional' }}</span>
+                                <span class="staff-badge {{ $type->submissionStatusBadgeClass() }}">{{ $type->submissionStatusLabel() }}</span>
+                            </span>
                         </div>
                         <p>{{ $type->description ?: 'No description provided.' }}</p>
+                        <p>Deadline: {{ $type->deadlineLabel() }}</p>
                         <div class="staff-doc-type-counts">
                             <span>{{ $type->submitted_count }} submitted</span>
                             <span class="pending">{{ $type->pending_count }} pending</span>

@@ -5,7 +5,7 @@
 @endpush
 
 @push('scripts')
-    <script src="{{ asset('js/notifications-toggle.js') }}" defer></script>
+    <script src="{{ asset('js/notifications-toggle.js') }}?v={{ filemtime(public_path('js/notifications-toggle.js')) }}" defer></script>
 @endpush
 
 @section('page-content')
@@ -38,6 +38,8 @@
                     type="button"
                     class="btn outline full notifications-see-more"
                     id="notifications-toggle"
+                    data-notifications-toggle
+                    aria-expanded="false"
                     data-preview-count="{{ $notificationPreviewCount }}"
                     data-total="{{ $filteredTotal }}"
                     data-more-url="{{ route('user.notifications.more', ['filter' => $activeFilter, 'offset' => $notificationPreviewCount]) }}"
@@ -83,73 +85,5 @@
 </section>
 
 </div>
-
-<script>
-(function () {
-    var button = document.getElementById('notifications-toggle');
-    var footer = document.getElementById('notifications-footer');
-    var list = document.querySelector('[data-notification-list]');
-    if (!button) return;
-
-    var expanded = false;
-    var loaded = false;
-    var previewCount = parseInt(button.getAttribute('data-preview-count'), 10) || 5;
-    var total = parseInt(button.getAttribute('data-total'), 10) || previewCount;
-    var moreUrl = button.getAttribute('data-more-url');
-
-    function extras() {
-        return document.querySelectorAll('[data-notification-extra]');
-    }
-
-    function setExpanded(isExpanded) {
-        expanded = isExpanded;
-        extras().forEach(function (item) {
-            item.hidden = !isExpanded;
-        });
-        button.textContent = isExpanded ? 'Show Less Notifications' : 'See More Notifications';
-        if (footer) {
-            footer.textContent = 'Showing ' + (isExpanded ? list.querySelectorAll('.notification-item').length : previewCount) + ' of ' + total + ' notification(s)';
-        }
-    }
-
-    button.addEventListener('click', function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        if (expanded) {
-            setExpanded(false);
-            return;
-        }
-
-        if (loaded || extras().length) {
-            loaded = true;
-            setExpanded(true);
-            return;
-        }
-
-        if (!moreUrl) return;
-
-        button.disabled = true;
-        fetch(moreUrl, {
-            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin'
-        }).then(function (response) {
-            if (!response.ok) throw new Error('Unable to load more notifications.');
-            return response.json();
-        }).then(function (data) {
-            if (data.html && list) {
-                list.insertAdjacentHTML('beforeend', data.html);
-            }
-            if (data.total) total = data.total;
-            loaded = true;
-            setExpanded(true);
-        }).catch(function () {
-            button.textContent = 'See More Notifications';
-        }).finally(function () {
-            button.disabled = false;
-        });
-    });
-})();
-</script>
 
 @endsection

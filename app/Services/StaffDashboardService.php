@@ -609,11 +609,56 @@ class StaffDashboardService
     }
 
     /**
+     * School filter for document submissions. No School Specified stays selectable
+     * even when every current scholar has a school.
+     *
+     * @return array{key: string, type: string, value: mixed, label: string, options: list<array{key: string, label: string}>}
+     */
+    public function documentSchoolFilter(Request $request, array $programIds, ?User $staff): array
+    {
+        $filter = $this->scholarsSchoolFilter($request, $programIds, $staff);
+        $options = $filter['options'];
+
+        if (! collect($options)->contains(fn (array $option) => $option['key'] === 'unassigned')) {
+            $options[] = ['key' => 'unassigned', 'label' => 'Unassigned'];
+        }
+
+        if ((string) $request->query('school') === 'unassigned') {
+            $filter['key'] = 'unassigned';
+            $filter['type'] = 'unassigned';
+            $filter['value'] = null;
+            $filter['label'] = 'Unassigned';
+        }
+
+        $filter['options'] = $options;
+
+        return $filter;
+    }
+
+    /**
      * Apply an existing school filter array to a users query.
      */
     public function applySchoolFilter($query, ?array $schoolFilter): void
     {
         $this->constrainSchool($query, $schoolFilter);
+    }
+
+    /**
+     * Whether a scholar belongs to the selected School/University filter.
+     */
+    public function userMatchesSchoolFilter(?User $user, ?array $schoolFilter): bool
+    {
+        if ($this->isAllSchools($schoolFilter)) {
+            return true;
+        }
+
+        if (! $user) {
+            return false;
+        }
+
+        $user->loadMissing('scholarshipClubSchool');
+
+        return $this->scholarsForSchool(collect([$user]), $schoolFilter)->isNotEmpty();
     }
 
     /**

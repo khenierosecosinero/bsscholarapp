@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class Event extends Model
@@ -554,26 +556,79 @@ class Event extends Model
 
         $imagePath = $this->image_path;
 
-        $deleted = static::query()
-            ->whereKey($this->id)
-            ->where('status', self::STATUS_CANCELLED)
-            ->delete();
+        $deleted = DB::transaction(function () {
+            $stillCancelled = static::query()
+                ->whereKey($this->id)
+                ->where('status', self::STATUS_CANCELLED)
+                ->exists();
 
-        if ($deleted > 0 && filled($imagePath) && Storage::disk('public')->exists($imagePath)) {
+            if (! $stillCancelled) {
+                return false;
+            }
+
+            $this->releaseDependents();
+
+            return static::query()
+                ->whereKey($this->id)
+                ->where('status', self::STATUS_CANCELLED)
+                ->delete() > 0;
+        });
+
+        if ($deleted && filled($imagePath) && Storage::disk('public')->exists($imagePath)) {
             Storage::disk('public')->delete($imagePath);
         }
 
-        return $deleted > 0;
+        return $deleted;
     }
 
     /**
-     * Events whose schedule overlaps the given window, so staff-set dates
-     * appear on every calendar day they occupy.
+     * Detach rows that belong to this event id before the event row is removed.
+     * Notifications are kept, with the event link cleared, so the message history remains.
+     */
+    public function releaseDependents(): void
+    {
+        ScholarNotification::query()
+            ->where('event_id', $this->id)
+            ->update(['event_id' => null]);
+
+        $this->attendances()->get()->each(function (Attendance $attendance) {
+            if (filled($attendance->photo_path) && Storage::disk('public')->exists($attendance->photo_path)) {
+                Storage::disk('public')->delete($attendance->photo_path);
+            }
+        });
+
+        $this->attendances()->delete();
+        $this->registrations()->delete();
+        $this->attendanceSessionLogs()->delete();
+    }
+
+    /**
+     * Events whose saved start and end overlap the given window.
      */
     public function scopeOverlappingDates(Builder $query, CarbonInterface $start, CarbonInterface $end): Builder
     {
         return $query->where('starts_at', '<=', $end)
-            ->where('ends_at', '>=', $start);
+            ->where(function (Builder $scoped) use ($start) {
+                $scoped->where('ends_at', '>=', $start)
+                    ->orWhere(function (Builder $inner) use ($start) {
+                        $inner->whereNull('ends_at')->where('starts_at', '>=', $start);
+                    });
+            });
+    }
+
+    /**
+     * Events that have not passed their saved end time.
+     */
+    public function scopeNotEnded(Builder $query, ?CarbonInterface $at = null): Builder
+    {
+        $at = $at ?? now();
+
+        return $query->where(function (Builder $scoped) use ($at) {
+            $scoped->where('ends_at', '>=', $at)
+                ->orWhere(function (Builder $inner) use ($at) {
+                    $inner->whereNull('ends_at')->where('starts_at', '>=', $at);
+                });
+        });
     }
 
     /**
@@ -658,27 +713,107 @@ class Event extends Model
     }
 
     /**
-     * Y-m-d keys for each calendar day this event should appear on.
+     * Y-m-d keys for each calendar day covered by the saved start and end.
+     * An end time of exactly midnight belongs to the previous day.
      */
     public function calendarDateKeys(): array
     {
-        if (! $this->starts_at) {
+        $start = $this->zonedStart();
+        if (! $start) {
             return [];
         }
 
-        $days = [];
-        $cursor = $this->starts_at->copy()->startOfDay();
-        $last = ($this->ends_at ?? $this->starts_at)->copy()->startOfDay();
-
-        if ($last->lt($cursor)) {
-            $last = $cursor->copy();
+        $end = $this->zonedEnd() ?? $start->copy();
+        if ($end->lt($start)) {
+            $end = $start->copy();
         }
 
+        $cursor = $start->copy()->startOfDay();
+        $last = $end->copy()->startOfDay();
+
+        if ($end->equalTo($last) && $last->gt($cursor)) {
+            $last->subDay();
+        }
+
+        $days = [];
         while ($cursor->lte($last)) {
             $days[] = $cursor->toDateString();
             $cursor->addDay();
         }
 
         return $days;
+    }
+
+    public function scheduleDateLabel(): string
+    {
+        $start = $this->zonedStart();
+        if (! $start) {
+            return 'the scheduled date';
+        }
+
+        $label = $start->format('F j, Y').' ('.$start->format('l').')';
+        $end = $this->zonedEnd();
+        if (! $end || $end->isSameDay($start)) {
+            return $label;
+        }
+
+        return $label.' – '.$end->format('F j, Y').' ('.$end->format('l').')';
+    }
+
+    public function scheduleTimeLabel(): string
+    {
+        $start = $this->zonedStart();
+        if (! $start) {
+            return 'the scheduled time';
+        }
+
+        $end = $this->zonedEnd();
+        if (! $end) {
+            return $start->format('g:i A');
+        }
+
+        if ($end->isSameDay($start)) {
+            return $start->format('g:i A').' - '.$end->format('g:i A');
+        }
+
+        return $start->format('g:i A').' – '.$end->format('M j, Y g:i A');
+    }
+
+    public function calendarDayTimeLabel(string $dateKey): string
+    {
+        $start = $this->zonedStart();
+        $end = $this->zonedEnd();
+        if (! $start || ! $end) {
+            return $start?->format('g:i A') ?? '';
+        }
+
+        $day = Carbon::parse($dateKey, config('app.timezone'))->startOfDay();
+        $startsToday = $day->equalTo($start->copy()->startOfDay());
+        $endsToday = $day->equalTo($end->copy()->startOfDay())
+            || ($end->equalTo($end->copy()->startOfDay()) && $day->equalTo($end->copy()->subDay()->startOfDay()));
+
+        if ($startsToday && $end->isSameDay($start)) {
+            return $start->format('g:i A').' - '.$end->format('g:i A');
+        }
+
+        if ($startsToday) {
+            return $start->format('g:i A');
+        }
+
+        if ($endsToday) {
+            return 'Until '.$end->format('g:i A');
+        }
+
+        return 'Continues';
+    }
+
+    private function zonedStart(): ?CarbonInterface
+    {
+        return $this->starts_at?->copy()->timezone(config('app.timezone'));
+    }
+
+    private function zonedEnd(): ?CarbonInterface
+    {
+        return $this->ends_at?->copy()->timezone(config('app.timezone'));
     }
 }

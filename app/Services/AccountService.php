@@ -45,6 +45,7 @@ class AccountService
                 "Your account has been created and linked to {$programLabel}. Scholar Staff will review your registration before full access is granted.",
                 'system'
             );
+            app(WorkflowMailService::class)->notifyReviewersOfScholar($user);
 
             return;
         }
@@ -78,6 +79,7 @@ class AccountService
                 "Your account has been created and linked to {$programLabel}. An administrator must approve your registration before you can log in or access the Scholar Staff section.",
                 'system'
             );
+            app(WorkflowMailService::class)->notifyAdministratorsOfStaff($user);
 
             return;
         }

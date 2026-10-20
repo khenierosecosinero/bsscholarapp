@@ -733,6 +733,83 @@ body:has(.staff-shell) {
     box-sizing: border-box;
 }
 
+.staff-attendance-school-filter,
+.staff-document-school-filter {
+    align-items: flex-end;
+}
+
+.staff-attendance-school-filter .staff-report-period-field,
+.staff-document-school-filter .staff-report-period-field {
+    flex: 1 1 280px;
+    max-width: 28rem;
+    min-width: min(100%, 16rem);
+    margin: 0;
+}
+
+.staff-document-school-filter .staff-report-period-field {
+    flex-basis: 220px;
+}
+
+.staff-document-school-filter .staff-search {
+    flex: 1 1 18rem;
+    min-width: min(100%, 18rem);
+}
+
+.staff-attendance-school-filter .staff-btn,
+.staff-document-school-filter .staff-btn {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.staff-doc-detail-heading,
+.staff-doc-edit-heading {
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 16px;
+}
+
+.staff-doc-detail-heading .staff-doc-back-link,
+.staff-doc-edit-heading .staff-doc-back-link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.staff-doc-detail-heading h2,
+.staff-doc-edit-heading h2 {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+@media (max-width: 640px) {
+    .staff-doc-detail-heading,
+    .staff-doc-edit-heading {
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .staff-doc-detail-heading h2,
+    .staff-doc-edit-heading h2 {
+        font-size: 15px;
+        line-height: 1.35;
+    }
+}
+
+@media (max-width: 900px) {
+    .staff-attendance-school-filter .staff-report-period-field,
+    .staff-attendance-school-filter .staff-btn,
+    .staff-document-school-filter .staff-report-period-field,
+    .staff-document-school-filter .staff-btn,
+    .staff-document-school-filter .staff-search,
+    .staff-document-school-filter .staff-select {
+        max-width: none;
+        width: 100%;
+    }
+}
+
 .staff-search {
     flex: 1;
     min-width: 0;
@@ -2350,10 +2427,32 @@ body:has(.staff-shell) {
     color: #c2410c;
 }
 
+.staff-documents-toolbar {
+    align-items: center;
+}
+
+.staff-documents-toolbar .staff-search,
+.staff-documents-toolbar .staff-btn {
+    min-height: 44px;
+    box-sizing: border-box;
+}
+
+.staff-documents-toolbar .staff-btn {
+    white-space: nowrap;
+}
+
 .staff-doc-type-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
     gap: 16px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    align-items: stretch;
+}
+
+.staff-doc-type-grid:has(> :only-child) {
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .staff-doc-type-card {
@@ -2364,38 +2463,83 @@ body:has(.staff-shell) {
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    box-sizing: border-box;
 }
 
 .staff-doc-type-main {
     display: flex;
+    align-items: flex-start;
     gap: 14px;
     padding: 18px 18px 12px;
     text-decoration: none;
     color: inherit;
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .staff-doc-type-main:hover {
     background: #f8fafc;
 }
 
+.staff-doc-type-main .doc-icon-wrap {
+    flex: 0 0 auto;
+    margin-bottom: 0;
+}
+
 .staff-doc-type-body {
     min-width: 0;
-    flex: 1;
+    flex: 1 1 auto;
 }
 
 .staff-doc-type-title-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 6px;
+    gap: 8px 10px;
+    margin-bottom: 8px;
 }
 
 .staff-doc-type-title-row h3 {
     margin: 0;
+    flex: 1 1 8rem;
+    min-width: 0;
     font-size: 16px;
+    line-height: 1.35;
     color: #0f2744;
+    overflow-wrap: anywhere;
+}
+
+.staff-doc-type-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    flex: 0 1 auto;
+    max-width: 100%;
+}
+
+.staff-doc-type-card .staff-badge {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+    .staff-doc-type-grid,
+    .staff-doc-type-grid:has(> :only-child) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .staff-doc-type-main,
+    .staff-doc-type-actions {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
 }
 
 .staff-attendance-card-badges {
@@ -2405,11 +2549,135 @@ body:has(.staff-shell) {
     justify-content: flex-end;
 }
 
+.staff-attendance-event-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+    gap: 16px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    align-items: stretch;
+}
+
+.staff-attendance-event-grid:has(> :only-child) {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.staff-attendance-event-card {
+    background: #fff;
+    border: 1px solid var(--staff-border);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: visible;
+}
+
+.staff-attendance-event-link {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    border-radius: 12px;
+}
+
+.staff-attendance-event-link:hover {
+    background: #f8fafc;
+}
+
+.staff-attendance-event-link .doc-icon-wrap {
+    flex: 0 0 auto;
+    margin-bottom: 0;
+}
+
+.staff-attendance-event-body {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.staff-attendance-event-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px 12px;
+    margin-bottom: 8px;
+}
+
+.staff-attendance-event-heading h3 {
+    margin: 0;
+    flex: 1 1 10rem;
+    min-width: 0;
+    font-size: 16px;
+    line-height: 1.35;
+    color: #0f2744;
+    overflow-wrap: anywhere;
+}
+
+.staff-attendance-event-card .staff-attendance-card-badges {
+    flex: 0 1 auto;
+    max-width: 100%;
+    justify-content: flex-start;
+}
+
+.staff-attendance-event-card .staff-badge {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.staff-attendance-event-when,
+.staff-attendance-event-where {
+    margin: 0 0 6px;
+    font-size: 13px;
+    color: #6b7280;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.staff-attendance-event-when {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 8px;
+}
+
+.staff-attendance-event-when span {
+    white-space: nowrap;
+}
+
+.staff-attendance-event-card .staff-doc-type-counts {
+    margin-top: 8px;
+}
+
+@media (max-width: 900px) {
+    .staff-attendance-event-grid {
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .staff-attendance-event-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .staff-attendance-event-link {
+        padding: 16px;
+    }
+}
+
 .staff-doc-type-body p {
     margin: 0 0 12px;
     font-size: 13px;
     color: #6b7280;
     line-height: 1.5;
+    overflow-wrap: anywhere;
 }
 
 .staff-doc-type-counts {
@@ -2428,9 +2696,14 @@ body:has(.staff-shell) {
 .staff-doc-type-actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
     padding: 12px 18px 16px;
     border-top: 1px solid #f1f5f9;
+}
+
+.staff-doc-type-card .staff-doc-type-actions {
+    margin-top: auto;
 }
 
 .staff-doc-type-actions form {
@@ -2956,6 +3229,72 @@ body:has(.staff-shell) {
 .staff-attendance-session-actions button:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+}
+
+.staff-submission-session {
+    margin: 0 0 16px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+}
+
+.staff-submission-session.is-open {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.staff-submission-session.is-closed {
+    background: #f8fafc;
+    border-color: #e5e7eb;
+}
+
+.staff-submission-session-status {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    flex: 1;
+    min-width: min(100%, 240px);
+}
+
+.staff-submission-status-badge {
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+
+.staff-submission-session-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.staff-submission-session-actions form {
+    margin: 0;
+}
+
+.staff-submission-session-actions button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+@media (max-width: 700px) {
+    .staff-submission-session-actions,
+    .staff-submission-session-actions form,
+    .staff-submission-session-actions .staff-btn {
+        width: 100%;
+    }
+
+    .staff-submission-session-actions .staff-btn {
+        justify-content: center;
+        box-sizing: border-box;
+    }
 }
 
 /* Staff calendar */

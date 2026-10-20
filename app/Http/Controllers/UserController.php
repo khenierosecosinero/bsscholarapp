@@ -61,6 +61,10 @@ class UserController extends Controller
         $documents = collect();
         $documentTypes = collect();
 
+        if ($hasPortalAccess && $user->scholarship_program_id && in_array($active, ['documents', 'notifications'], true)) {
+            $this->scholar->syncDocumentDeadlines([(int) $user->scholarship_program_id]);
+        }
+
         if ($needsDocuments) {
             $documents = $this->scholar->documentsForUser($user);
             $documentOverview = $this->scholar->documentOverviewStats($user, $documents);
@@ -287,9 +291,18 @@ class UserController extends Controller
         $user = Auth::user();
         $filter = $request->get('filter', 'all');
         $offset = max(0, (int) $request->get('offset', 5));
+        $except = collect(explode(',', (string) $request->get('except', '')))
+            ->map(fn ($id) => trim($id))
+            ->filter(fn ($id) => ctype_digit($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
         $query = $this->filteredNotificationQuery($user, $filter);
         $total = (clone $query)->count();
-        $notifications = $query->skip($offset)->get();
+        $notifications = (clone $query)
+            ->when($except->isNotEmpty(), fn ($builder) => $builder->whereNotIn('id', $except->all()))
+            ->when($except->isEmpty(), fn ($builder) => $builder->skip($offset))
+            ->get();
 
         $html = $notifications->map(
             fn ($notif) => view('partials.user-notification-item', [
@@ -302,13 +315,15 @@ class UserController extends Controller
             'html' => $html,
             'count' => $notifications->count(),
             'total' => $total,
-            'shown' => $offset + $notifications->count(),
+            'shown' => $except->isNotEmpty()
+                ? $except->count() + $notifications->count()
+                : $offset + $notifications->count(),
         ]);
     }
 
     private function filteredNotificationQuery($user, string $filter)
     {
-        $query = $user->scholarNotifications()->latest();
+        $query = $user->scholarNotifications()->with(['announcement', 'event'])->latest()->orderByDesc('id');
 
         if ($filter === 'unread') {
             $query->where('is_read', false);

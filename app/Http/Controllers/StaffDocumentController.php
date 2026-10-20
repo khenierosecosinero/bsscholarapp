@@ -10,6 +10,7 @@ use App\Services\ProgramScopeService;
 use App\Services\ScholarService;
 use App\Services\StaffDashboardService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
@@ -26,6 +27,7 @@ class StaffDocumentController extends Controller
     {
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
+        $this->scholar->syncDocumentDeadlines($programIds);
         $search = trim((string) $request->get('search', ''));
         $scholarScope = $this->scholarScope($programIds);
 
@@ -83,7 +85,10 @@ class StaffDocumentController extends Controller
             'name' => 'required|string|max:120',
             'description' => 'nullable|string|max:500',
             'required' => 'nullable|boolean',
+            'submission_deadline' => 'nullable|date',
         ]);
+
+        $deadline = $this->deadlineFromRequest($request);
 
         $type = DocumentType::create([
             'name' => $data['name'],
@@ -91,7 +96,13 @@ class StaffDocumentController extends Controller
             'description' => $data['description'] ?? null,
             'required' => $request->boolean('required'),
             'scholarship_program_id' => $programId,
+            'submission_deadline' => $deadline,
+            'submissions_open' => true,
+            'submissions_opened_at' => ($deadline === null || $deadline->gt(now())) ? now() : null,
         ]);
+
+        $this->scholar->syncDocumentDeadlines([$programId]);
+        $type->refresh();
 
         $this->scholar->provisionDocumentType($type);
         $notified = $this->scholar->notifyScholarsOfDocumentType($type);
@@ -106,14 +117,17 @@ class StaffDocumentController extends Controller
         $staff = Auth::user();
         $this->programScope->assertDocumentTypeManagedByStaff($documentType, $staff);
         $programIds = $this->staffData->programIds($staff);
+        $this->scholar->syncDocumentDeadlines($programIds);
+        $documentType->refresh();
         $search = trim((string) $request->get('search', ''));
-        $statusFilter = $request->get('status', 'submitted');
+        $statusFilter = (string) $request->get('status', 'submitted');
         $scholarScope = $this->scholarScope($programIds);
+        $schoolFilter = $this->staffData->documentSchoolFilter($request, $programIds, $staff);
+        $schoolOptions = $this->documentSchoolOptions($schoolFilter['options']);
+        $scoped = $this->scopedDocuments($documentType, $scholarScope, $schoolFilter);
 
-        $documents = Document::query()
-            ->with(['user.scholarshipProgram', 'documentType', 'reviewer'])
-            ->where('document_type_id', $documentType->id)
-            ->whereHas('user', $scholarScope)
+        $documents = (clone $scoped)
+            ->with(['user.scholarshipProgram', 'user.scholarshipClubSchool', 'documentType', 'reviewer'])
             ->when($search !== '', function ($q) use ($search) {
                 $q->whereHas('user', function ($u) use ($search) {
                     $u->where(function ($inner) use ($search) {
@@ -132,18 +146,23 @@ class StaffDocumentController extends Controller
                     ->orWhere('status', 'not_submitted');
             }))
             ->latest('uploaded_at')
+            ->orderByDesc('id')
             ->paginate(15)
             ->withQueryString();
 
         $counts = [
-            'submitted' => Document::where('document_type_id', $documentType->id)->whereNotNull('file_path')->where('file_path', '!=', '')->whereHas('user', $scholarScope)->count(),
-            'pending' => Document::where('document_type_id', $documentType->id)->whereNotNull('file_path')->whereIn('status', ['pending', 'submitted'])->whereHas('user', $scholarScope)->count(),
-            'approved' => Document::where('document_type_id', $documentType->id)->where('status', 'approved')->whereHas('user', $scholarScope)->count(),
-            'rejected' => Document::where('document_type_id', $documentType->id)->where('status', 'rejected')->whereHas('user', $scholarScope)->count(),
-            'not_submitted' => Document::where('document_type_id', $documentType->id)->whereHas('user', $scholarScope)->where(function ($missing) {
+            'submitted' => (clone $scoped)->whereNotNull('file_path')->where('file_path', '!=', '')->count(),
+            'pending' => (clone $scoped)->whereNotNull('file_path')->whereIn('status', ['pending', 'submitted'])->count(),
+            'approved' => (clone $scoped)->where('status', 'approved')->count(),
+            'rejected' => (clone $scoped)->where('status', 'rejected')->count(),
+            'not_submitted' => (clone $scoped)->where(function ($missing) {
                 $missing->whereNull('file_path')->orWhere('file_path', '')->orWhere('status', 'not_submitted');
             })->count(),
         ];
+        $programTypes = DocumentType::query()
+            ->whereIn('scholarship_program_id', $programIds ?: [0])
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         return view('staff.documents.show', array_merge(
             $this->layoutData(
@@ -158,6 +177,10 @@ class StaffDocumentController extends Controller
                 'search' => $search,
                 'statusFilter' => $statusFilter,
                 'counts' => $counts,
+                'schoolOptions' => $schoolOptions,
+                'selectedSchoolKey' => $schoolFilter['key'],
+                'selectedSchoolLabel' => collect($schoolOptions)->firstWhere('key', $schoolFilter['key'])['label'] ?? 'All Schools/Universities',
+                'programTypes' => $programTypes,
             ]
         ));
     }
@@ -185,17 +208,85 @@ class StaffDocumentController extends Controller
             'name' => 'required|string|max:120',
             'description' => 'nullable|string|max:500',
             'required' => 'nullable|boolean',
+            'submission_deadline' => 'nullable|date',
         ]);
+
+        $previousDeadline = $documentType->submission_deadline?->copy();
+        $closedByDeadline = ! $documentType->submissionsAreOpen()
+            && $previousDeadline
+            && $previousDeadline->lte(now())
+            && $documentType->submissions_closed_at
+            && $documentType->submissions_closed_at->gte($previousDeadline);
+        $nextDeadline = $this->deadlineFromRequest($request);
 
         $documentType->update([
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'required' => $request->boolean('required'),
+            'submission_deadline' => $nextDeadline,
         ]);
+
+        if ($closedByDeadline && ($nextDeadline === null || $nextDeadline->gt(now()))) {
+            $documentType->update([
+                'submissions_open' => true,
+                'submissions_opened_at' => now(),
+            ]);
+        }
+
+        $documentType->refresh();
+        $this->notifyDeadlineChange($documentType, $previousDeadline, $documentType->submission_deadline);
 
         return redirect()
             ->route('staff.documents.show', $documentType)
             ->with('success', "Required document \"{$documentType->name}\" updated.");
+    }
+
+    public function openSubmissions(DocumentType $documentType)
+    {
+        $this->programScope->assertDocumentTypeManagedByStaff($documentType, Auth::user());
+
+        if ($documentType->submissionsAreOpen()) {
+            return back()->with('success', "Submissions for {$documentType->name} are already OPEN.");
+        }
+
+        $documentType->update([
+            'submissions_open' => true,
+            'submissions_opened_at' => now(),
+        ]);
+        $documentType->refresh();
+
+        $this->scholar->notifyDocumentWindow($documentType, 'reopened');
+        $this->scholar->logActivity(Auth::user(), 'document', "Opened submissions for {$documentType->name}", [
+            'document_type_id' => $documentType->id,
+        ]);
+
+        $message = $documentType->deadlineHasPassed()
+            ? "Submissions for {$documentType->name} are now OPEN. The deadline has passed, so scholars can upload after you update the deadline."
+            : "Submissions for {$documentType->name} are now OPEN. Scholars can upload and update this document.";
+
+        return back()->with('success', $message);
+    }
+
+    public function closeSubmissions(DocumentType $documentType)
+    {
+        $this->programScope->assertDocumentTypeManagedByStaff($documentType, Auth::user());
+
+        if (! $documentType->submissionsAreOpen()) {
+            return back()->with('success', "Submissions for {$documentType->name} are already CLOSED.");
+        }
+
+        $documentType->update([
+            'submissions_open' => false,
+            'submissions_closed_at' => now(),
+        ]);
+        $documentType->refresh();
+
+        $this->scholar->notifyDocumentWindow($documentType, 'closed');
+        $this->scholar->logActivity(Auth::user(), 'document', "Closed submissions for {$documentType->name}", [
+            'document_type_id' => $documentType->id,
+        ]);
+
+        return back()->with('success', "Submissions for {$documentType->name} are now CLOSED. Existing files and review statuses were not changed.");
     }
 
     public function destroy(DocumentType $documentType)
@@ -267,6 +358,65 @@ class StaffDocumentController extends Controller
             $document->user && Auth::user()->canManageScholar($document->user),
             403
         );
+    }
+
+    private function scopedDocuments(DocumentType $documentType, \Closure $scholarScope, array $schoolFilter)
+    {
+        $query = Document::query()
+            ->where('document_type_id', $documentType->id)
+            ->whereHas('user', $scholarScope);
+
+        if (($schoolFilter['type'] ?? 'all') !== 'all') {
+            $query->whereHas('user', function ($user) use ($schoolFilter) {
+                $this->staffData->applySchoolFilter($user, $schoolFilter);
+            });
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param  list<array{key: string, label: string}>  $options
+     * @return list<array{key: string, label: string}>
+     */
+    private function documentSchoolOptions(array $options): array
+    {
+        return array_map(function (array $option) {
+            if ($option['key'] === 'all') {
+                $option['label'] = 'All Schools/Universities';
+            }
+
+            if ($option['key'] === 'unassigned') {
+                $option['label'] = 'No School Specified';
+            }
+
+            return $option;
+        }, $options);
+    }
+
+    private function deadlineFromRequest(Request $request): ?Carbon
+    {
+        if (! $request->filled('submission_deadline')) {
+            return null;
+        }
+
+        return Carbon::parse($request->input('submission_deadline'))->timezone(config('app.timezone'));
+    }
+
+    private function notifyDeadlineChange(DocumentType $type, ?Carbon $previous, ?Carbon $current): void
+    {
+        if ($previous?->getTimestamp() === $current?->getTimestamp()) {
+            return;
+        }
+
+        $event = match (true) {
+            $previous !== null && $current !== null && $current->gt($previous) => 'deadline_extended',
+            $previous !== null && $current !== null => 'deadline_changed',
+            $current !== null => 'deadline_set',
+            default => 'deadline_removed',
+        };
+
+        $this->scholar->notifyDocumentWindow($type, $event);
     }
 
     private function scholarScope(array $programIds): \Closure

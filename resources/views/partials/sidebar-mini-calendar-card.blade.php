@@ -1,14 +1,13 @@
 @php
     $calRoute = $calRoute ?? 'user.profile';
-    $monthDate = $sidebarMonthDate ?? now()->startOfMonth();
+    $monthDate = ($sidebarMonthDate ?? now())->copy()->startOfMonth();
     $prevMonth = $sidebarPrevMonth ?? $monthDate->copy()->subMonth();
     $nextMonth = $sidebarNextMonth ?? $monthDate->copy()->addMonth();
     $events = collect($sidebarCalendarEvents ?? []);
     $eventDays = $events
-        ->flatMap(fn ($event) => $event['calendar_days'] ?? [$event['starts_at']->toDateString()])
-        ->filter(fn ($date) => \Carbon\Carbon::parse($date)->isSameMonth($monthDate))
-        ->map(fn ($date) => (int) \Carbon\Carbon::parse($date)->day)
+        ->flatMap(fn ($event) => $event['calendar_days'] ?? [])
         ->unique()
+        ->values()
         ->all();
     $calStart = $monthDate->copy()->startOfMonth()->startOfWeek(\Carbon\Carbon::SUNDAY);
     $calEnd = $monthDate->copy()->endOfMonth()->endOfWeek(\Carbon\Carbon::SATURDAY);
@@ -30,7 +29,7 @@
                 <div class="cal-row">
                     @for($i = 0; $i < 7; $i++)
                         @php $inMonth = $calStart->month === $monthDate->month; @endphp
-                        <div class="cal-day {{ !$inMonth ? 'outside' : '' }} {{ $inMonth && in_array($calStart->day, $eventDays, true) ? 'has-dot' : '' }} {{ $calStart->isToday() ? 'today' : '' }}">
+                        <div class="cal-day {{ !$inMonth ? 'outside' : '' }} {{ $inMonth && in_array($calStart->toDateString(), $eventDays, true) ? 'has-dot' : '' }} {{ $calStart->isToday() ? 'today' : '' }}">
                             {{ $inMonth ? $calStart->day : $calStart->day }}
                         </div>
                         @php $calStart->addDay(); @endphp

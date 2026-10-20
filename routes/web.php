@@ -173,6 +173,8 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
         Route::get('/documents/types/{documentType}', [StaffDocumentController::class, 'show'])->name('documents.show');
         Route::get('/documents/types/{documentType}/edit', [StaffDocumentController::class, 'edit'])->name('documents.edit');
         Route::put('/documents/types/{documentType}', [StaffDocumentController::class, 'update'])->name('documents.update');
+        Route::post('/documents/types/{documentType}/submissions/open', [StaffDocumentController::class, 'openSubmissions'])->name('documents.submissions.open');
+        Route::post('/documents/types/{documentType}/submissions/close', [StaffDocumentController::class, 'closeSubmissions'])->name('documents.submissions.close');
         Route::delete('/documents/types/{documentType}', [StaffDocumentController::class, 'destroy'])->name('documents.destroy');
         Route::get('/documents/{document}/view', [StaffDocumentController::class, 'view'])->name('documents.view');
         Route::get('/documents/{document}/download', [StaffDocumentController::class, 'download'])->name('documents.download');

@@ -55,14 +55,14 @@
             <p class="staff-muted">No pending scholar account approvals.</p>
         @else
             <div class="staff-table-wrap">
-                <table class="staff-table staff-stack-table">
+                <table class="staff-table staff-stack-table staff-pending-approvals">
                     <thead>
                         <tr>
                             <th>Type</th>
                             <th>Name / Title</th>
                             <th>Details</th>
                             <th>Date Submitted</th>
-                            <th>Action</th>
+                            <th class="staff-pending-action">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -72,29 +72,8 @@
                                 <td data-label="Name / Title">{{ $request->full_name }}</td>
                                 <td data-label="Details">{{ $request->scholar_id }} · {{ $request->email }}</td>
                                 <td data-label="Date Submitted">{{ $request->created_at->format('M j, Y') }}</td>
-                                <td data-label="Action">
-                                    <a href="{{ route('staff.scholars.show', $request) }}" class="staff-action-btn" title="View">👁</a>
-                                    <form method="POST" action="{{ route('staff.scholars.approve', $request) }}" style="display:inline" data-ajax-approval="approve" data-no-loading="true">
-                                        @csrf
-                                        <button type="submit" class="staff-action-btn" title="Approve">✓</button>
-                                    </form>
-                                    <form
-                                        method="POST"
-                                        action="{{ route('staff.scholars.reject', $request) }}"
-                                        style="display:inline"
-                                        data-confirm="Reject and permanently remove this scholar application? Their email and scholar ID will become available for a new registration."
-                                        data-confirm-title="Reject this application permanently?"
-                                        data-confirm-name="{{ $request->full_name }}"
-                                        data-confirm-note="This cannot be undone. The pending account will be permanently removed so the applicant can register again."
-                                        data-confirm-yes="Reject Permanently"
-                                        data-confirm-no="Cancel"
-                                        data-confirm-variant="danger"
-                                        data-ajax-approval="reject"
-                                        data-no-loading="true"
-                                    >
-                                        @csrf
-                                        <button type="submit" class="staff-action-btn" title="Reject application">✕</button>
-                                    </form>
+                                <td data-label="Action" class="staff-pending-action">
+                                    <a href="{{ route('staff.scholars.show', $request) }}" class="staff-action-btn staff-action-btn-view" title="View" aria-label="View {{ $request->full_name }}">👁</a>
                                 </td>
                             </tr>
                         @endforeach
@@ -184,5 +163,34 @@
 @endsection
 
 @push('styles')
-<style>.staff-muted{color:#6b7280;font-size:13px}</style>
+<style>
+.staff-muted{color:#6b7280;font-size:13px}
+.staff-pending-approvals th.staff-pending-action,
+.staff-pending-approvals td.staff-pending-action{
+    width:72px;
+    text-align:center;
+    vertical-align:middle;
+    white-space:nowrap;
+}
+.staff-pending-approvals td.staff-pending-action .staff-action-btn{
+    margin:0 auto;
+}
+@media (max-width:800px){
+    .staff-pending-approvals th.staff-pending-action,
+    .staff-pending-approvals td.staff-pending-action{
+        width:100%;
+        text-align:left;
+        white-space:normal;
+    }
+    .staff-pending-approvals td.staff-pending-action{
+        align-items:flex-start;
+    }
+    .staff-pending-approvals td.staff-pending-action > .staff-action-btn{
+        width:36px;
+        max-width:36px;
+        margin:0;
+        align-self:flex-start;
+    }
+}
+</style>
 @endpush

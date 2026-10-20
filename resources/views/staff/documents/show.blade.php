@@ -3,9 +3,9 @@
 @section('page-content')
 
 <div class="staff-card" style="margin-bottom:20px">
-    <div class="staff-card-header">
+    <div class="staff-card-header staff-doc-detail-heading">
+        <a href="{{ route('staff.documents') }}" class="staff-card-link staff-doc-back-link">&larr; Back to Documents</a>
         <h2>{{ $documentType->name }}</h2>
-        <a href="{{ route('staff.documents') }}" class="staff-card-link">&larr; Back to Documents</a>
     </div>
     <p class="staff-muted" style="margin:0 0 12px">{{ $documentType->description ?: 'No description provided.' }}</p>
     <div class="staff-doc-type-counts" style="margin-bottom:12px">
@@ -15,6 +15,46 @@
         <span class="rejected">{{ $counts['rejected'] }} rejected</span>
         <span>{{ $counts['not_submitted'] }} not submitted</span>
     </div>
+    <section class="staff-submission-session {{ $documentType->submissionsAreOpen() ? 'is-open' : 'is-closed' }}">
+        <div class="staff-submission-session-status">
+            <span class="staff-badge {{ $documentType->submissionStatusBadgeClass() }} staff-submission-status-badge">{{ $documentType->submissionStatusLabel() }}</span>
+            <div>
+                <strong>Document submission</strong>
+                <p class="staff-muted" style="margin:4px 0 0">
+                    Deadline: {{ $documentType->deadlineLabel() }}.
+                    @if($documentType->submissionsAreOpen())
+                        Scholars can upload and replace {{ $documentType->name }} while submissions are open and the deadline has not passed.
+                        @if($documentType->submissions_opened_at)
+                            Opened {{ $documentType->submissions_opened_at->timezone(config('app.timezone'))->format('M j, Y g:i A') }}.
+                        @endif
+                    @else
+                        Scholars cannot upload, replace, or resubmit {{ $documentType->name }}. Existing files and review statuses stay unchanged.
+                        @if($documentType->submissions_closed_at)
+                            Closed {{ $documentType->submissions_closed_at->timezone(config('app.timezone'))->format('M j, Y g:i A') }}.
+                        @endif
+                    @endif
+                </p>
+            </div>
+        </div>
+        <div class="staff-submission-session-actions">
+            <form method="POST" action="{{ route('staff.documents.submissions.open', $documentType) }}">
+                @csrf
+                <button type="submit" class="staff-btn staff-btn-success" @disabled($documentType->submissionsAreOpen())>Open Submissions</button>
+            </form>
+            <form
+                method="POST"
+                action="{{ route('staff.documents.submissions.close', $documentType) }}"
+                data-confirm="Scholars will not be able to upload, replace, or resubmit {{ $documentType->name }}. Existing files and review statuses will stay as they are."
+                data-confirm-title="Close submissions for {{ $documentType->name }}?"
+                data-confirm-yes="Close Submission"
+                data-confirm-no="Cancel"
+                data-confirm-variant="danger"
+            >
+                @csrf
+                <button type="submit" class="staff-btn staff-btn-danger" @disabled(! $documentType->submissionsAreOpen())>Close Submissions</button>
+            </form>
+        </div>
+    </section>
     <div class="staff-doc-type-actions" style="padding:0;border:0">
         <a href="{{ route('staff.documents.edit', $documentType) }}" class="staff-btn staff-btn-sm">Edit type</a>
         <form
@@ -35,7 +75,23 @@
     </div>
 </div>
 
-<form method="GET" class="staff-filter-bar">
+<form method="GET" class="staff-filter-bar staff-document-school-filter">
+    <div class="staff-report-period-field">
+        <label for="document-school">School/University</label>
+        <select id="document-school" name="school" class="staff-select" onchange="this.form.submit()">
+            @foreach($schoolOptions as $option)
+                <option value="{{ $option['key'] }}" @selected($selectedSchoolKey === $option['key'])>{{ $option['label'] }}</option>
+            @endforeach
+        </select>
+    </div>
+    <div class="staff-report-period-field">
+        <label for="document-type-filter">Document Type</label>
+        <select id="document-type-filter" class="staff-select" onchange="if (this.value) window.location = this.value">
+            @foreach($programTypes as $type)
+                <option value="{{ route('staff.documents.show', array_filter(['documentType' => $type->id, 'search' => $search ?: null, 'status' => $statusFilter, 'school' => $selectedSchoolKey !== 'all' ? $selectedSchoolKey : null])) }}" @selected($type->id === $documentType->id)>{{ $type->name }}</option>
+            @endforeach
+        </select>
+    </div>
     <div class="staff-search">
         <span>🔍</span>
         <input type="search" name="search" value="{{ $search }}" placeholder="Search by scholar name or ID...">
@@ -49,6 +105,9 @@
         <option value="all" @selected($statusFilter === 'all')>All scholars</option>
     </select>
     <button type="submit" class="staff-btn">Filter</button>
+    @if($selectedSchoolKey !== 'all')
+        <a href="{{ route('staff.documents.show', array_filter(['documentType' => $documentType->id, 'search' => $search ?: null, 'status' => $statusFilter])) }}" class="staff-btn">Reset</a>
+    @endif
 </form>
 
 <div class="staff-card">
@@ -162,10 +221,10 @@
                 @empty
                     <tr class="staff-table-empty">
                         <td colspan="5">
-                            @if($statusFilter === 'submitted')
-                                No scholars have submitted {{ $documentType->name }} yet.
-                            @else
+                            @if($selectedSchoolKey !== 'all' || $search !== '' || $statusFilter !== 'submitted')
                                 No matching scholars for this filter.
+                            @else
+                                No scholars have submitted {{ $documentType->name }} yet.
                             @endif
                         </td>
                     </tr>

@@ -1,7 +1,7 @@
 @extends('layouts.user')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/dashboard-events.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/dashboard-events.css') }}?v={{ filemtime(public_path('css/dashboard-events.css')) }}">
 @endpush
 
 @section('page-content')
@@ -199,21 +199,22 @@
                 <div class="cal-grid">
                     <div class="cal-row cal-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
                     @php
-                        $calStart = now()->startOfMonth()->startOfWeek(\Carbon\Carbon::SUNDAY);
-                        $calEnd = now()->endOfMonth()->endOfWeek(\Carbon\Carbon::SATURDAY);
+                        $calendarToday = now()->timezone(config('app.timezone'));
+                        $calStart = $calendarToday->copy()->startOfMonth()->startOfWeek(\Carbon\Carbon::SUNDAY);
+                        $calEnd = $calendarToday->copy()->endOfMonth()->endOfWeek(\Carbon\Carbon::SATURDAY);
                         $eventDays = collect($calendarEvents)
-                            ->flatMap(fn ($e) => $e['calendar_days'] ?? [$e['starts_at']->toDateString()])
-                            ->filter(fn ($date) => \Carbon\Carbon::parse($date)->isSameMonth(now()))
-                            ->map(fn ($date) => (int) \Carbon\Carbon::parse($date)->day)
+                            ->flatMap(fn ($e) => $e['calendar_days'] ?? [])
                             ->unique()
+                            ->values()
                             ->all();
-                        $currentMonth = now()->month;
+                        $currentMonth = $calendarToday->month;
+                        $currentYear = $calendarToday->year;
                     @endphp
                     @while($calStart->lte($calEnd))
                         <div class="cal-row">
                             @for($i = 0; $i < 7; $i++)
-                                @php $inMonth = $calStart->month === $currentMonth; @endphp
-                                <div class="cal-day {{ !$inMonth ? 'empty' : '' }} {{ $inMonth && in_array($calStart->day, $eventDays) ? 'has-dot' : '' }} {{ $calStart->isToday() ? 'today' : '' }}">{{ $inMonth ? $calStart->day : '' }}</div>
+                                @php $inMonth = $calStart->month === $currentMonth && $calStart->year === $currentYear; @endphp
+                                <div class="cal-day {{ !$inMonth ? 'empty' : '' }} {{ $inMonth && in_array($calStart->toDateString(), $eventDays, true) ? 'has-dot' : '' }} {{ $calStart->isToday() ? 'today' : '' }}">{{ $inMonth ? $calStart->day : '' }}</div>
                                 @php $calStart->addDay(); @endphp
                             @endfor
                         </div>

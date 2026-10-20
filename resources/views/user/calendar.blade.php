@@ -46,8 +46,10 @@
                         <div class="fc-row">
                             @for($i = 0; $i < 7; $i++)
                                 @php
-                                    $inMonth = $start->month === $monthDate->month;
-                                    $dayEvents = $eventsByDay->get($start->format('Y-m-d'), collect());
+                                    $inMonth = $start->month === $monthDate->month && $start->year === $monthDate->year;
+                                    $dayKey = $start->format('Y-m-d');
+                                    $dayEvents = ($eventsByDay->get($dayKey) ?? collect())
+                                        ->filter(fn ($ev) => in_array($dayKey, $ev['calendar_days'] ?? [], true));
                                 @endphp
                                 <div class="fc-cell {{ !$inMonth ? 'other-month' : '' }} {{ $start->isToday() ? 'today' : '' }}">
                                     <span class="fc-day-num">{{ $start->day }}</span>
@@ -58,7 +60,7 @@
                                         @endphp
                                         <a href="{{ route('user.calendar', ['year' => $monthDate->year, 'month' => $monthDate->month, 'event' => $ev['id']]) }}" class="fc-event {{ $eventColor }}" title="{{ $ev['title'] }} — {{ $ev['status_label'] }}">
                                             <span class="fc-event-title">{{ $ev['title'] }}</span>
-                                            <span class="fc-event-meta">{{ $ev['starts_at']->format('g:i A') }} · {{ $ev['status_label'] }}</span>
+                                            <span class="fc-event-meta">{{ $ev['day_times'][$dayKey] ?? $ev['time'] }} · {{ $ev['status_label'] }}</span>
                                         </a>
                                     @endforeach
                                 </div>
@@ -91,7 +93,6 @@
                     @if($selected['image_url'])<img src="{{ $selected['image_url'] }}" alt="">@endif
                     @include('partials.event-status-badge', ['statusClass' => $selected['status_class'], 'statusLabel' => $selected['status_label']])
                     @if(empty($selected['is_cancelled']))
-                        <span class="badge {{ $selected['participation_class'] ?? '' }}">{{ $selected['participation_label'] ?? '' }}</span>
                         <span class="badge {{ !empty($selected['attendance_open']) ? 'attendance-open' : 'attendance-closed' }}">{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
                     @endif
                     <h3>{{ $selected['title'] }}</h3>
@@ -101,7 +102,7 @@
                     @if(!empty($selected['attendance_message']))
                         <p class="muted" style="margin:0 0 10px">{{ $selected['attendance_message'] }}</p>
                     @endif
-                    <div class="info-row"><span class="info-icon">&#128197;</span> {{ $selected['starts_at']->format('M d Y') }}</div>
+                    <div class="info-row"><span class="info-icon">&#128197;</span> {{ $selected['full_date'] }}</div>
                     <div class="info-row"><span class="info-icon">&#128336;</span> {{ $selected['time'] }}</div>
                     <div class="info-row"><span class="info-icon">&#128205;</span> {{ $selected['location'] }}</div>
                     <div class="info-row"><span class="info-icon">&#9201;</span> Service Hours: {{ $selected['hours'] }}</div>

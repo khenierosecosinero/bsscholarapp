@@ -317,13 +317,14 @@ class StaffController extends Controller
             'service_hours' => $data['service_hours'],
             'organizer' => $data['organizer'] ?? $staff->full_name,
             'image_path' => $imagePath,
-            'status' => 'confirmed',
+            'status' => Event::STATUS_PENDING,
+            'attendance_is_open' => false,
             'scholarship_program_id' => $staff->scholarship_program_id,
         ]);
 
-        $notifiedCount = $this->scholar->notifyScholarsOfPublishedEvent($event);
+        $notifiedCount = $this->scholar->notifyScholarsOfEventStatusChange($event, Event::STATUS_PENDING);
 
-        $message = "Event \"{$event->title}\" is scheduled for {$event->starts_at->format('F j, Y')} and now appears on scholar calendars and Events pages.";
+        $message = "Event \"{$event->title}\" is scheduled for {$event->starts_at->format('F j, Y')} with registration status Pending. It appears on scholar Events pages as Pending until you confirm it. No scholars are registered until they click Attend / Register. Attendance stays closed.";
         if ($notifiedCount > 0) {
             $message .= " {$notifiedCount} scholar(s) were notified in their Notifications section.";
         } else {
@@ -371,6 +372,7 @@ class StaffController extends Controller
         }
 
         $event->refresh();
+        $this->scholar->syncRegistrationsWithEventStatus($event);
         $this->scholar->notifyScholarsOfEventStatusChange($event, $target);
 
         $label = match ($target) {
@@ -485,15 +487,23 @@ class StaffController extends Controller
         $staff = Auth::user();
         $programIds = $this->staffData->programIds($staff);
         $search = trim((string) $request->get('search', ''));
+        $schoolFilter = $this->staffData->scholarsSchoolFilter($request, $programIds, $staff);
+        $schoolOptions = $this->attendanceSchoolOptions($schoolFilter['options']);
 
         $this->scholar->syncMissedCheckInsForPrograms($programIds);
         $this->scholar->syncCompletedEventHoursForPrograms($programIds);
 
-        $panel = $this->attendanceEventPanel($programIds, (int) $request->get('event', 0), $search);
+        $panel = $this->attendanceEventPanel($programIds, (int) $request->get('event', 0), $search, $schoolFilter);
 
         return view('staff.attendance', array_merge(
             $this->layoutData('attendance', 'Attendance', 'Select an event to review check-ins, photos, and service hours.'),
-            compact('search', 'panel')
+            [
+                'search' => $search,
+                'panel' => $panel,
+                'schoolOptions' => $schoolOptions,
+                'selectedSchoolKey' => $schoolFilter['key'],
+                'selectedSchoolLabel' => collect($schoolOptions)->firstWhere('key', $schoolFilter['key'])['label'] ?? 'All Schools/Universities',
+            ]
         ));
     }
 
@@ -785,8 +795,18 @@ class StaffController extends Controller
         }
 
         $name = $scholar->full_name;
+        $email = $scholar->email;
         $deletedId = (int) $scholar->id;
         $this->accounts->permanentlyDelete($scholar);
+        app(\App\Services\WorkflowMailService::class)->sendToAddress(
+            $email,
+            $name,
+            'Account Rejected',
+            'Your scholar registration was not approved. You can register again with this email address.',
+            \App\Support\OutboundAppUrl::withRoot(fn () => route('login')),
+            'Go to sign in',
+            'scholar-rejected:'.$deletedId
+        );
 
         return $this->approvalActionSucceeded(
             $request,
@@ -1060,7 +1080,26 @@ class StaffController extends Controller
         );
     }
 
-    private function attendanceEventPanel(array $programIds, int $selectedEventId, string $search = ''): array
+    /**
+     * @param  list<array{key: string, label: string}>  $options
+     * @return list<array{key: string, label: string}>
+     */
+    private function attendanceSchoolOptions(array $options): array
+    {
+        return array_map(function (array $option) {
+            if ($option['key'] === 'all') {
+                $option['label'] = 'All Schools/Universities';
+            }
+
+            if ($option['key'] === 'unassigned') {
+                $option['label'] = 'No School Specified';
+            }
+
+            return $option;
+        }, $options);
+    }
+
+    private function attendanceEventPanel(array $programIds, int $selectedEventId, string $search = '', ?array $schoolFilter = null): array
     {
         $events = Event::query()
             ->with(['registrations.user', 'attendances.user'])
@@ -1106,7 +1145,7 @@ class StaffController extends Controller
                 }
             }
 
-            $selected->load(['registrations.user', 'attendances.user']);
+            $selected->load(['registrations.user.scholarshipClubSchool', 'attendances.user.scholarshipClubSchool']);
 
             foreach ($selected->registrations as $registration) {
                 $attendance = $selected->attendances->firstWhere('user_id', $registration->user_id);
@@ -1126,6 +1165,13 @@ class StaffController extends Controller
                     $failed->push($row);
                 }
             }
+
+            $checkedIn = $checkedIn
+                ->filter(fn (array $row) => $this->staffData->userMatchesSchoolFilter($row['user'] ?? null, $schoolFilter))
+                ->values();
+            $failed = $failed
+                ->filter(fn (array $row) => $this->staffData->userMatchesSchoolFilter($row['user'] ?? null, $schoolFilter))
+                ->values();
         }
 
         return [

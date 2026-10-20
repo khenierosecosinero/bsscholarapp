@@ -32,7 +32,7 @@
         <div class="staff-card-header"><h2>Participation</h2></div>
         <div class="staff-stat-body">
             <div class="value">{{ $event->registrations_count ?? 0 }}</div>
-            <div class="sub">Registered scholars</div>
+            <div class="sub">Registered Scholars</div>
         </div>
         <p class="staff-muted" style="margin-top:16px">Open or close attendance from Staff &gt; Attendance. The session stays open until you close it and does not follow the event schedule. Scholars who registered but did not check in before the session closed are marked Failed to Check In and receive 0 service hours.</p>
         <a href="{{ route('staff.attendance', ['event' => $event->id]) }}" class="staff-btn staff-btn-primary" style="margin-top:12px">Manage Attendance</a>
@@ -41,7 +41,7 @@
 
 @if(isset($participants))
 <div class="staff-card" style="margin-top:20px">
-    <div class="staff-card-header"><h2>Registered Scholars</h2></div>
+    <div class="staff-card-header"><h2>Attend/Register</h2></div>
     <div class="staff-table-wrap">
         <table class="staff-table staff-stack-table staff-manage-table">
             <thead>

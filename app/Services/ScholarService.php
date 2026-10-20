@@ -57,9 +57,9 @@ class ScholarService
 
     public function scopeEventsForSelectedPeriod(Builder $query): Builder
     {
-        $this->academic->scopeEventsForReport($query, $this->academic->selectedReportFilter());
+        [$start, $end] = $this->academic->eventBoundsForReport($this->academic->selectedReportFilter());
 
-        return $query;
+        return $query->overlappingDates($start, $end);
     }
 
     public function scopeAnnouncementsForUser(Builder $query, User $user): Builder
@@ -568,9 +568,12 @@ class ScholarService
 
     private function countUpcomingEventsForPeriod(User $user): int
     {
+        $weekStart = now()->copy()->startOfWeek(Carbon::SUNDAY)->startOfDay();
+        $weekEnd = now()->copy()->endOfWeek(Carbon::SATURDAY)->endOfDay();
         $query = Event::query()
-            ->where('starts_at', '>=', now())
-            ->where('starts_at', '<=', now()->addWeek());
+            ->overlappingDates($weekStart, $weekEnd)
+            ->notEnded()
+            ->whereNotIn('status', [Event::STATUS_CANCELLED, Event::STATUS_COMPLETED]);
         $this->scopeEventsForSelectedPeriod($query);
 
         return $this->scopeEventsForUser($query, $user)->count();
@@ -581,9 +584,10 @@ class ScholarService
         $attendances = $this->attendancesByEvent($user);
 
         $query = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-            ->where('starts_at', '>=', now()->subDay())
+            ->notEnded()
             ->whereNotIn('status', [Event::STATUS_CANCELLED, Event::STATUS_COMPLETED])
             ->orderBy('starts_at')
+            ->orderBy('id')
             ->limit($limit);
         $this->scopeEventsForSelectedPeriod($query);
 
@@ -596,19 +600,21 @@ class ScholarService
         $attendances = $this->attendancesByEvent($user);
 
         $registered = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-            ->where('starts_at', '>', now())
+            ->notEnded()
             ->whereNotIn('status', [Event::STATUS_CANCELLED, Event::STATUS_COMPLETED])
             ->whereHas('registrations', fn ($q) => $q->where('user_id', $user->id))
-            ->orderBy('starts_at');
+            ->orderBy('starts_at')
+            ->orderBy('id');
         $this->scopeEventsForSelectedPeriod($registered);
 
         $event = $this->scopeEventsForUser($registered, $user)->first();
 
         if (! $event) {
             $open = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-                ->where('starts_at', '>', now())
+                ->notEnded()
                 ->whereNotIn('status', [Event::STATUS_CANCELLED, Event::STATUS_COMPLETED])
-                ->orderBy('starts_at');
+                ->orderBy('starts_at')
+                ->orderBy('id');
             $this->scopeEventsForSelectedPeriod($open);
             $event = $this->scopeEventsForUser($open, $user)->first();
         }
@@ -619,12 +625,13 @@ class ScholarService
     public function eventsForUser(User $user, ?string $search = null, ?string $status = null): Collection
     {
         $base = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-            ->orderBy('starts_at');
+            ->orderBy('starts_at')
+            ->orderBy('id');
 
-        // Active/default lists hide past rows for fresh scholars. History filters
-        // (all / cancelled / completed) must still show staff status changes.
-        if (! in_array($status, ['all', 'cancelled', 'completed'], true)) {
-            $base->upcomingForFreshScholar($user);
+        // Active Events are events that have not passed their saved end time.
+        // Status filters still return matching records, including past dates.
+        if ($status === null || $status === 'upcoming') {
+            $base->notEnded();
         }
 
         $this->scopeEventsForSelectedPeriod($base);
@@ -675,8 +682,7 @@ class ScholarService
 
     public function formatEvent(Event $event, User $user, ?Collection $attendances = null): array
     {
-        $registration = $event->registrations->first()
-            ?? $user->eventRegistrations()->where('event_id', $event->id)->first();
+        $registration = $this->registrationFor($event, $user);
         $attendance = $attendances
             ? $attendances->get($event->id)
             : $user->attendances()->where('event_id', $event->id)->first();
@@ -700,12 +706,12 @@ class ScholarService
             'location' => $event->location,
             'starts_at' => $event->starts_at,
             'ends_at' => $event->ends_at,
-            'date' => $event->starts_at->format('M d'),
-            'month' => strtoupper($event->starts_at->format('M')),
-            'day' => $event->starts_at->format('d'),
-            'dow' => strtoupper($event->starts_at->format('D')),
-            'time' => $event->starts_at->format('g:i A').' - '.$event->ends_at->format('g:i A'),
-            'full_date' => $event->starts_at->format('F d Y').' ('.$event->starts_at->format('l').')',
+            'date' => $event->starts_at->copy()->timezone(config('app.timezone'))->format('M d'),
+            'month' => strtoupper($event->starts_at->copy()->timezone(config('app.timezone'))->format('M')),
+            'day' => $event->starts_at->copy()->timezone(config('app.timezone'))->format('d'),
+            'dow' => strtoupper($event->starts_at->copy()->timezone(config('app.timezone'))->format('D')),
+            'time' => $event->scheduleTimeLabel(),
+            'full_date' => $event->scheduleDateLabel(),
             'hours' => $event->service_hours,
             'organizer' => $event->organizer,
             'image_url' => $event->image_url,
@@ -730,6 +736,9 @@ class ScholarService
                         ? 'This event is completed and is no longer open for registration.'
                         : null)),
             'calendar_days' => $event->calendarDateKeys(),
+            'day_times' => collect($event->calendarDateKeys())
+                ->mapWithKeys(fn (string $day) => [$day => $event->calendarDayTimeLabel($day)])
+                ->all(),
             'attendance' => $attendance,
             'attendance_open' => $event->allowsScholarAttendanceActions(),
             'attendance_status' => $event->attendanceStatusLabel(),
@@ -784,10 +793,10 @@ class ScholarService
         }
 
         $eventStamp = sprintf(
-            '%s on %s at %s',
+            '%s on %s, %s',
             $event->title,
-            $event->starts_at?->format('M j, Y') ?? 'the scheduled date',
-            $event->starts_at?->format('g:i A') ?? 'the scheduled time'
+            $event->scheduleDateLabel(),
+            $event->scheduleTimeLabel()
         );
 
         if ($event->isAttendanceOpen()) {
@@ -1011,8 +1020,7 @@ class ScholarService
 
     public function calendarStatus(Event $event, User $user, ?Attendance $attendance = null, ?EventRegistration $registration = null): string
     {
-        $registration ??= $event->registrations->first()
-            ?? $user->eventRegistrations()->where('event_id', $event->id)->first();
+        $registration ??= $this->registrationFor($event, $user);
 
         if ($this->hasParticipated($attendance)) {
             return 'participated';
@@ -1097,6 +1105,11 @@ class ScholarService
                 'attendance_id' => $attendance->id,
                 'message' => $e->getMessage(),
             ]);
+            app(WorkflowMailService::class)->alertAdministrators(
+                'attendance-drive:'.$attendance->id,
+                'Google Drive attendance upload failed',
+                "Attendance for {$attendance->event?->title} was approved, but the participation photo could not be stored in Google Drive. Reconnect Google Drive from Settings and review that attendance record."
+            );
         }
 
         $user = $attendance->user;
@@ -1263,10 +1276,26 @@ class ScholarService
 
     public function registrationStatus(Event $event, User $user): string
     {
-        $registration = $event->registrations->first()
-            ?? $user->eventRegistrations()->where('event_id', $event->id)->first();
+        return $this->registrationFor($event, $user)?->status ?? 'not_joined';
+    }
 
-        return $registration?->status ?? 'not_joined';
+    /**
+     * The registration for this scholar on this event. A loaded relation may
+     * contain every participant, so it is never matched by list position.
+     */
+    private function registrationFor(Event $event, User $user): ?EventRegistration
+    {
+        if ($event->relationLoaded('registrations')) {
+            $match = $event->registrations->first(
+                fn ($registration) => (int) $registration->user_id === (int) $user->id
+            );
+
+            if ($match) {
+                return $match;
+            }
+        }
+
+        return $user->eventRegistrations()->where('event_id', $event->id)->first();
     }
 
     public function calendarEvents(User $user, int $year, int $month): Collection
@@ -1278,8 +1307,8 @@ class ScholarService
 
         $query = Event::with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
             ->overlappingDates($start, $end)
-            ->upcomingForFreshScholar($user)
-            ->orderBy('starts_at');
+            ->orderBy('starts_at')
+            ->orderBy('id');
         $this->scopeEventsForSelectedPeriod($query);
 
         return $this->scopeEventsForUser($query, $user)->get()
@@ -1393,13 +1422,20 @@ class ScholarService
             ->where('scholarship_program_id', $type->scholarship_program_id);
 
         $title = 'Required document: '.$type->name;
+        $deadline = $type->deadlineLabel();
         $body = $type->description
-            ? "Scholar Staff posted a required document: {$type->name}. {$type->description} Please submit it on your Documents page."
-            : "Scholar Staff posted a required document: {$type->name}. Please submit it on your Documents page.";
+            ? "Scholar Staff posted a required document: {$type->name}. {$type->description} Please submit it on your Documents page. Deadline: {$deadline}."
+            : "Scholar Staff posted a required document: {$type->name}. Please submit it on your Documents page. Deadline: {$deadline}.";
 
         $count = 0;
 
         $scholarsQuery->each(function (User $scholar) use ($title, $body, &$count) {
+            $existing = ScholarNotification::query()
+                ->where('user_id', $scholar->id)
+                ->where('title', $title)
+                ->first();
+            $changed = ! $existing || $existing->body !== $body;
+
             ScholarNotification::updateOrCreate(
                 [
                     'user_id' => $scholar->id,
@@ -1413,7 +1449,132 @@ class ScholarService
                 ]
             );
             $count++;
+
+            if ($changed) {
+                app(WorkflowMailService::class)->sendForNotification($scholar, $title, $body, 'documents');
+            }
         });
+
+        return $count;
+    }
+
+    /**
+     * Close document types whose deadline has passed, and notify scholars once
+     * when a deadline is approaching or has closed submissions.
+     *
+     * @param  list<int>  $programIds
+     */
+    public function syncDocumentDeadlines(array $programIds = []): void
+    {
+        $now = now();
+        $soon = $now->copy()->addDay();
+
+        $types = DocumentType::query()
+            ->when($programIds !== [], fn ($query) => $query->whereIn('scholarship_program_id', $programIds))
+            ->whereNotNull('submission_deadline')
+            ->get();
+
+        foreach ($types as $type) {
+            if ($type->submission_deadline->lte($now) && $type->submissionsAreOpen() && ! $type->reopenedAfterDeadline()) {
+                $type->update([
+                    'submissions_open' => false,
+                    'submissions_closed_at' => $now,
+                ]);
+                $type->refresh();
+                $this->notifyDocumentWindow($type, 'deadline_passed');
+
+                continue;
+            }
+
+            if ($type->acceptsSubmissions() && $type->submission_deadline->gt($now) && $type->submission_deadline->lte($soon)) {
+                $this->notifyDocumentWindow($type, 'approaching');
+            }
+        }
+    }
+
+    public function notifyDocumentWindow(DocumentType $type, string $event): int
+    {
+        $name = $type->name;
+        $deadline = $type->deadlineLabel();
+        $when = now()->timezone(config('app.timezone'))->format('M j, Y g:i A');
+
+        [$title, $body] = match ($event) {
+            'approaching' => [
+                "Deadline approaching: {$name}",
+                "The deadline for {$name} is {$deadline}. Submit it from your Documents page before then.",
+            ],
+            'deadline_passed' => [
+                "Deadline passed: {$name}",
+                "Submissions for {$name} closed because the deadline passed ({$deadline}).",
+            ],
+            'closed' => [
+                "Submissions closed: {$name}",
+                "Scholar Staff closed submissions for {$name} on {$when}. You cannot upload or replace this document until submissions are opened again.",
+            ],
+            'reopened' => [
+                "Submissions reopened: {$name}",
+                "Scholar Staff reopened submissions for {$name} on {$when}. Deadline: {$deadline}.",
+            ],
+            'deadline_extended' => [
+                "Deadline extended: {$name}",
+                "The deadline for {$name} was extended to {$deadline}.",
+            ],
+            'deadline_changed' => [
+                "Deadline updated: {$name}",
+                "The deadline for {$name} is now {$deadline}.",
+            ],
+            'deadline_removed' => [
+                "Deadline removed: {$name}",
+                "The deadline for {$name} was removed. No deadline set.",
+            ],
+            'deadline_set' => [
+                "Deadline set: {$name}",
+                "A deadline was set for {$name}: {$deadline}.",
+            ],
+            default => [null, null],
+        };
+
+        if ($title === null || $body === null) {
+            return 0;
+        }
+
+        return $this->notifyProgramScholarsOnce($type, $title, $body);
+    }
+
+    private function notifyProgramScholarsOnce(DocumentType $type, string $title, string $body): int
+    {
+        if (! $type->scholarship_program_id) {
+            return 0;
+        }
+
+        $count = 0;
+
+        User::query()
+            ->where('role', User::ROLE_SCHOLAR)
+            ->where('status', User::STATUS_APPROVED)
+            ->where('scholarship_program_id', $type->scholarship_program_id)
+            ->orderBy('id')
+            ->each(function (User $scholar) use ($title, $body, &$count) {
+                $exists = ScholarNotification::query()
+                    ->where('user_id', $scholar->id)
+                    ->where('title', $title)
+                    ->where('body', $body)
+                    ->exists();
+
+                if ($exists) {
+                    return;
+                }
+
+                ScholarNotification::create([
+                    'user_id' => $scholar->id,
+                    'title' => $title,
+                    'body' => $body,
+                    'category' => 'documents',
+                    'is_important' => true,
+                ]);
+                app(WorkflowMailService::class)->sendForNotification($scholar, $title, $body, 'documents');
+                $count++;
+            });
 
         return $count;
     }
@@ -1467,6 +1628,40 @@ class ScholarService
             'category' => $category,
             'is_important' => $important,
         ]);
+
+        app(WorkflowMailService::class)->sendForNotification($user, $title, $body, $category, $eventId);
+    }
+
+    /**
+     * Keep each scholar's registration aligned with an explicit staff status change.
+     * Confirming the event confirms pending registrations. Returning it to Pending
+     * does not confirm anyone, and does not reopen attendance.
+     */
+    public function syncRegistrationsWithEventStatus(Event $event): void
+    {
+        if (in_array($event->status, [Event::STATUS_CONFIRMED, Event::STATUS_ONGOING], true)) {
+            EventRegistration::query()
+                ->where('event_id', $event->id)
+                ->where('status', EventRegistration::STATUS_PENDING)
+                ->update(['status' => EventRegistration::STATUS_CONFIRMED]);
+
+            return;
+        }
+
+        if ($event->status !== Event::STATUS_PENDING) {
+            return;
+        }
+
+        $checkedInUserIds = Attendance::query()
+            ->where('event_id', $event->id)
+            ->whereNotNull('check_in')
+            ->pluck('user_id');
+
+        EventRegistration::query()
+            ->where('event_id', $event->id)
+            ->where('status', EventRegistration::STATUS_CONFIRMED)
+            ->when($checkedInUserIds->isNotEmpty(), fn ($query) => $query->whereNotIn('user_id', $checkedInUserIds))
+            ->update(['status' => EventRegistration::STATUS_PENDING]);
     }
 
     public function notifyScholarsOfPublishedEvent(Event $event): int
@@ -1476,10 +1671,10 @@ class ScholarService
             'published',
             'New Event: '.$event->title,
             sprintf(
-                '%s has been scheduled on %s at %s (%s). Service hours: %s. Open Events to view details and register.',
+                '%s has been scheduled for %s, %s (%s). Service hours: %s. Open Events to view details and register.',
                 $event->title,
-                $event->starts_at->format('M j Y'),
-                $event->starts_at->format('g:i A'),
+                $event->scheduleDateLabel(),
+                $event->scheduleTimeLabel(),
                 $event->location,
                 number_format((float) $event->service_hours, 1).' hrs'
             ),
@@ -1497,10 +1692,10 @@ class ScholarService
                 'pending',
                 'Event Pending: '.$event->title,
                 sprintf(
-                    '%s is now Pending. Scheduled %s at %s (%s). Check Events for the latest status.',
+                    '%s is now Pending. Scheduled %s, %s (%s). Check Events for the latest status.',
                     $event->title,
-                    $event->starts_at->format('M j Y'),
-                    $event->starts_at->format('g:i A'),
+                    $event->scheduleDateLabel(),
+                    $event->scheduleTimeLabel(),
                     $event->location
                 ),
                 false
@@ -1510,10 +1705,10 @@ class ScholarService
                 'confirmed',
                 'Event Confirmed: '.$event->title,
                 sprintf(
-                    '%s is Confirmed for %s at %s (%s). Open Events to register or review details.',
+                    '%s is Confirmed for %s, %s (%s). Open Events to register or review details.',
                     $event->title,
-                    $event->starts_at->format('M j Y'),
-                    $event->starts_at->format('g:i A'),
+                    $event->scheduleDateLabel(),
+                    $event->scheduleTimeLabel(),
                     $event->location
                 ),
                 true
@@ -1523,10 +1718,10 @@ class ScholarService
                 'cancelled',
                 'Event Cancelled: '.$event->title,
                 sprintf(
-                    '%s scheduled for %s at %s has been Cancelled. It is no longer available for registration or attendance.',
+                    '%s scheduled for %s, %s has been Cancelled. It is no longer available for registration or attendance.',
                     $event->title,
-                    $event->starts_at->format('M j Y'),
-                    $event->starts_at->format('g:i A')
+                    $event->scheduleDateLabel(),
+                    $event->scheduleTimeLabel()
                 ),
                 true
             ),
@@ -1585,6 +1780,13 @@ class ScholarService
                 return;
             }
 
+            $existing = ScholarNotification::query()
+                ->where('user_id', $scholar->id)
+                ->where('event_id', $event->id)
+                ->where('title', $title)
+                ->first();
+            $changed = ! $existing || $existing->body !== $body;
+
             ScholarNotification::updateOrCreate(
                 [
                     'user_id' => $scholar->id,
@@ -1598,6 +1800,10 @@ class ScholarService
                     'is_read' => false,
                 ]
             );
+
+            if ($changed) {
+                app(WorkflowMailService::class)->sendForNotification($scholar, $title, $body, 'event_reminder', $event->id);
+            }
 
             $count++;
         });

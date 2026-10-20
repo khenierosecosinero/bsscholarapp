@@ -397,5 +397,15 @@ class AttendanceSessionService
         foreach (array_chunk($rows, 100) as $chunk) {
             ScholarNotification::insert($chunk);
         }
+
+        if ($rows === []) {
+            return;
+        }
+
+        User::query()
+            ->whereIn('id', array_column($rows, 'user_id'))
+            ->each(function (User $scholar) use ($title, $body, $event) {
+                app(WorkflowMailService::class)->sendForNotification($scholar, $title, $body, 'attendance', $event->id);
+            });
     }
 }

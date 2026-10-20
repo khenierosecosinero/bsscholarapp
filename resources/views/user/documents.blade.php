@@ -32,13 +32,22 @@
                 'not_submitted' => 'muted',
                 default => 'muted',
             };
+            $statusLabel = match ($doc->status) {
+                'approved' => 'Approved',
+                'submitted' => 'Submitted',
+                'pending' => 'Pending',
+                'rejected' => 'Rejected',
+                'not_submitted' => 'Not Submitted',
+                default => ucfirst(str_replace('_', ' ', $doc->status)),
+            };
         @endphp
         <div class="doc-status-card {{ $doc->status }}">
             @include('partials.document-icon', ['slug' => $doc->documentType->slug, 'size' => 'lg'])
             <div class="doc-status-body">
                 <strong>{{ $doc->documentType->name }}</strong>
-                <span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $doc->status)) }}</span>
+                <span class="badge {{ $badgeClass }}">{{ $statusLabel }}</span>
                 <span class="muted">{{ $doc->uploaded_at ? 'Uploaded on ' . $doc->uploaded_at->format('M d Y') : 'Not yet uploaded' }}</span>
+                <span class="muted">Deadline: {{ $doc->documentType->deadlineLabel() }}</span>
                 @if($doc->status === 'rejected' && $doc->review_notes)
                     <span class="muted">Reason: {{ $doc->review_notes }}</span>
                 @endif
@@ -63,6 +72,17 @@
 
 <section class="documents-page-grid">
     <div class="documents-main">
+        <form
+            method="POST"
+            action="{{ route('user.documents.upload') }}"
+            enctype="multipart/form-data"
+            id="upload-form"
+            class="documents-table-upload"
+        >
+            @csrf
+            <input type="hidden" name="document_type_id" id="doc-type-select" value="">
+            <input type="file" name="file" id="file-input" accept=".pdf,.jpg,.jpeg,.png" tabindex="-1">
+        </form>
         <div class="card">
             <div class="tabs-row">
                 <div class="tabs">
@@ -73,7 +93,7 @@
             </div>
             <div class="table-wrap">
             <table class="table doc-table stack-table">
-                <thead><tr><th>Document Type</th><th>Description</th><th>Status</th><th>Date Uploaded</th><th>Action</th></tr></thead>
+                <thead><tr><th>Document Type</th><th>Description</th><th>Status</th><th>Deadline</th><th>Date Uploaded</th><th>Action</th></tr></thead>
                 <tbody>
                     @php
                         $filtered = match ($activeTab) {
@@ -95,11 +115,20 @@
                                 'not_submitted' => 'muted',
                                 default => 'muted',
                             };
+                            $statusLabel = match ($doc->status) {
+                                'approved' => 'Approved',
+                                'submitted' => 'Submitted',
+                                'pending' => 'Pending',
+                                'rejected' => 'Rejected',
+                                'not_submitted' => 'Not Submitted',
+                                default => ucfirst(str_replace('_', ' ', $doc->status)),
+                            };
                         @endphp
                         <tr>
                             <td data-label="Document Type"><div class="table-event">@include('partials.document-icon', ['slug' => $doc->documentType->slug, 'size' => 'sm'])<span>{{ $doc->documentType->name }}</span></div></td>
                             <td data-label="Description">{{ $doc->documentType->description }}</td>
-                            <td data-label="Status"><span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $doc->status)) }}</span></td>
+                            <td data-label="Status"><span class="badge {{ $badgeClass }}">{{ $statusLabel }}</span></td>
+                            <td data-label="Deadline">{{ $doc->documentType->deadlineLabel() }}</td>
                             <td data-label="Date Uploaded">{{ $doc->uploaded_at?->format('M d Y') ?? '—' }}</td>
                             <td data-label="Action">
                                 <div class="doc-actions">
@@ -107,8 +136,13 @@
                                         <a href="{{ route('user.documents.view', $doc) }}" class="btn small" target="_blank" rel="noopener">View</a>
                                         <a href="{{ route('user.documents.download', $doc) }}" class="btn small">Download</a>
                                     @endif
-                                    @if($doc->status !== 'approved')
-                                        <button type="button" class="btn small" onclick="document.getElementById('doc-type-select').value='{{ $doc->document_type_id }}';document.getElementById('file-input').click()">{{ $doc->hasFile() ? 'Replace' : 'Upload' }}</button>
+                                    @if($doc->documentType->acceptsSubmissions() && $doc->status !== 'approved')
+                                        @php
+                                            $submissionAction = $doc->status === 'rejected' && $doc->hasFile()
+                                                ? 'Resubmit'
+                                                : ($doc->hasFile() ? 'Replace' : 'Upload');
+                                        @endphp
+                                        <button type="button" class="btn small" onclick="document.getElementById('doc-type-select').value='{{ $doc->document_type_id }}';document.getElementById('file-input').click()">{{ $submissionAction }}</button>
                                         @if($doc->hasFile())
                                             <form
                                                 method="POST"
@@ -129,7 +163,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="muted center">{{ $documentTypes->isEmpty() ? 'No required documents have been posted by Scholar Staff yet.' : 'No documents found.' }}</td></tr>
+                        <tr><td colspan="6" class="muted center">{{ $documentTypes->isEmpty() ? 'No required documents have been posted by Scholar Staff yet.' : 'No documents found.' }}</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -143,44 +177,11 @@
             'message' => 'These documents help us verify your identity, enrollment, and eligibility as a Batang Surigaonon Scholar.',
             'dismissible' => false,
             'autoDismiss' => false,
-            'class' => 'bssa-alert--banner',
+            'class' => 'bssa-alert--banner documents-info-card',
         ])
     </div>
 
     <aside class="documents-sidebar">
-        <div class="card documents-sidebar-card upload-card">
-            <div class="card-header">UPLOAD NEW DOCUMENT</div>
-            @if($documentTypes->isEmpty())
-                <p class="muted" style="margin:0">Uploads will be available after Scholar Staff posts a required document.</p>
-            @else
-            <form
-                method="POST"
-                action="{{ route('user.documents.upload') }}"
-                enctype="multipart/form-data"
-                id="upload-form"
-                data-confirm="Submit this file for Scholar Staff review?"
-                data-confirm-title="Upload document?"
-                data-confirm-yes="Upload"
-                data-confirm-no="Cancel"
-            >
-                @csrf
-                <div class="upload-zone" onclick="document.getElementById('file-input').click()">
-                    <div class="upload-icon">&#9729;</div>
-                    <p>Drag and drop your file here<br>or click to browse</p>
-                    <span id="file-name" class="muted small"></span>
-                </div>
-                <input type="file" name="file" id="file-input" accept=".pdf,.jpg,.jpeg,.png" hidden required>
-                <select name="document_type_id" id="doc-type-select" class="form-select" required>
-                    <option value="">Select Document Type</option>
-                    @foreach($documentTypes as $type)
-                        <option value="{{ $type->id }}">{{ $type->name }}</option>
-                    @endforeach
-                </select>
-                <button type="submit" class="btn blue full">Upload Document</button>
-            </form>
-            @endif
-        </div>
-
         <div class="card documents-sidebar-card guidelines-card">
             <div class="card-header">DOCUMENT GUIDELINES</div>
             <ul class="guidelines-list">

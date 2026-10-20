@@ -22,6 +22,12 @@ class DocumentStorageService
     public function store(User $scholar, DocumentType $type, UploadedFile $file): Document
     {
         if (! $this->drive->isConnected()) {
+            app(WorkflowMailService::class)->alertAdministrators(
+                'drive-not-connected',
+                'Google Drive is not connected',
+                'A scholar document could not be stored because Google Drive is not connected. Connect Google Drive from Settings.'
+            );
+
             throw new RuntimeException('Google Drive is not connected. Ask an administrator or Scholar Staff to open Settings and connect Google Drive first.');
         }
 
@@ -48,7 +54,17 @@ class DocumentStorageService
             }
         }
 
-        $uploaded = $this->drive->uploadFile($file, $folderId, $driveName);
+        try {
+            $uploaded = $this->drive->uploadFile($file, $folderId, $driveName);
+        } catch (Throwable $e) {
+            app(WorkflowMailService::class)->alertAdministrators(
+                'drive-upload-failed',
+                'Google Drive document upload failed',
+                'A scholar document could not be stored in Google Drive. Review the Drive connection in Settings.'
+            );
+
+            throw $e;
+        }
         $path = $file->store('documents/'.$scholar->id, 'public');
 
         try {
