@@ -26,6 +26,27 @@ class StaffDashboardService
         return $staff->managedLocationIds();
     }
 
+    /**
+     * Distinct events this staff member can see, grouped by the event's own status.
+     * Ongoing events are shown as Confirmed, matching the scholar calendar.
+     */
+    public function scheduleSummaryStats(User $staff): array
+    {
+        $counts = Event::query()
+            ->whereIn('scholarship_program_id', $this->programIds($staff) ?: [0])
+            ->visibleToStaff($staff)
+            ->get(['id', 'status'])
+            ->unique('id')
+            ->countBy('status');
+
+        return [
+            'confirmed' => (int) ($counts[Event::STATUS_CONFIRMED] ?? 0) + (int) ($counts[Event::STATUS_ONGOING] ?? 0),
+            'pending' => (int) ($counts[Event::STATUS_PENDING] ?? 0),
+            'cancelled' => (int) ($counts[Event::STATUS_CANCELLED] ?? 0),
+            'completed' => (int) ($counts[Event::STATUS_COMPLETED] ?? 0),
+        ];
+    }
+
     public function layoutPayload(User $staff, string $active, string $title, string $subtitle = '', ?string $breadcrumb = null): array
     {
         $staff->loadMissing('scholarshipProgram', 'scholarshipClub');
@@ -227,17 +248,30 @@ class StaffDashboardService
     public function reportContext(Request $request, array $programIds, ?User $staff = null): array
     {
         $selected = $this->academic->selectedPeriod();
-        $filter = $this->academic->resolveReportFilter((int) $selected->year_start, $selected->semester);
+        $options = $this->academic->yearOptions();
+        $requested = $request->query('year');
+        $allYears = $requested === 'all';
+        $year = is_numeric($requested) ? (int) $requested : (int) $selected->year_start;
+        if (! isset($options[$year])) {
+            $year = (int) $selected->year_start;
+        }
+
+        $filter = $this->academic->resolveReportFilter($year, $selected->semester);
+        if ($allYears) {
+            $filter['all_years'] = true;
+            $filter['academic_year'] = 'All Academic Years';
+            $filter['label'] = 'All Academic Years · '.$filter['semester_label'];
+        }
+
         $school = $this->resolveSchoolFilter($request, $programIds, $staff);
         session([
-            'staff_report_year' => $filter['year_start'],
-            'staff_report_semester' => $filter['semester'],
             'staff_report_school' => $school['key'],
         ]);
 
         return [
             'reportFilter' => $filter,
-            'reportYearOptions' => $this->academic->reportYearOptions($programIds),
+            'reportYearOptions' => $options,
+            'selectedReportYear' => $allYears ? 'all' : (string) $filter['year_start'],
             'reportSemesterOptions' => $this->academic->reportSemesterOptions(),
             'schoolFilter' => $school,
             'reportSchoolOptions' => $school['options'],
@@ -293,7 +327,7 @@ class StaffDashboardService
             $approved = (float) $stats['approved'];
             $pending = (float) $stats['pending'];
             $remaining = (float) $stats['remaining'];
-            $status = $approved >= $required
+            $status = $approved >= (float) $stats['required']
                 ? 'Completed'
                 : ($approved > 0 || $pending > 0 ? 'In Progress' : 'Not Started');
 
@@ -339,6 +373,10 @@ class StaffDashboardService
             'recent' => $recent,
             'schools' => $schools,
             'show_school_breakdown' => $this->isAllSchools($schoolFilter),
+            'empty' => $overview['approved_hours'] <= 0
+                && $overview['pending_hours'] <= 0
+                && $overview['rejected_count'] === 0
+                && $overview['failed_count'] === 0,
         ];
     }
 
@@ -369,6 +407,7 @@ class StaffDashboardService
             'records' => $records,
             'schools' => $this->schoolGroupsFromAttendance($allScholars, $allRecords, $staff, $schoolFilter),
             'show_school_breakdown' => $this->isAllSchools($schoolFilter),
+            'empty' => ($breakdown['approved'] + $breakdown['pending'] + $breakdown['rejected'] + $breakdown['failedCheckIn']) === 0,
         ];
     }
 
@@ -380,10 +419,9 @@ class StaffDashboardService
             });
 
         if ($filter) {
-            [$start, $end] = $this->academic->eventBoundsForReport($filter);
-            $registrations->whereHas('event', fn ($event) => $event
-                ->whereIn('scholarship_program_id', $programIds ?: [0])
-                ->whereBetween('starts_at', [$start, $end]));
+            $registrations->whereHas('event', function ($event) use ($programIds, $filter) {
+                $this->applyReportEventWindow($event, $programIds, $filter);
+            });
         }
 
         return [
@@ -410,7 +448,6 @@ class StaffDashboardService
             ->get();
         $scholars = $this->scholarsForSchool($allScholars, $schoolFilter);
         $counts = $this->participationCounts($programIds, $filter, $staff, $schoolFilter);
-        [$start, $end] = $this->academic->eventBoundsForReport($filter);
 
         $events = Event::query()
             ->with([
@@ -419,9 +456,10 @@ class StaffDashboardService
                 'attendances:id,event_id,user_id,status,check_in',
             ])
             ->whereIn('scholarship_program_id', $programIds ?: [0])
-            ->where(function ($query) use ($start, $end, $filter) {
-                $query->whereBetween('starts_at', [$start, $end])
-                    ->orWhereHas('attendances', fn ($attendance) => $this->academic->scopeAttendancesForReport($attendance, $filter));
+            ->where(function ($query) use ($filter) {
+                $query->where(function ($dated) use ($filter) {
+                    $this->applyReportEventWindow($dated, null, $filter);
+                })->orWhereHas('attendances', fn ($attendance) => $this->academic->scopeAttendancesForReport($attendance, $filter));
             })
             ->orderByDesc('starts_at')
             ->limit(20)
@@ -435,6 +473,7 @@ class StaffDashboardService
             'period' => $filter,
             'schools' => $this->schoolGroupsFromParticipation($allScholars, $events, $filter, $programIds, $staff, $schoolFilter),
             'show_school_breakdown' => $this->isAllSchools($schoolFilter),
+            'empty' => ($counts['registered'] + $counts['participated'] + $counts['pending'] + $counts['failed'] + $counts['confirmed']) === 0,
         ]);
     }
 
@@ -464,7 +503,7 @@ class StaffDashboardService
             $pending = (float) $stats['pending'];
             $approvedHours += $approved;
 
-            if ($approved >= $required) {
+            if ($approved >= (float) $stats['required']) {
                 $completed++;
             } elseif ($approved > 0 || $pending > 0) {
                 $inProgress++;
@@ -499,6 +538,7 @@ class StaffDashboardService
             'rows' => $report['rows'],
             'schools' => $report['schools'],
             'show_school_breakdown' => $report['show_school_breakdown'],
+            'empty' => $report['empty'] ?? false,
         ];
     }
 
@@ -529,6 +569,22 @@ class StaffDashboardService
         sort($programIds);
 
         return md5(implode(',', $programIds).'|club:'.($staff?->scholarship_club_id ?? '0'));
+    }
+
+    private function applyReportEventWindow($event, ?array $programIds, array $filter): void
+    {
+        if ($programIds !== null) {
+            $event->whereIn('scholarship_program_id', $programIds ?: [0]);
+        }
+
+        if (! empty($filter['all_years'])) {
+            $this->academic->scopeEventsForReport($event, $filter);
+
+            return;
+        }
+
+        [$start, $end] = $this->academic->eventBoundsForReport($filter);
+        $event->whereBetween('starts_at', [$start, $end]);
     }
 
     private function defaultReportFilter(): array
@@ -794,7 +850,7 @@ class StaffDashboardService
                 'approved' => $approved,
                 'pending' => $pending,
                 'remaining' => $remaining,
-                'status' => $approved >= $required
+                'status' => $approved >= (float) $stats['required']
                     ? 'Completed'
                     : ($approved > 0 || $pending > 0 ? 'In Progress' : 'Not Started'),
             ];
@@ -942,9 +998,7 @@ class StaffDashboardService
             $registeredIds = EventRegistration::query()
                 ->whereIn('user_id', $ids ?: [0])
                 ->whereHas('event', function ($event) use ($programIds, $filter) {
-                    [$start, $end] = $this->academic->eventBoundsForReport($filter);
-                    $event->whereIn('scholarship_program_id', $programIds ?: [0])
-                        ->whereBetween('starts_at', [$start, $end]);
+                    $this->applyReportEventWindow($event, $programIds, $filter);
                 })
                 ->pluck('user_id')
                 ->map(fn ($id) => (int) $id)

@@ -12,12 +12,13 @@ class AttendanceSessionLog extends Model
     public const ACTION_CLOSED = 'closed';
 
     protected $fillable = [
-        'event_id', 'staff_id', 'action', 'acted_at',
+        'event_id', 'session_date', 'staff_id', 'action', 'acted_at',
     ];
 
     protected function casts(): array
     {
         return [
+            'session_date' => 'date',
             'acted_at' => 'datetime',
         ];
     }

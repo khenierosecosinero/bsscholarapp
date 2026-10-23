@@ -31,7 +31,7 @@
                         <td data-label="Event"><a href="{{ route('admin.events.show', array_merge(['event' => $event], $eventsListQuery)) }}" class="admin-event-name-link" aria-label="View scholars who attended {{ $event->title }}">{{ $event->title }}</a></td>
                         <td data-label="Scholarship Club">{{ $event->directoryClubLabel($selectedClubId ?? null) }}</td>
                         <td data-label="Participants">{{ $event->verifiedParticipantCount() }}</td>
-                        <td data-label="Schedule">{{ $event->starts_at?->format('M j, Y g:i A') ?? '—' }}</td>
+                        <td data-label="Schedule">{{ $event->scheduleWhenLabel() }}</td>
                         <td data-label="Status" class="staff-col-status"><span class="staff-badge {{ $event->scheduleBadgeClass() }}">{{ $event->scheduleLabel() }}</span></td>
                         <td data-label="Service Hours">{{ $event->service_hours ?? 0 }}</td>
                     </tr>

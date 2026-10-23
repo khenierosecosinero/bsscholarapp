@@ -335,6 +335,12 @@ class StaffDocumentController extends Controller
 
         $status = $data['status'];
         $notes = filled($data['review_notes'] ?? null) ? trim($data['review_notes']) : null;
+        $label = ucfirst($status);
+        $document->refresh();
+
+        if ($document->status === $status) {
+            return back()->with('success', "{$document->documentType?->name} for {$document->user?->full_name} is already {$label}.");
+        }
 
         $document->update([
             'status' => $status,
@@ -344,8 +350,6 @@ class StaffDocumentController extends Controller
         ]);
 
         $this->scholar->notifyDocumentReview($document, $status, $notes);
-
-        $label = ucfirst($status);
 
         return back()->with('success', "{$document->documentType?->name} for {$document->user?->full_name} marked as {$label}.");
     }

@@ -14,6 +14,10 @@
     $gridEnd = $monthDate->copy()->endOfMonth()->endOfWeek(\Carbon\Carbon::SATURDAY);
 @endphp
 
+<div class="staff-calendar-summary">
+    @include('partials.schedule-summary', $scheduleStats ?? [])
+</div>
+
 <div class="staff-cal-toolbar">
     <a href="{{ route('staff.calendar', ['year' => now()->year, 'month' => now()->month]) }}" class="staff-btn">Today</a>
     <div class="staff-cal-month-nav">
@@ -40,9 +44,9 @@
                         <div class="staff-cal-cell {{ !$inMonth ? 'other-month' : '' }} {{ $gridStart->isToday() ? 'today' : '' }}">
                             <span class="staff-cal-day-num">{{ $gridStart->day }}</span>
                             @foreach($dayEvents as $event)
-                                <a href="{{ route('staff.events.show', $event) }}" class="staff-cal-event" title="{{ $event->title }} — {{ $event->starts_at->format('g:i A') }}">
+                                <a href="{{ route('staff.events.show', $event) }}" class="staff-cal-event {{ $event->statusBadgeClass() }}" title="{{ $event->title }} — {{ $event->statusLabel() }}">
                                     <span class="staff-cal-event-title">{{ $event->title }}</span>
-                                    <span class="staff-cal-event-time">{{ $event->starts_at->format('g:i A') }}</span>
+                                    <span class="staff-cal-event-time">{{ $event->calendarDayTimeLabel($gridStart->toDateString()) }}</span>
                                 </a>
                             @endforeach
                         </div>
@@ -50,6 +54,12 @@
                     @endfor
                 </div>
             @endwhile
+        </div>
+        <div class="staff-cal-legend">
+            <span><span class="staff-cal-legend-dot orange"></span> Pending</span>
+            <span><span class="staff-cal-legend-dot green"></span> Confirmed</span>
+            <span><span class="staff-cal-legend-dot red"></span> Cancelled</span>
+            <span><span class="staff-cal-legend-dot gray"></span> Completed</span>
         </div>
         <p class="staff-muted" style="margin:12px 0 0">Dates you set when creating an event appear on this calendar and on every matching scholar calendar the same day.</p>
     </div>
@@ -68,7 +78,7 @@
                     </div>
                     <div class="staff-list-item-body">
                         <strong>{{ $event->title }}</strong>
-                        <div class="staff-muted">{{ $event->starts_at->format('M j, Y · g:i A') }} · {{ $event->location ?? 'TBA' }}</div>
+                        <div class="staff-muted">{{ $event->scheduleWhenLabel() }} · {{ $event->location ?? 'TBA' }}</div>
                     </div>
                 </div>
             @empty

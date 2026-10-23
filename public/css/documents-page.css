@@ -202,6 +202,25 @@
     text-align: left;
 }
 
+.page-documents .doc-name,
+.page-documents .doc-date {
+    color: #000000;
+}
+
+.page-documents .doc-status-grid {
+    grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+}
+
+.page-documents .doc-uploaded {
+    white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+    .page-documents .doc-status-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .page-documents .doc-table td .badge {
     display: inline-flex;
     align-items: center;
@@ -209,15 +228,174 @@
 }
 
 .page-documents .doc-actions {
-    display: inline-flex;
-    flex-wrap: wrap;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    flex-wrap: nowrap;
     gap: 8px;
-    align-items: center;
-    justify-content: center;
     width: 100%;
 }
 
-.page-documents .doc-actions form {
+.page-documents .doc-action-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.page-documents .doc-table td[data-label="Action"] {
+    min-width: 240px;
+    text-align: left;
+}
+
+.page-documents .doc-replace-form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: min(100%, 480px);
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+}
+
+.page-documents .doc-actions .doc-replace-form {
+    flex: 0 0 auto;
+    width: 100%;
+}
+
+.page-documents .doc-replace-picker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    padding: 6px;
+    border: 1px solid #d7e3ea;
+    border-radius: 10px;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.page-documents .doc-replace-form.has-file .doc-replace-picker {
+    border-color: #86efac;
+    background: #f0fdf4;
+}
+
+.page-documents .doc-replace-form.has-error .doc-replace-picker {
+    border-color: #fca5a5;
+    background: #fff7f7;
+}
+
+.page-documents .doc-replace-browse {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    height: 32px;
+    margin: 0;
+    padding: 0 12px;
+    border-radius: 8px;
+    background: var(--green, #16803c);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.page-documents .doc-replace-browse:focus-within {
+    outline: 2px solid #14532d;
+    outline-offset: 2px;
+}
+
+.page-documents .doc-replace-icon {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+}
+
+.page-documents .doc-replace-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.page-documents .doc-replace-filename {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.page-documents .doc-replace-form.has-file .doc-replace-filename {
+    color: #000000;
+    font-weight: 600;
+}
+
+.page-documents .doc-review-note {
+    color: #000000;
+    font-size: 12px;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.page-documents .doc-replace-error {
+    margin: 0;
+    color: #b91c1c;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.page-documents .doc-replace-submit {
+    align-self: flex-start;
+    height: 32px;
+    padding: 0 12px;
+    border: none;
+    border-radius: 8px;
+    background: #2DA66A;
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.page-documents .doc-replace-submit:hover:not(:disabled),
+.page-documents .doc-replace-submit:focus-visible:not(:disabled) {
+    background: #248a58;
+    color: #FFFFFF;
+}
+
+.page-documents .doc-replace-submit:focus-visible {
+    outline: 2px solid #14532d;
+    outline-offset: 2px;
+    color: #FFFFFF;
+}
+
+.page-documents .doc-replace-submit:disabled {
+    background: #2DA66A;
+    color: #FFFFFF;
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.page-documents .doc-actions form:not(.doc-replace-form) {
     margin: 0;
     display: inline-flex;
 }
@@ -244,6 +422,14 @@
     .page-documents .doc-actions {
         justify-content: flex-start;
         width: auto;
+    }
+
+    .page-documents .doc-replace-picker {
+        flex-wrap: wrap;
+    }
+
+    .page-documents .doc-replace-filename {
+        flex: 1 1 140px;
     }
 }
 

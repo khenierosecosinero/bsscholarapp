@@ -61,10 +61,10 @@
                         @endif
                         <div class="event-details">
                             <div class="event-title">{{ $ev['title'] }}</div>
-                            <div class="event-meta">{{ $ev['time'] }} · {{ $ev['location'] }}</div>
+                            <div class="event-meta">{{ $ev['full_date'] }} · {{ $ev['time'] }} · {{ $ev['location'] }}</div>
                             <div class="event-footer">
                                 <span class="badge {{ $ev['status_class'] }}">{{ $ev['status_label'] }}</span>
-                                <span class="badge {{ !empty($ev['attendance_open']) ? 'attendance-open' : 'attendance-closed' }}">{{ $ev['attendance_status'] ?? 'CLOSED' }}</span>
+                                <span class="badge {{ ($ev['attendance_status'] ?? 'CLOSED') === 'OPEN' ? 'attendance-open' : 'attendance-closed' }}" data-attendance-event-id="{{ $ev['id'] }}">{{ $ev['attendance_status'] ?? 'CLOSED' }}</span>
                                 <span class="hours">Service Hours: {{ $ev['hours'] }}</span>
                             </div>
                         </div>
@@ -85,23 +85,53 @@
             @if($pendingAttendances->isEmpty())
                 <p class="muted">No pending attendances.</p>
             @else
-                <div class="table-wrap">
-                <table class="table stack-table">
-                    <thead><tr><th>Event</th><th>Date</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th><th>Action</th></tr></thead>
-                    <tbody>
-                        @foreach($pendingAttendances as $att)
+                <div class="table-wrap pending-attendance-wrap">
+                    <table class="table pending-attendance-table stack-table">
+                        <colgroup>
+                            <col class="pending-col-event">
+                            <col class="pending-col-date">
+                            <col class="pending-col-checkin">
+                            <col class="pending-col-checkout">
+                            <col class="pending-col-hours">
+                            <col class="pending-col-status">
+                            <col class="pending-col-action">
+                        </colgroup>
+                        <thead>
                             <tr>
-                                <td data-label="Event"><div class="table-event">@if($att->event?->image_url)<img src="{{ $att->event->image_url }}" alt="">@endif {{ $att->event?->title }}</div></td>
-                                <td data-label="Date">{{ $att->event?->starts_at?->format('M d Y') }}</td>
-                                <td data-label="Check In">{{ $att->check_in?->format('g:i A') ?? '—' }}</td>
-                                <td data-label="Check Out">{{ $att->check_out?->format('g:i A') ?? '—' }}</td>
-                                <td data-label="Hours">{{ $att->hoursLabel() }}</td>
-                                <td data-label="Status"><span class="badge pending">Pending</span></td>
-                                <td data-label="Action">@if(!$accountPending)<a href="{{ route('user.events', ['event' => $att->event_id]) }}" class="btn outline small">View Details</a>@endif</td>
+                                <th scope="col">Event</th>
+                                <th scope="col">Date</th>
+                                <th scope="col">Check In</th>
+                                <th scope="col">Check Out</th>
+                                <th scope="col">Hours</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Action</th>
                             </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @foreach($pendingAttendances as $att)
+                                <tr>
+                                    <td data-label="Event">
+                                        <div class="table-event">
+                                            @if($att->event?->image_url)
+                                                <img src="{{ $att->event->image_url }}" alt="">
+                                            @endif
+                                            <span class="table-event-title">{{ $att->event?->title }}</span>
+                                        </div>
+                                    </td>
+                                    <td data-label="Date">{{ $att->event?->starts_at?->timezone(config('app.timezone'))->format('M j, Y') }}</td>
+                                    <td data-label="Check In">{{ $att->check_in?->timezone(config('app.timezone'))->format('g:i A') ?? '—' }}</td>
+                                    <td data-label="Check Out">{{ $att->check_out?->timezone(config('app.timezone'))->format('g:i A') ?? '—' }}</td>
+                                    <td data-label="Hours">{{ $att->hoursLabel() }}</td>
+                                    <td data-label="Status"><span class="badge pending">Pending</span></td>
+                                    <td data-label="Action">
+                                        @if(!$accountPending)
+                                            <a href="{{ route('user.events', ['event' => $att->event_id]) }}" class="btn outline small pending-attendance-link">View Details</a>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
             @endif
         </div>

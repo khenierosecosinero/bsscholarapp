@@ -14,20 +14,6 @@
             </div>
         </div>
 
-        <div class="summary-card blue">
-            <span class="summary-icon-wrap" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                    <circle cx="12" cy="7" r="4"/>
-                    <polyline points="16 11 18 13 22 9"/>
-                </svg>
-            </span>
-            <div class="summary-card-body">
-                <strong>{{ $participated ?? 0 }}</strong>
-                <span>Participated</span>
-            </div>
-        </div>
-
         <div class="summary-card orange">
             <span class="summary-icon-wrap" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -37,11 +23,11 @@
             </span>
             <div class="summary-card-body">
                 <strong>{{ $pending ?? 0 }}</strong>
-                <span>Pending</span>
+                <span>Pending Events</span>
             </div>
         </div>
 
-        <div class="summary-card purple">
+        <div class="summary-card red">
             <span class="summary-icon-wrap" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"/>
@@ -49,8 +35,21 @@
                 </svg>
             </span>
             <div class="summary-card-body">
-                <strong>{{ $notJoined ?? 0 }}</strong>
-                <span>Not Joined</span>
+                <strong>{{ $cancelled ?? 0 }}</strong>
+                <span>Cancelled Events</span>
+            </div>
+        </div>
+
+        <div class="summary-card gray">
+            <span class="summary-icon-wrap" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+            </span>
+            <div class="summary-card-body">
+                <strong>{{ $completed ?? 0 }}</strong>
+                <span>Completed Events</span>
             </div>
         </div>
     </div>

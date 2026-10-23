@@ -22,7 +22,26 @@
         @endif
 
         <div class="staff-list-item"><div><strong>Location</strong><div class="staff-muted">{{ $event->location }}</div></div></div>
-        <div class="staff-list-item"><div><strong>Date &amp; Time</strong><div class="staff-muted">{{ $event->starts_at->format('M j, Y g:i A') }} – {{ $event->ends_at->format('g:i A') }}</div></div></div>
+        <div class="staff-list-item"><div><strong>Event Date</strong><div class="staff-muted">{{ $event->scheduleWhenLabel() }}</div></div></div>
+        <div class="staff-list-item"><div><strong>Attendance</strong><div class="staff-muted">{{ $event->attendanceStatusLabel() }} · Opened at {{ $event->attendanceOpenedAtLabel() ?? 'Not yet opened' }} · Closed at {{ $event->attendanceSessionClosed() ? ($event->attendanceClosedAtLabel() ?? 'Not yet closed') : 'Not yet closed' }}</div></div></div>
+
+        <form method="POST" action="{{ route('staff.events.schedule', $event) }}" class="staff-event-date-form">
+            @csrf
+            @method('PATCH')
+            <div class="staff-form-grid staff-datetime-grid">
+                <div class="staff-form-group">
+                    <label for="starts_at">Event Start Date</label>
+                    <input type="datetime-local" id="starts_at" name="starts_at" value="{{ old('starts_at', $event->starts_at?->timezone(config('app.timezone'))->format('Y-m-d\TH:i')) }}" required>
+                    @error('starts_at')<div class="staff-field-error">{{ $message }}</div>@enderror
+                </div>
+                <div class="staff-form-group">
+                    <label for="ends_at">Event End Date</label>
+                    <input type="datetime-local" id="ends_at" name="ends_at" value="{{ old('ends_at', $event->ends_at?->timezone(config('app.timezone'))->format('Y-m-d\TH:i')) }}" required>
+                    @error('ends_at')<div class="staff-field-error">{{ $message }}</div>@enderror
+                </div>
+            </div>
+            <button type="submit" class="staff-btn staff-btn-primary">Save Event Dates</button>
+        </form>
         <div class="staff-list-item"><div><strong>Service Hours</strong><div class="staff-muted">{{ number_format((float) $event->service_hours, 1) }} hrs</div></div></div>
         <div class="staff-list-item"><div><strong>Organizer</strong><div class="staff-muted">{{ $event->organizer ?? '—' }}</div></div></div>
         <div class="staff-list-item"><div><strong>Visibility</strong><div class="staff-muted">Published to all scholars in User / Events</div></div></div>

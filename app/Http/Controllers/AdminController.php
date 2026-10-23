@@ -7,6 +7,7 @@ use App\Models\AdminBackupEmail;
 use App\Models\Attendance;
 use App\Models\Document;
 use App\Models\Event;
+use App\Models\EventRegistration;
 use App\Models\ScholarshipClub;
 use App\Models\ScholarshipProgram;
 use App\Models\User;
@@ -656,8 +657,9 @@ class AdminController extends Controller
 
         $attendances = $event->attendances()->with('user')->get()->keyBy('user_id');
         $seen = [];
+        $attendanceFinalized = $event->attendanceMayBeFinalized();
 
-        $participants = $event->registrations()->with('user')->get()->map(function ($registration) use ($event, $attendances, &$seen) {
+        $participants = $event->registrations()->with('user')->get()->map(function ($registration) use ($attendances, $attendanceFinalized, &$seen) {
             $user = $registration->user;
 
             if (! $user?->isScholar()) {
@@ -666,7 +668,11 @@ class AdminController extends Controller
 
             $seen[(int) $user->id] = true;
             $attendance = $attendances->get($registration->user_id);
-            $missed = ($event->hasEnded() || $event->attendanceSessionClosed()) && ! $attendance?->check_in;
+            $missed = (
+                ($attendanceFinalized && ! $attendance?->check_in)
+                || $attendance?->status === Attendance::STATUS_FAILED_CHECK_IN
+                || $registration->status === EventRegistration::STATUS_FAILED_CHECK_IN
+            );
             $status = $missed
                 ? Attendance::STATUS_FAILED_CHECK_IN
                 : ($attendance?->status ?? $registration->status);

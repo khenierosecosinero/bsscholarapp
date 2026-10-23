@@ -146,6 +146,7 @@ Route::middleware(['auth', 'scholar.staff'])->prefix('staff')->name('staff.')->g
         Route::get('/events/create', [StaffController::class, 'createEvent'])->name('events.create');
         Route::post('/events', [StaffController::class, 'storeEvent'])->name('events.store');
         Route::get('/events/{event}', [StaffController::class, 'showEvent'])->name('events.show');
+        Route::patch('/events/{event}/schedule', [StaffController::class, 'updateEventSchedule'])->name('events.schedule');
         Route::patch('/events/{event}/status', [StaffController::class, 'updateEventStatus'])->name('events.status');
         Route::post('/events/{event}/pending', [StaffController::class, 'markEventPending'])->name('events.pending');
         Route::post('/events/{event}/confirm', [StaffController::class, 'markEventConfirmed'])->name('events.confirm');

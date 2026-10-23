@@ -66,7 +66,11 @@ class EventActionController extends Controller
         }
 
         if (! $event->isAttendanceOpen()) {
-            return back()->with('error', 'Attendance is currently CLOSED. You can no longer submit or modify your attendance until Scholar Staff opens it.');
+            return back()->with('error', 'Attendance is currently CLOSED until Scholar Staff opens it.');
+        }
+
+        if (! $event->isWithinAttendancePeriod()) {
+            return back()->with('error', 'You can submit attendance only during '.$event->scheduleWhenLabel().'.');
         }
 
         $registration = EventRegistration::where('user_id', $user->id)
@@ -121,7 +125,11 @@ class EventActionController extends Controller
         }
 
         if (! $event->isAttendanceOpen()) {
-            return back()->with('error', 'Attendance is currently CLOSED. You can no longer submit or modify your attendance.');
+            return back()->with('error', 'Attendance is currently CLOSED.');
+        }
+
+        if (! $event->isWithinAttendancePeriod()) {
+            return back()->with('error', 'You can submit attendance only during '.$event->scheduleWhenLabel().'.');
         }
 
         $attendance = Attendance::where('user_id', $user->id)
@@ -179,7 +187,11 @@ class EventActionController extends Controller
         }
 
         if (! $event->isAttendanceOpen()) {
-            return back()->with('error', 'Attendance is currently CLOSED. You can no longer submit or modify your attendance.');
+            return back()->with('error', 'Attendance is currently CLOSED.');
+        }
+
+        if (! $event->isWithinAttendancePeriod()) {
+            return back()->with('error', 'You can submit attendance only during '.$event->scheduleWhenLabel().'.');
         }
 
         $attendance = Attendance::where('user_id', $user->id)

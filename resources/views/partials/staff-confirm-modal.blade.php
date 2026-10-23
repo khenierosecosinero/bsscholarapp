@@ -233,9 +233,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }).then(function (result) {
             if (result.ok && result.data.ok !== false) {
                 applyClosedSession(result.data.session || { is_open: false, status_label: 'CLOSED', status_badge_class: 'gray' });
-                busy = false;
-                closeModal();
-                showFlash('success', result.data.message || 'Attendance is now CLOSED.');
+                window.location.reload();
                 return;
             }
 

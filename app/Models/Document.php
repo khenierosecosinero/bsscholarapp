@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Document extends Model
 {
@@ -47,6 +48,20 @@ class Document extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(DocumentRevision::class)->latest('id');
+    }
+
+    public function latestRejectionNote(): ?string
+    {
+        $note = $this->revisions
+            ->first(fn (DocumentRevision $revision) => $revision->status === 'rejected' && filled($revision->review_notes))
+            ?->review_notes;
+
+        return filled($note) ? $note : null;
     }
 
     public function reviewStatus(): string

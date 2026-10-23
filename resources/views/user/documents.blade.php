@@ -44,12 +44,14 @@
         <div class="doc-status-card {{ $doc->status }}">
             @include('partials.document-icon', ['slug' => $doc->documentType->slug, 'size' => 'lg'])
             <div class="doc-status-body">
-                <strong>{{ $doc->documentType->name }}</strong>
+                <strong class="doc-name">{{ $doc->documentType->name }}</strong>
                 <span class="badge {{ $badgeClass }}">{{ $statusLabel }}</span>
-                <span class="muted">{{ $doc->uploaded_at ? 'Uploaded on ' . $doc->uploaded_at->format('M d Y') : 'Not yet uploaded' }}</span>
-                <span class="muted">Deadline: {{ $doc->documentType->deadlineLabel() }}</span>
+                <span class="doc-date doc-uploaded">{{ $doc->uploaded_at ? 'Uploaded on ' . $doc->uploaded_at->format('M d Y') : 'Not yet uploaded' }}</span>
+                <span class="doc-date">Deadline: {{ $doc->documentType->deadlineLabel() }}</span>
                 @if($doc->status === 'rejected' && $doc->review_notes)
                     <span class="muted">Reason: {{ $doc->review_notes }}</span>
+                @elseif($doc->status === 'pending' && $doc->latestRejectionNote())
+                    <span class="muted">Previous rejection: {{ $doc->latestRejectionNote() }}</span>
                 @endif
             </div>
             @if($doc->status === 'approved' || $doc->status === 'submitted')
@@ -125,22 +127,46 @@
                             };
                         @endphp
                         <tr>
-                            <td data-label="Document Type"><div class="table-event">@include('partials.document-icon', ['slug' => $doc->documentType->slug, 'size' => 'sm'])<span>{{ $doc->documentType->name }}</span></div></td>
+                            <td data-label="Document Type"><div class="table-event">@include('partials.document-icon', ['slug' => $doc->documentType->slug, 'size' => 'sm'])<span class="doc-name">{{ $doc->documentType->name }}</span></div></td>
                             <td data-label="Description">{{ $doc->documentType->description }}</td>
-                            <td data-label="Status"><span class="badge {{ $badgeClass }}">{{ $statusLabel }}</span></td>
-                            <td data-label="Deadline">{{ $doc->documentType->deadlineLabel() }}</td>
-                            <td data-label="Date Uploaded">{{ $doc->uploaded_at?->format('M d Y') ?? '—' }}</td>
+                            <td data-label="Status">
+                                <span class="badge {{ $badgeClass }}">{{ $statusLabel }}</span>
+                                @if($doc->status === 'rejected' && $doc->review_notes)
+                                    <div class="doc-review-note">Reason: {{ $doc->review_notes }}</div>
+                                @elseif($doc->status === 'pending' && $doc->latestRejectionNote())
+                                    <div class="doc-review-note">Previous rejection: {{ $doc->latestRejectionNote() }}</div>
+                                @endif
+                            </td>
+                            <td class="doc-date" data-label="Deadline">{{ $doc->documentType->deadlineLabel() }}</td>
+                            <td class="doc-date" data-label="Date Uploaded">{{ $doc->uploaded_at?->format('M d Y') ?? '—' }}</td>
                             <td data-label="Action">
                                 <div class="doc-actions">
                                     @if($doc->hasFile())
-                                        <a href="{{ route('user.documents.view', $doc) }}" class="btn small" target="_blank" rel="noopener">View</a>
-                                        <a href="{{ route('user.documents.download', $doc) }}" class="btn small">Download</a>
+                                        <div class="doc-action-links">
+                                            <a href="{{ route('user.documents.view', $doc) }}" class="btn small" target="_blank" rel="noopener">View</a>
+                                            <a href="{{ route('user.documents.download', $doc) }}" class="btn small">Download</a>
+                                        </div>
                                     @endif
-                                    @if($doc->documentType->acceptsSubmissions() && $doc->status !== 'approved')
+                                    @if($doc->status === 'rejected')
+                                        @include('partials.document-replacement-form', ['doc' => $doc])
+                                        @if($doc->hasFile() && $doc->documentType->acceptsSubmissions())
+                                            <form
+                                                method="POST"
+                                                action="{{ route('user.documents.destroy', $doc) }}"
+                                                data-confirm="This file will be removed. You can upload a new one afterward."
+                                                data-confirm-title="Delete this {{ $doc->documentType->name }}?"
+                                                data-confirm-yes="Delete"
+                                                data-confirm-no="Cancel"
+                                                data-confirm-variant="danger"
+                                            >
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn small danger">Delete</button>
+                                            </form>
+                                        @endif
+                                    @elseif($doc->documentType->acceptsSubmissions() && $doc->status !== 'approved')
                                         @php
-                                            $submissionAction = $doc->status === 'rejected' && $doc->hasFile()
-                                                ? 'Resubmit'
-                                                : ($doc->hasFile() ? 'Replace' : 'Upload');
+                                            $submissionAction = $doc->hasFile() ? 'Replace' : 'Upload';
                                         @endphp
                                         <button type="button" class="btn small" onclick="document.getElementById('doc-type-select').value='{{ $doc->document_type_id }}';document.getElementById('file-input').click()">{{ $submissionAction }}</button>
                                         @if($doc->hasFile())
@@ -200,3 +226,52 @@
 </div>
 
 @endsection
+
+@push('scripts')
+<script>
+document.querySelectorAll('.doc-replace-form').forEach(function (form) {
+    var input = form.querySelector('input[type="file"]');
+    var filename = form.querySelector('.doc-replace-filename');
+    var error = form.querySelector('.doc-replace-error');
+    var button = form.querySelector('button[type="submit"]');
+    var allowed = ['pdf', 'jpg', 'jpeg', 'png'];
+    var maxBytes = 5 * 1024 * 1024;
+
+    function showError(message) {
+        error.hidden = !message;
+        error.textContent = message || '';
+    }
+
+    input.addEventListener('change', function () {
+        var file = input.files[0];
+        var message = '';
+        filename.textContent = file ? file.name : 'No file selected';
+        filename.title = file ? file.name : 'No file selected';
+        button.disabled = true;
+        if (file) {
+            var extension = file.name.split('.').pop().toLowerCase();
+            if (!allowed.includes(extension)) {
+                message = 'Use a PDF, JPG, or PNG file.';
+            } else if (file.size > maxBytes) {
+                message = 'File size must not exceed 5MB.';
+            }
+        }
+        showError(message);
+        form.classList.toggle('has-file', Boolean(file) && !message);
+        form.classList.toggle('has-error', Boolean(message));
+        if (file && !message) {
+            button.disabled = false;
+        }
+    });
+
+    form.addEventListener('submit', function (event) {
+        if (form.dataset.submitting === '1' || button.disabled) {
+            event.preventDefault();
+            return;
+        }
+        form.dataset.submitting = '1';
+        button.disabled = true;
+    });
+});
+</script>
+@endpush

@@ -479,6 +479,10 @@ class ScholarService
     public function periodHourStatsFromRecords(iterable $records, array $filter): array
     {
         $requiredEach = (float) self::REQUIRED_HOURS;
+        if (! empty($filter['all_years'])) {
+            return $this->hourStatsAcrossYears($records, $filter, $requiredEach);
+        }
+
         $year = (int) $filter['year_start'];
         $semesters = (($filter['semester'] ?? AcademicSettingsService::SEMESTER_ALL) === AcademicSettingsService::SEMESTER_ALL)
             ? AcademicSettingsService::SEMESTERS
@@ -512,6 +516,55 @@ class ScholarService
         }
 
         $required = $requiredEach * count($semesters);
+        $approved = round($approved, 2);
+        $pending = round($pending, 2);
+
+        return [
+            'approved' => $approved,
+            'pending' => $pending,
+            'required' => $required,
+            'remaining' => (float) max(0, round($required - $approved, 2)),
+        ];
+    }
+
+    /**
+     * @param  iterable<int, object>  $records
+     * @param  array{semester?: string}  $filter
+     * @return array<string, float>
+     */
+    private function hourStatsAcrossYears(iterable $records, array $filter, float $requiredEach): array
+    {
+        $semesterFilter = (string) ($filter['semester'] ?? AcademicSettingsService::SEMESTER_ALL);
+        $buckets = [];
+
+        foreach ($records as $row) {
+            $rowYear = (int) ($row->academic_year_start ?? 0);
+            $rowSemester = (string) ($row->semester ?? '');
+            if ($rowYear < 2000 || $rowSemester === '') {
+                continue;
+            }
+            if ($semesterFilter !== AcademicSettingsService::SEMESTER_ALL && $rowSemester !== $semesterFilter) {
+                continue;
+            }
+
+            $key = $rowYear.'|'.$rowSemester;
+            $buckets[$key] ??= ['approved' => 0.0, 'pending' => 0.0];
+            $hours = (float) ($row->hours_earned ?? 0);
+            if ($row->status === Attendance::STATUS_APPROVED) {
+                $buckets[$key]['approved'] += $hours;
+            } elseif ($row->status === Attendance::STATUS_PENDING) {
+                $buckets[$key]['pending'] += $hours;
+            }
+        }
+
+        $approved = 0.0;
+        $pending = 0.0;
+        foreach ($buckets as $bucket) {
+            $approved += min($requiredEach, $bucket['approved']);
+            $pending += $bucket['pending'];
+        }
+
+        $required = $requiredEach * max(1, count($buckets));
         $approved = round($approved, 2);
         $pending = round($pending, 2);
 
@@ -709,7 +762,7 @@ class ScholarService
             'day' => $event->starts_at->copy()->timezone(config('app.timezone'))->format('d'),
             'dow' => strtoupper($event->starts_at->copy()->timezone(config('app.timezone'))->format('D')),
             'time' => $event->scheduleTimeLabel(),
-            'full_date' => $event->scheduleDateLabel(),
+            'full_date' => $event->dateRangeLabel(),
             'hours' => $event->service_hours,
             'organizer' => $event->organizer,
             'image_url' => $event->image_url,
@@ -790,26 +843,21 @@ class ScholarService
             return 'This event is completed and is no longer open for registration or attendance.';
         }
 
-        $eventStamp = sprintf(
-            '%s on %s, %s',
-            $event->title,
-            $event->scheduleDateLabel(),
-            $event->scheduleTimeLabel()
-        );
+        $title = $event->title;
 
         if ($event->isAttendanceOpen()) {
             $opened = $event->attendanceOpenedAtLabel() ?? now()->format('M j, Y g:i A');
 
-            return "Attendance for {$eventStamp} is OPEN as of {$opened}. You may mark your attendance until Scholar Staff closes the session.";
+            return "Attendance for {$title} is OPEN as of {$opened}. You may mark your attendance until Scholar Staff closes the session.";
         }
 
-        if ($event->attendanceSessionClosed()) {
+        if ($event->attendanceMayBeFinalized() && $event->attendanceSessionClosed()) {
             $closed = $event->attendanceClosedAtLabel() ?? now()->format('M j, Y g:i A');
 
-            return "Attendance for {$eventStamp} is CLOSED as of {$closed}. You can no longer submit or modify your attendance.";
+            return "Attendance for {$title} is CLOSED as of {$closed}.";
         }
 
-        return "Attendance for {$eventStamp} is CLOSED. You can mark attendance only after Scholar Staff opens the session.";
+        return "Attendance for {$title} is CLOSED. You can mark attendance only after Scholar Staff opens the session.";
     }
 
     public function missedCheckIn(Event $event, ?EventRegistration $registration, ?Attendance $attendance): bool
@@ -822,7 +870,7 @@ class ScholarService
             return false;
         }
 
-        if (! $event->attendanceSessionClosed() && ! $event->hasEnded()) {
+        if (! $event->attendanceMayBeFinalized()) {
             return false;
         }
 
@@ -1057,14 +1105,25 @@ class ScholarService
         };
     }
 
-    public function scheduleSummaryStats(Collection $events): array
+    /**
+     * Distinct events for the scholar in the selected academic period,
+     * grouped by the event's own status. Ongoing events are shown as Confirmed.
+     */
+    public function scheduleSummaryStats(User $user): array
     {
+        $query = Event::query();
+        $this->scopeEventsForSelectedPeriod($query);
+
+        $counts = $this->scopeEventsForUser($query, $user)
+            ->get(['id', 'status'])
+            ->unique('id')
+            ->countBy('status');
+
         return [
-            'confirmed' => $events->where('calendar_status', 'confirmed')->count(),
-            'participated' => $events->where('calendar_status', 'participated')->count(),
-            'pending' => $events->where('calendar_status', 'pending')->count(),
-            'notJoined' => $events->where('calendar_status', 'not_joined')->count(),
-            'failedCheckIn' => $events->where('calendar_status', 'failed_to_check_in')->count(),
+            'confirmed' => (int) ($counts[Event::STATUS_CONFIRMED] ?? 0) + (int) ($counts[Event::STATUS_ONGOING] ?? 0),
+            'pending' => (int) ($counts[Event::STATUS_PENDING] ?? 0),
+            'cancelled' => (int) ($counts[Event::STATUS_CANCELLED] ?? 0),
+            'completed' => (int) ($counts[Event::STATUS_COMPLETED] ?? 0),
         ];
     }
 
@@ -1273,9 +1332,9 @@ class ScholarService
         return $user->eventRegistrations()->where('event_id', $event->id)->first();
     }
 
-    public function calendarEvents(User $user, int $year, int $month): Collection
+    public function calendarEvents(User $user, int $year, int $month, bool $activeOnly = false): Collection
     {
-        $monthDate = Carbon::create($year, $month, 1);
+        $monthDate = Carbon::create($year, $month, 1, 0, 0, 0, config('app.timezone'));
         $start = $monthDate->copy()->startOfMonth()->startOfWeek(Carbon::SUNDAY)->startOfDay();
         $end = $monthDate->copy()->endOfMonth()->endOfWeek(Carbon::SATURDAY)->endOfDay();
         $attendances = $this->attendancesByEvent($user);
@@ -1284,10 +1343,40 @@ class ScholarService
             ->overlappingDates($start, $end)
             ->orderBy('starts_at')
             ->orderBy('id');
+
+        if ($activeOnly) {
+            $query->whereNotIn('status', [Event::STATUS_CANCELLED, Event::STATUS_COMPLETED]);
+        }
+
         $this->scopeEventsForSelectedPeriod($query);
 
         return $this->scopeEventsForUser($query, $user)->get()
             ->map(fn (Event $event) => $this->formatEvent($event, $user, $attendances));
+    }
+
+    /**
+     * The event shown in the calendar details panel.
+     * An explicit choice wins. Otherwise the earliest event that has not
+     * reached its end time is used, so a start time that already passed
+     * does not hide an event that is still ongoing.
+     */
+    public function selectCalendarEvent(Collection $events, int $requestedId = 0): ?array
+    {
+        if ($requestedId > 0) {
+            $match = $events->firstWhere('id', $requestedId);
+
+            if ($match) {
+                return $match;
+            }
+        }
+
+        $current = $events->first(function (array $event) {
+            $end = $event['ends_at'] ?? null;
+
+            return $end instanceof \Carbon\CarbonInterface && $end->greaterThanOrEqualTo(now());
+        });
+
+        return $current ?: $events->first();
     }
 
     public function ensureUserDocuments(User $user): void
@@ -1330,7 +1419,7 @@ class ScholarService
         $this->ensureUserDocuments($user);
 
         return Document::query()
-            ->with('documentType')
+            ->with(['documentType', 'revisions'])
             ->where('user_id', $user->id)
             ->get()
             ->sortBy(fn (Document $document) => $document->documentType?->name ?? '')
@@ -1581,6 +1670,30 @@ class ScholarService
 
         $this->notify($scholar, $title, $body, 'documents', $status === 'rejected');
         $this->logActivity($scholar, 'document', "Document \"{$typeName}\" marked as {$status}");
+    }
+
+    public function notifyStaffOfDocumentReplacement(Document $document): void
+    {
+        $document->loadMissing(['user.scholarshipProgram', 'documentType']);
+        $scholar = $document->user;
+        $typeName = $document->documentType?->name ?? 'document';
+
+        if (! $scholar) {
+            return;
+        }
+
+        $title = 'Replacement document submitted';
+        $body = "{$scholar->full_name} submitted a replacement {$typeName} for review.";
+
+        User::query()
+            ->where('role', User::ROLE_SCHOLAR_STAFF)
+            ->where('status', User::STATUS_APPROVED)
+            ->where('scholarship_program_id', $scholar->scholarship_program_id)
+            ->get()
+            ->filter(fn (User $staff) => $staff->canManageScholar($scholar))
+            ->each(function (User $staff) use ($title, $body) {
+                $this->notify($staff, $title, $body, 'documents', true);
+            });
     }
 
     public function logActivity(User $user, string $type, string $description, array $metadata = []): void

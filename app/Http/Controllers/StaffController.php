@@ -300,6 +300,7 @@ class StaffController extends Controller
             'organizer' => ['nullable', 'string', 'max:255'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:5120'],
         ], [
+            'ends_at.after' => 'The event end date cannot be earlier than the start date.',
             'image.image' => 'The event image must be a photo (JPG or PNG).',
             'image.mimes' => 'The event image must be a JPG or PNG file.',
             'image.max' => 'The event image must not be larger than 5MB.',
@@ -333,7 +334,7 @@ class StaffController extends Controller
 
         $notifiedCount = $this->scholar->notifyScholarsOfEventStatusChange($event, Event::STATUS_PENDING);
 
-        $message = "Event \"{$event->title}\" is scheduled for {$event->starts_at->format('F j, Y')} with registration status Pending. It appears on scholar Events pages as Pending until you confirm it. No scholars are registered until they click Attend / Register. Attendance stays closed.";
+        $message = "Event \"{$event->title}\" is scheduled for {$event->dateRangeLabel()} with registration status Pending. It appears on scholar Events pages as Pending until you confirm it. No scholars are registered until they click Attend / Register. Attendance stays closed.";
         if ($notifiedCount > 0) {
             $message .= " {$notifiedCount} scholar(s) were notified in their Notifications section.";
         } else {
@@ -467,10 +468,15 @@ class StaffController extends Controller
         }
 
         $event->load(['registrations.user', 'attendances']);
+        $attendanceFinalized = $event->attendanceMayBeFinalized();
 
-        $participants = $event->registrations->map(function ($registration) use ($event) {
+        $participants = $event->registrations->map(function ($registration) use ($event, $attendanceFinalized) {
             $attendance = $event->attendances->firstWhere('user_id', $registration->user_id);
-            $failed = ($event->hasEnded() || $event->attendanceSessionClosed()) && ! $attendance?->check_in;
+            $failed = (
+                ($attendanceFinalized && ! $attendance?->check_in)
+                || $attendance?->status === Attendance::STATUS_FAILED_CHECK_IN
+                || $registration->status === EventRegistration::STATUS_FAILED_CHECK_IN
+            );
             $status = $failed
                 ? Attendance::STATUS_FAILED_CHECK_IN
                 : ($attendance?->status ?? $registration->status);
@@ -559,6 +565,11 @@ class StaffController extends Controller
         $gridStart = $monthDate->copy()->startOfMonth()->startOfWeek(Carbon::SUNDAY)->startOfDay();
         $gridEnd = $monthDate->copy()->endOfMonth()->endOfWeek(Carbon::SATURDAY)->endOfDay();
 
+        $completedIds = Event::completeExpiredConfirmedIds();
+        if ($completedIds !== []) {
+            $this->scholar->notifyScholarsOfCompletedEvents($completedIds);
+        }
+
         $monthEvents = Event::query()
             ->whereIn('scholarship_program_id', $programIds ?: [0])
             ->visibleToStaff($staff)
@@ -571,6 +582,7 @@ class StaffController extends Controller
             [
                 'events' => $this->staffData->upcomingEvents($programIds, 20, $staff),
                 'monthEvents' => $monthEvents,
+                'scheduleStats' => $this->staffData->scheduleSummaryStats($staff),
                 'monthDate' => $monthDate,
                 'prevMonth' => $monthDate->copy()->subMonth(),
                 'nextMonth' => $monthDate->copy()->addMonth(),
@@ -1005,7 +1017,30 @@ class StaffController extends Controller
         return back()->with('success', "Attendance for {$attendance->user?->full_name} was verified and service hours were approved.");
     }
 
-    public function openAttendance(Event $event)
+    public function updateEventSchedule(Request $request, Event $event)
+    {
+        $this->assertManagesEvent($event);
+
+        if ($event->isAttendanceOpen()) {
+            return back()->with('error', 'Close attendance before changing the event dates.');
+        }
+
+        $data = $request->validate([
+            'starts_at' => ['required', 'date'],
+            'ends_at' => ['required', 'date', 'after:starts_at'],
+        ], [
+            'ends_at.after' => 'The event end date cannot be earlier than the start date.',
+        ]);
+
+        $event->update([
+            'starts_at' => Carbon::parse($data['starts_at']),
+            'ends_at' => Carbon::parse($data['ends_at']),
+        ]);
+
+        return back()->with('success', "{$event->title} is now scheduled for {$event->dateRangeLabel()}.");
+    }
+
+    public function openAttendance(Request $request, Event $event)
     {
         $this->assertManagesEvent($event);
         abort_unless(Auth::user()->hasStaffPortalAccess(), 403);
@@ -1040,6 +1075,8 @@ class StaffController extends Controller
         $message = "Attendance for {$event->title} is now CLOSED. Scholars can no longer submit or modify their attendance.";
 
         if ($request->expectsJson()) {
+            $request->session()->flash('success', $message);
+
             return response()->json([
                 'ok' => true,
                 'message' => $message,
@@ -1133,10 +1170,13 @@ class StaffController extends Controller
                 $event->setAttribute('pending_count', $event->attendances->filter(
                     fn ($attendance) => $attendance->hasCheckedIn() && $attendance->status === Attendance::STATUS_PENDING
                 )->count());
-                $event->setAttribute('failed_count', $event->registrations->filter(function ($registration) use ($event) {
+                $attendanceFinalized = $event->attendanceMayBeFinalized();
+                $event->setAttribute('failed_count', $event->registrations->filter(function ($registration) use ($event, $attendanceFinalized) {
                     $attendance = $event->attendances->firstWhere('user_id', $registration->user_id);
 
-                    return ($event->hasEnded() || $event->attendanceSessionClosed()) && ! $attendance?->hasCheckedIn();
+                    return ($attendanceFinalized && ! $attendance?->hasCheckedIn())
+                        || $attendance?->status === Attendance::STATUS_FAILED_CHECK_IN
+                        || $registration->status === EventRegistration::STATUS_FAILED_CHECK_IN;
                 })->count());
             });
 
@@ -1161,6 +1201,7 @@ class StaffController extends Controller
             }
 
             $selected->load(['registrations.user.scholarshipClubSchool', 'attendances.user.scholarshipClubSchool']);
+            $attendanceFinalized = $selected->attendanceMayBeFinalized();
 
             foreach ($selected->registrations as $registration) {
                 $attendance = $selected->attendances->firstWhere('user_id', $registration->user_id);
@@ -1176,8 +1217,7 @@ class StaffController extends Controller
                         $pending->push($row);
                     }
                 } elseif (
-                    $selected->hasEnded()
-                    || $selected->attendanceSessionClosed()
+                    $attendanceFinalized
                     || $attendance?->status === Attendance::STATUS_FAILED_CHECK_IN
                     || $registration->status === EventRegistration::STATUS_FAILED_CHECK_IN
                 ) {

@@ -180,26 +180,32 @@ class UserController extends Controller
         $user = Auth::user();
         $year = (int) $request->get('year', now()->year);
         $month = (int) $request->get('month', now()->month);
-        $monthDate = Carbon::create($year, $month, 1);
-        $events = $this->scholar->calendarEvents($user, $year, $month);
-
-        $selectedId = $request->get('event');
-        $selected = $selectedId
-            ? $events->firstWhere('id', (int) $selectedId)
-            : $events->first();
-
-        return view('user.calendar', array_merge($this->layoutData(
+        $monthDate = Carbon::create($year, $month, 1, 0, 0, 0, config('app.timezone'));
+        $layout = $this->layoutData(
             'calendar',
             'Calendar of Activities',
             'View upcoming events and your participation schedule.'
-        ), [
+        );
+        $events = $this->scholar->calendarEvents($user, $year, $month);
+        $requestedId = (int) $request->get('event', 0);
+        $selected = $this->scholar->selectCalendarEvent($events, $requestedId);
+
+        if ($requestedId > 0 && (int) ($selected['id'] ?? 0) !== $requestedId) {
+            return redirect()->route('user.calendar', array_filter([
+                'year' => $year,
+                'month' => $month,
+                'event' => $selected['id'] ?? null,
+            ]));
+        }
+
+        return view('user.calendar', array_merge($layout, [
             'events' => $events,
             'selected' => $selected,
             'monthDate' => $monthDate,
             'prevMonth' => $monthDate->copy()->subMonth(),
             'nextMonth' => $monthDate->copy()->addMonth(),
             'upcomingEvents' => $this->scholar->upcomingEvents($user, 5),
-            'scheduleStats' => $this->scholar->scheduleSummaryStats($events),
+            'scheduleStats' => $this->scholar->scheduleSummaryStats($user),
         ]));
     }
 
@@ -427,8 +433,30 @@ class UserController extends Controller
         abort_unless($user->hasScholarPortalAccess(), 403);
 
         $eventId = (int) $request->get('event', 0);
+        $payload = $this->attendanceSessions->liveStatusForUser($user, $eventId ?: null);
 
-        return response()->json($this->attendanceSessions->liveStatusForUser($user, $eventId ?: null));
+        if ($request->boolean('calendar')) {
+            $completedIds = Event::completeExpiredConfirmedIds();
+            if ($completedIds !== []) {
+                $this->scholar->notifyScholarsOfCompletedEvents($completedIds);
+            }
+
+            $year = (int) $request->get('year', now()->year);
+            $month = (int) $request->get('month', now()->month);
+            $events = $this->scholar->calendarEvents($user, $year, $month);
+            $match = $eventId > 0 ? $events->firstWhere('id', $eventId) : null;
+            $next = $this->scholar->selectCalendarEvent($events, $match ? $eventId : 0);
+
+            $payload['calendar_selection'] = [
+                'requested_id' => $eventId ?: null,
+                'requested_eligible' => $eventId > 0 ? (bool) $match : true,
+                'selected_id' => $next['id'] ?? null,
+                'eligible_ids' => $events->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
+                'status_key' => $events->map(fn (array $event) => $event['id'].':'.($event['event_status'] ?? ''))->implode(','),
+            ];
+        }
+
+        return response()->json($payload);
     }
 
     public function presenceHeartbeat(Request $request)

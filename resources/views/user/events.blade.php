@@ -37,10 +37,10 @@
                         @if($ev['image_url'])<img class="event-thumb" src="{{ $ev['image_url'] }}" alt="">@endif
                         <div class="event-details">
                             <div class="event-title">{{ $ev['title'] }}</div>
-                            <div class="event-meta">{{ $ev['time'] }} · {{ $ev['location'] }}</div>
+                            <div class="event-meta">{{ $ev['full_date'] }} · {{ $ev['time'] }} · {{ $ev['location'] }}</div>
                             <div class="event-footer">
                                 <span class="hours">Service Hours: {{ $ev['hours'] }}</span>
-                                <span class="badge {{ !empty($ev['attendance_open']) ? 'attendance-open' : 'attendance-closed' }}">{{ $ev['attendance_status'] ?? 'CLOSED' }}</span>
+                                <span class="badge {{ ($ev['attendance_status'] ?? 'CLOSED') === 'OPEN' ? 'attendance-open' : 'attendance-closed' }}" data-attendance-event-id="{{ $ev['id'] }}">{{ $ev['attendance_status'] ?? 'CLOSED' }}</span>
                             </div>
                         </div>
                         <div class="event-action event-action-stack">
@@ -60,7 +60,7 @@
                 <div class="event-detail-flags">
                     <span class="badge {{ $selected['status_class'] }}">{{ $selected['status_label'] }}</span>
                     @if(empty($selected['is_cancelled']))
-                        <span class="badge {{ !empty($selected['attendance_open']) ? 'attendance-open' : 'attendance-closed' }} attendance-status-flag" data-attendance-event-badge>{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
+                        <span class="badge {{ ($selected['attendance_status'] ?? 'CLOSED') === 'OPEN' ? 'attendance-open' : 'attendance-closed' }} attendance-status-flag" data-attendance-event-badge data-attendance-event-id="{{ $selected['id'] }}">{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
                     @endif
                 </div>
 
@@ -112,9 +112,9 @@
                 @endif
 
                 @if(empty($selected['is_cancelled']) && empty($selected['is_pending']))
-                <div class="bssa-alert {{ !empty($selected['attendance_open']) ? 'bssa-alert--success' : 'bssa-alert--info' }} bssa-alert--banner reminder-box {{ !empty($selected['attendance_open']) ? 'attendance-open-box' : 'attendance-closed-box' }}" data-attendance-event-message role="status">
+                <div class="bssa-alert {{ ($selected['attendance_status'] ?? 'CLOSED') === 'OPEN' ? 'bssa-alert--success' : 'bssa-alert--info' }} bssa-alert--banner reminder-box {{ ($selected['attendance_status'] ?? 'CLOSED') === 'OPEN' ? 'attendance-open-box' : 'attendance-closed-box' }}" data-attendance-event-message role="status">
                     <div class="bssa-alert__icon" aria-hidden="true">
-                        @if(!empty($selected['attendance_open']))
+                        @if(($selected['attendance_status'] ?? 'CLOSED') === 'OPEN')
                             <svg class="bssa-alert__icon-svg" viewBox="0 0 24 24" fill="none" focusable="false"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.15"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.75"/><path d="M7.5 12.5l3 3 6-6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         @else
                             <svg class="bssa-alert__icon-svg" viewBox="0 0 24 24" fill="none" focusable="false"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.12"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.75"/><path d="M12 10.5V17M12 7.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -126,7 +126,7 @@
                     </div>
                 </div>
 
-                @if($selected['failed_to_check_in'] && empty($selected['attendance_open']))
+                @if($selected['failed_to_check_in'] && ($selected['attendance_status'] ?? 'CLOSED') !== 'OPEN')
                     @include('partials.bssa-alert', [
                         'type' => 'error',
                         'title' => 'Failed to Check In',
@@ -171,7 +171,7 @@
                                 data-confirm-yes="Check In"
                                 data-confirm-no="Cancel"
                             >@csrf<button type="submit" class="btn full checkin-btn" {{ empty($selected['can_check_in']) ? 'disabled' : '' }}>&#128247; Check In</button></form>
-                            <p class="muted center small">{{ !empty($selected['attendance_open']) ? 'Attendance is OPEN. You can check in now.' : 'Attendance is CLOSED. You can no longer submit or modify your attendance.' }}</p>
+                            <p class="muted center small">{{ !empty($selected['can_check_in']) ? 'Attendance is OPEN. You can check in now.' : ((($selected['attendance_status'] ?? '') === 'OPEN') ? 'You can submit attendance only during '.$selected['full_date'].', '.$selected['time'].'.' : 'Attendance is CLOSED.') }}</p>
                         @else
                             <div class="attendance-action-stack">
                                 @include('partials.attendance-photo-upload', ['attendance' => $att, 'eventId' => $selected['id'], 'canModify' => !empty($selected['can_modify_attendance'])])
@@ -189,7 +189,7 @@
                                         <button type="submit" class="btn full">Check Out</button>
                                     </form>
                                 @elseif(!$att->check_out)
-                                    <p class="muted center small attendance-checkout-closed">Attendance is CLOSED. You can no longer submit or modify your attendance.</p>
+                                    <p class="muted center small attendance-checkout-closed">Attendance is CLOSED.</p>
                                 @endif
                             </div>
                         @endif

@@ -24,11 +24,16 @@
                 <div class="fc-header"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
                 <div class="fc-body">
                     @php
-                        $start = $monthDate->copy()->startOfMonth()->startOfWeek(\Carbon\Carbon::SUNDAY);
-                        $end = $monthDate->copy()->endOfMonth()->endOfWeek(\Carbon\Carbon::SATURDAY);
+                        $zone = config('app.timezone');
+                        $start = $monthDate->copy()->timezone($zone)->startOfMonth()->startOfWeek(\Carbon\Carbon::SUNDAY);
+                        $end = $monthDate->copy()->timezone($zone)->endOfMonth()->endOfWeek(\Carbon\Carbon::SATURDAY);
                         $eventsByDay = collect();
                         foreach ($events as $ev) {
-                            foreach ($ev['calendar_days'] ?? [$ev['starts_at']->toDateString()] as $dayKey) {
+                            $days = $ev['calendar_days'] ?? [];
+                            if ($days === [] && ! empty($ev['starts_at'])) {
+                                $days = [$ev['starts_at']->copy()->timezone($zone)->toDateString()];
+                            }
+                            foreach ($days as $dayKey) {
                                 $bucket = $eventsByDay->get($dayKey, collect());
                                 $eventsByDay->put($dayKey, $bucket->push($ev));
                             }
@@ -40,14 +45,13 @@
                             'cancelled' => 'red',
                             'completed' => 'gray',
                         ];
-                        $participationColorMap = ['participated' => 'blue', 'confirmed' => 'green', 'pending' => 'orange', 'not_joined' => 'purple', 'failed_to_check_in' => 'red'];
                     @endphp
                     @while($start->lte($end))
                         <div class="fc-row">
                             @for($i = 0; $i < 7; $i++)
                                 @php
                                     $inMonth = $start->month === $monthDate->month && $start->year === $monthDate->year;
-                                    $dayKey = $start->format('Y-m-d');
+                                    $dayKey = $start->copy()->timezone($zone)->toDateString();
                                     $dayEvents = ($eventsByDay->get($dayKey) ?? collect())
                                         ->filter(fn ($ev) => in_array($dayKey, $ev['calendar_days'] ?? [], true));
                                 @endphp
@@ -55,8 +59,7 @@
                                     <span class="fc-day-num">{{ $start->day }}</span>
                     @foreach($dayEvents as $ev)
                                         @php
-                                            $eventColor = $lifecycleColorMap[$ev['event_status'] ?? '']
-                                                ?? ($participationColorMap[$ev['calendar_status']] ?? 'blue');
+                                            $eventColor = $lifecycleColorMap[$ev['event_status'] ?? ''] ?? 'gray';
                                         @endphp
                                         <a href="{{ route('user.calendar', ['year' => $monthDate->year, 'month' => $monthDate->month, 'event' => $ev['id']]) }}" class="fc-event {{ $eventColor }}" title="{{ $ev['title'] }} — {{ $ev['status_label'] }}">
                                             <span class="fc-event-title">{{ $ev['title'] }}</span>
@@ -76,14 +79,15 @@
                     <span><span class="legend-dot green"></span> Confirmed</span>
                     <span><span class="legend-dot red"></span> Cancelled</span>
                     <span><span class="legend-dot gray"></span> Completed</span>
-                    <span><span class="legend-dot blue"></span> Participated</span>
-                    <span><span class="legend-dot purple"></span> Not Joined</span>
                 </div>
             </div>
         </div>
 
         @include('partials.schedule-summary', $scheduleStats ?? [])
         @include('partials.calendar-upcoming-events')
+        @unless($selected)
+            <p class="muted calendar-empty-selection">No upcoming events available.</p>
+        @endunless
     </div>
 
     @if($selected)
@@ -93,7 +97,7 @@
                     @if($selected['image_url'])<img src="{{ $selected['image_url'] }}" alt="">@endif
                     @include('partials.event-status-badge', ['statusClass' => $selected['status_class'], 'statusLabel' => $selected['status_label']])
                     @if(empty($selected['is_cancelled']))
-                        <span class="badge {{ !empty($selected['attendance_open']) ? 'attendance-open' : 'attendance-closed' }}">{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
+                        <span class="badge {{ ($selected['attendance_status'] ?? 'CLOSED') === 'OPEN' ? 'attendance-open' : 'attendance-closed' }}" data-attendance-event-id="{{ $selected['id'] }}">{{ $selected['attendance_status'] ?? 'CLOSED' }}</span>
                     @endif
                     <h3>{{ $selected['title'] }}</h3>
                     @if(!empty($selected['is_cancelled']))

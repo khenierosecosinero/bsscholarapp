@@ -115,7 +115,6 @@
         <table class="staff-table staff-manage-table staff-documents-table staff-data-table">
             <colgroup>
                 <col class="staff-documents-col-scholar">
-                <col class="staff-documents-col-file">
                 <col class="staff-documents-col-date">
                 <col class="staff-documents-col-status">
                 <col class="staff-documents-col-actions">
@@ -123,7 +122,6 @@
             <thead>
                 <tr>
                     <th>Scholar Information</th>
-                    <th>File</th>
                     <th>Date Submitted</th>
                     <th class="staff-col-status">Status</th>
                     <th class="staff-col-actions">Actions</th>
@@ -138,18 +136,9 @@
                                     <x-user-avatar :user="$document->user" class="staff-scholar-avatar" />
                                     <div class="staff-scholar-meta">
                                         <strong>{{ $document->user?->full_name ?? '—' }}</strong>
-                                        <small>{{ $document->user?->scholar_id }} · {{ $document->user?->scholarshipClubLabel() }}</small>
+                                        <small>{{ $document->user?->scholar_id }}</small>
                                     </div>
                                 </div>
-                            </div>
-                        </td>
-                        <td data-label="File" class="staff-col-file">
-                            <div class="staff-stack-value">
-                                @if($document->hasFile())
-                                    {{ $document->original_name ?? 'Attached file' }}
-                                @else
-                                    <span class="staff-muted">No file attached</span>
-                                @endif
                             </div>
                         </td>
                         <td data-label="Date Submitted" class="staff-col-date">
@@ -165,53 +154,39 @@
                         </td>
                         <td data-label="Actions" class="staff-col-actions">
                             @if($document->hasFile())
-                                <div class="staff-stack-value staff-doc-review-actions">
+                                @php $reviewStatus = $document->reviewStatus(); @endphp
+                                <div class="staff-stack-value staff-doc-review-actions document-actions">
                                     <a href="{{ route('staff.documents.view', $document) }}" class="staff-btn staff-btn-sm" target="_blank" rel="noopener">Review</a>
                                     <a href="{{ route('staff.documents.download', $document) }}" class="staff-btn staff-btn-sm">Download</a>
-
-                                    @if($document->reviewStatus() !== 'approved')
-                                        <form
-                                            method="POST"
-                                            action="{{ route('staff.documents.status', $document) }}"
-                                            data-confirm="This document will be marked as approved."
-                                            data-confirm-title="Approve this {{ $documentType->name }}?"
-                                            data-confirm-yes="Approve"
-                                            data-confirm-no="Cancel"
-                                        >
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="status" value="approved">
-                                            <button type="submit" class="staff-btn staff-btn-sm staff-btn-success">Approve</button>
-                                        </form>
-                                    @endif
-
-                                    @if($document->reviewStatus() !== 'rejected')
-                                        <form
-                                            method="POST"
-                                            action="{{ route('staff.documents.status', $document) }}"
-                                            class="staff-reject-form"
-                                            data-confirm="The scholar can upload a replacement after rejection."
-                                            data-confirm-title="Reject this {{ $documentType->name }}?"
-                                            data-confirm-yes="Reject"
-                                            data-confirm-no="Cancel"
-                                            data-confirm-variant="danger"
-                                        >
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="status" value="rejected">
-                                            <input type="text" name="review_notes" class="staff-review-notes" placeholder="Reason (optional)" maxlength="500">
-                                            <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger">Reject</button>
-                                        </form>
-                                    @endif
-
-                                    @if($document->reviewStatus() !== 'pending')
-                                        <form method="POST" action="{{ route('staff.documents.status', $document) }}">
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="status" value="pending">
-                                            <button type="submit" class="staff-btn staff-btn-sm staff-btn-warning">Set pending</button>
-                                        </form>
-                                    @endif
+                                    <form
+                                        method="POST"
+                                        action="{{ route('staff.documents.status', $document) }}"
+                                        class="staff-reject-form"
+                                        data-confirm="The scholar can upload a replacement after rejection."
+                                        data-confirm-title="Reject this {{ $documentType->name }}?"
+                                        data-confirm-yes="Reject"
+                                        data-confirm-no="Cancel"
+                                        data-confirm-variant="danger"
+                                    >
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="status" value="rejected">
+                                        <button type="submit" class="staff-btn staff-btn-sm staff-btn-danger" @disabled($reviewStatus === 'rejected')>Reject</button>
+                                    </form>
+                                    <form
+                                        method="POST"
+                                        action="{{ route('staff.documents.status', $document) }}"
+                                        class="staff-approve-form"
+                                        data-confirm="This document will be marked as approved."
+                                        data-confirm-title="Approve this {{ $documentType->name }}?"
+                                        data-confirm-yes="Approve"
+                                        data-confirm-no="Cancel"
+                                    >
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="status" value="approved">
+                                        <button type="submit" class="staff-btn staff-btn-sm staff-btn-success" @disabled($reviewStatus === 'approved')>Approve</button>
+                                    </form>
                                 </div>
                             @else
                                 <div class="staff-stack-value"><span class="staff-muted">Waiting for upload</span></div>
@@ -220,7 +195,7 @@
                     </tr>
                 @empty
                     <tr class="staff-table-empty">
-                        <td colspan="5">
+                        <td colspan="4">
                             @if($selectedSchoolKey !== 'all' || $search !== '' || $statusFilter !== 'submitted')
                                 No matching scholars for this filter.
                             @else

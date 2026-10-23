@@ -10,8 +10,7 @@
             <div>
                 <h2>{{ $event->title }}</h2>
                 <p class="staff-muted" style="margin:4px 0 0">
-                    {{ $event->starts_at?->format('M j, Y') }}
-                    · {{ $event->starts_at?->format('g:i A') }}{{ $event->ends_at ? ' – '.$event->ends_at->format('g:i A') : '' }}
+                    {{ $event->scheduleWhenLabel() }}
                     · {{ $event->location }}
                 </p>
             </div>
@@ -201,10 +200,8 @@
                                 </span>
                             </div>
                             <p class="staff-attendance-event-when">
-                                @if($event->starts_at)
-                                    <span>{{ $event->starts_at->format('M j, Y') }}</span>
-                                    <span>{{ $event->starts_at->format('g:i A') }}{{ $event->ends_at ? ' – '.$event->ends_at->format('g:i A') : '' }}</span>
-                                @endif
+                                <span>{{ $event->dateRangeLabel() }}</span>
+                                <span>{{ $event->scheduleTimeLabel() }}</span>
                             </p>
                             <p class="staff-attendance-event-where">{{ $event->location }}</p>
                             <div class="staff-doc-type-counts">

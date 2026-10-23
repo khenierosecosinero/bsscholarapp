@@ -107,6 +107,11 @@ class Event extends Model
         return $this->hasMany(AttendanceSessionLog::class);
     }
 
+    public function daySessions(): HasMany
+    {
+        return $this->hasMany(AttendanceDaySession::class);
+    }
+
     public function scholarshipProgram(): BelongsTo
     {
         return $this->belongsTo(ScholarshipProgram::class);
@@ -219,12 +224,78 @@ class Event extends Model
 
     public function attendanceOpenedAtLabel(): ?string
     {
-        return $this->attendance_opened_at?->format('M j, Y g:i A');
+        return $this->timestampLabel($this->attendance_opened_at);
     }
 
     public function attendanceClosedAtLabel(): ?string
     {
-        return $this->attendance_closed_at?->format('M j, Y g:i A');
+        return $this->timestampLabel($this->attendance_closed_at);
+    }
+
+    public function timestampLabel(?CarbonInterface $at): ?string
+    {
+        return $at?->copy()->timezone(config('app.timezone'))->format('F j, Y, g:i A');
+    }
+
+    /**
+     * Single-day events show one date. Multi-day events show the full range.
+     */
+    public function dateRangeLabel(): string
+    {
+        $start = $this->zonedStart();
+        if (! $start) {
+            return 'Not scheduled';
+        }
+
+        $end = $this->zonedEnd();
+        if (! $end || $end->isSameDay($start)) {
+            return $start->format('F j, Y');
+        }
+
+        return $start->format('F j, Y').' – '.$end->format('F j, Y');
+    }
+
+    public function scheduleWhenLabel(): string
+    {
+        $start = $this->zonedStart();
+        if (! $start) {
+            return 'Not scheduled';
+        }
+
+        $end = $this->zonedEnd();
+        if (! $end || $end->isSameDay($start)) {
+            $time = $end
+                ? $start->format('g:i A').' – '.$end->format('g:i A')
+                : $start->format('g:i A');
+
+            return $start->format('F j, Y').' · '.$time;
+        }
+
+        return $start->format('F j, Y, g:i A').' – '.$end->format('F j, Y, g:i A');
+    }
+
+    /**
+     * One attendance session covers the whole event. Missed check-ins are final
+     * after that session is closed, or after the event has ended.
+     */
+    public function attendanceMayBeFinalized(): bool
+    {
+        if ($this->isAttendanceOpen()) {
+            return false;
+        }
+
+        return $this->attendanceSessionClosed() || $this->hasEnded();
+    }
+
+    public function isWithinAttendancePeriod(?CarbonInterface $at = null): bool
+    {
+        $at ??= now();
+
+        if (! $this->starts_at || ! $this->ends_at) {
+            return false;
+        }
+
+        return $at->betweenIncluded($this->starts_at, $this->ends_at);
     }
 
     public function isHappeningNow(): bool
@@ -331,7 +402,8 @@ class Event extends Model
     public function allowsScholarAttendanceActions(): bool
     {
         return in_array($this->status, [self::STATUS_CONFIRMED, self::STATUS_ONGOING], true)
-            && $this->isAttendanceOpen();
+            && $this->isAttendanceOpen()
+            && $this->isWithinAttendancePeriod();
     }
 
     public function isCompletableStatus(): bool
@@ -599,6 +671,7 @@ class Event extends Model
 
         $this->attendances()->delete();
         $this->registrations()->delete();
+        $this->daySessions()->delete();
         $this->attendanceSessionLogs()->delete();
     }
 

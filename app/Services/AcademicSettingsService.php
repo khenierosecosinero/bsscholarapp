@@ -568,7 +568,9 @@ class AcademicSettingsService
 
     public function scopeAttendancesForReport(Builder|Relation $query, array $filter): Builder|Relation
     {
-        $query->where('academic_year_start', $filter['year_start']);
+        if (empty($filter['all_years'])) {
+            $query->where('academic_year_start', $filter['year_start']);
+        }
 
         if (($filter['semester'] ?? self::SEMESTER_ALL) !== self::SEMESTER_ALL) {
             $query->where('semester', $filter['semester']);
@@ -612,9 +614,26 @@ class AcademicSettingsService
      */
     public function scopeEventsForReport(Builder|Relation $query, array $filter): Builder|Relation
     {
+        if (! empty($filter['all_years'])) {
+            return $this->scopeEventsForSemesterMonths($query, (string) ($filter['semester'] ?? self::SEMESTER_ALL));
+        }
+
         [$start, $end] = $this->eventBoundsForReport($filter);
 
         return $query->whereBetween('starts_at', [$start, $end]);
+    }
+
+    private function scopeEventsForSemesterMonths(Builder|Relation $query, string $semester): Builder|Relation
+    {
+        if ($semester === '1st Semester') {
+            return $query->whereMonth('starts_at', '>=', 8)->whereMonth('starts_at', '<=', 12);
+        }
+
+        if ($semester === '2nd Semester') {
+            return $query->whereMonth('starts_at', '>=', 1)->whereMonth('starts_at', '<=', 5);
+        }
+
+        return $query;
     }
 
     /**

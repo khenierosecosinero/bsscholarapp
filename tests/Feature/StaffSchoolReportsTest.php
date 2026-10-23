@@ -54,7 +54,9 @@ class StaffSchoolReportsTest extends TestCase
                 ->assertDontSee('Latest Attendance Records')
                 ->assertDontSee('Scholar Completion')
                 ->assertSee('name="school"', false)
-                ->assertDontSee('id="report-year"', false)
+                ->assertSee('id="report-year"', false)
+                ->assertSee('All Academic Years')
+                ->assertSee('2026–2027')
                 ->assertDontSee('id="report-semester"', false)
                 ->assertSee('Set in Settings → General Settings')
                 ->getContent();
@@ -132,6 +134,113 @@ class StaffSchoolReportsTest extends TestCase
         $this->assertStringContainsString('<strong>Total:</strong> 1', $html);
         $this->assertStringNotContainsString($stiScholar->full_name, $html);
         $this->assertStringNotContainsString($snsuScholar->full_name, $html);
+    }
+
+    public function test_academic_year_dropdown_filters_reports_without_changing_the_global_setting(): void
+    {
+        [$staff, $sti, $snsu, $stiScholar, $snsuScholar] = $this->makeClubWithSchools();
+        $this->makeApprovedHours($stiScholar, 5, 2026, '1st Semester');
+        $this->makeApprovedHours($snsuScholar, 30, 2025, '1st Semester');
+
+        AcademicSetting::create([
+            'year_start' => 2025,
+            'year_end' => 2026,
+            'semester' => '1st Semester',
+            'is_active' => false,
+        ]);
+        AcademicSetting::create([
+            'year_start' => 2024,
+            'year_end' => 2025,
+            'semester' => '1st Semester',
+            'is_active' => false,
+        ]);
+
+        $pages = [
+            'staff.reports.service-hours',
+            'staff.reports.attendance',
+            'staff.reports.participation',
+            'staff.reports.completion',
+        ];
+
+        foreach ($pages as $routeName) {
+            $this->actingAs($staff)
+                ->get(route($routeName))
+                ->assertOk()
+                ->assertSee('Academic Year')
+                ->assertSee('All Academic Years')
+                ->assertSee('2024–2025')
+                ->assertSee('2025–2026')
+                ->assertSee('2026–2027')
+                ->assertSee('value="2026" selected', false);
+        }
+
+        $year2026 = $this->actingAs($staff)
+            ->get(route('staff.reports.service-hours', ['year' => 2026, 'school' => 'id:'.$sti->id]));
+        $year2026->assertOk()->assertSee('5.00');
+        $this->assertSame(5.0, $year2026->viewData('report')['overview']['approved_hours']);
+        $this->assertSame('id:'.$sti->id, $year2026->viewData('selectedSchoolKey'));
+
+        $year2025 = $this->actingAs($staff)
+            ->get(route('staff.reports.service-hours', ['year' => 2025, 'school' => 'all']));
+        $year2025->assertOk();
+        $this->assertSame(30.0, $year2025->viewData('report')['overview']['approved_hours']);
+        $this->assertFalse($year2025->viewData('report')['empty']);
+
+        $allYears = $this->actingAs($staff)
+            ->get(route('staff.reports.service-hours', ['year' => 'all', 'school' => 'all']));
+        $allYears->assertOk()->assertSee('All Academic Years');
+        $this->assertSame(35.0, $allYears->viewData('report')['overview']['approved_hours']);
+
+        $attendance2025 = $this->actingAs($staff)
+            ->get(route('staff.reports.attendance', ['year' => 2025, 'school' => 'all']));
+        $this->assertSame(1, $attendance2025->viewData('report')['breakdown']['approved']);
+
+        $attendanceAll = $this->actingAs($staff)
+            ->get(route('staff.reports.attendance', ['year' => 'all', 'school' => 'all']));
+        $this->assertSame(2, $attendanceAll->viewData('report')['breakdown']['approved']);
+
+        $participation2026 = $this->actingAs($staff)
+            ->get(route('staff.reports.participation', ['year' => 2026, 'school' => 'all']));
+        $this->assertSame(1, $participation2026->viewData('report')['registered']);
+        $this->assertSame(1, $participation2026->viewData('report')['participated']);
+
+        $participationAll = $this->actingAs($staff)
+            ->get(route('staff.reports.participation', ['year' => 'all', 'school' => 'all']));
+        $this->assertSame(2, $participationAll->viewData('report')['registered']);
+
+        $empty = $this->actingAs($staff)
+            ->get(route('staff.reports.service-hours', ['year' => 2024, 'school' => 'all']));
+        $empty->assertOk()->assertSee('No records for AY 2024–2025.');
+        $this->assertTrue($empty->viewData('report')['empty']);
+        $this->assertSame(0.0, $empty->viewData('report')['overview']['approved_hours']);
+
+        $this->actingAs($staff)
+            ->get(route('staff.reports.attendance', ['year' => 2024, 'school' => 'all']))
+            ->assertOk()
+            ->assertSee('No records for AY 2024–2025.');
+
+        $this->actingAs($staff)
+            ->get(route('staff.reports.completion', ['year' => 2024, 'school' => 'all']))
+            ->assertOk()
+            ->assertSee('No records for AY 2024–2025.');
+
+        $this->actingAs($staff)
+            ->get(route('staff.reports.participation', ['year' => 2024, 'school' => 'all']))
+            ->assertOk()
+            ->assertSee('No records for AY 2024–2025.');
+
+        $fallback = $this->actingAs($staff)
+            ->get(route('staff.reports.service-hours', ['year' => 1999, 'school' => 'all']));
+        $this->assertSame(2026, $fallback->viewData('reportFilter')['year_start']);
+        $this->assertSame(5.0, $fallback->viewData('report')['overview']['approved_hours']);
+
+        $this->assertSame(2026, AcademicSetting::query()->where('is_active', true)->value('year_start'));
+        $this->assertNull(session('academic_period_view'));
+
+        $stillCurrent = $this->actingAs($staff)
+            ->get(route('staff.reports.service-hours', ['school' => 'all']));
+        $this->assertSame(2026, $stillCurrent->viewData('reportFilter')['year_start']);
+        $this->assertSame(5.0, $stillCurrent->viewData('report')['overview']['approved_hours']);
     }
 
     /**

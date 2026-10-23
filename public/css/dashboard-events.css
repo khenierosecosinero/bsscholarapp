@@ -203,6 +203,137 @@
     }
 }
 
+/* Pending attendances: seven stable columns inside the dashboard card. */
+.content-grid:has(.pending-attendance-table) > .left-col {
+    min-width: 0;
+}
+
+.card.pending .card-header {
+    margin-bottom: 16px;
+}
+
+.card.pending .pending-attendance-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.card.pending .pending-attendance-table {
+    width: 100%;
+    min-width: 672px;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.card.pending .pending-col-event { width: 23%; }
+.card.pending .pending-col-date { width: 14%; }
+.card.pending .pending-col-checkin { width: 11%; }
+.card.pending .pending-col-checkout { width: 12%; }
+.card.pending .pending-col-hours { width: 12%; }
+.card.pending .pending-col-status { width: 12%; }
+.card.pending .pending-col-action { width: 16%; }
+
+.card.pending .pending-attendance-table th,
+.card.pending .pending-attendance-table td {
+    box-sizing: border-box;
+    padding: 12px 4px;
+    vertical-align: middle;
+    text-align: left;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-wrap: normal;
+    word-break: normal;
+}
+
+.card.pending .pending-attendance-table th {
+    padding: 2px 4px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted, #8a8f98);
+}
+
+.card.pending .pending-attendance-table td {
+    border-top: 1px solid #f1f5f9;
+}
+
+.card.pending .pending-attendance-table .table-event {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    white-space: normal;
+    font-weight: 700;
+}
+
+.card.pending .pending-attendance-table .table-event img {
+    width: 36px;
+    height: 28px;
+    max-width: 36px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.card.pending .pending-attendance-table .table-event-title {
+    min-width: 0;
+    line-height: 1.35;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: normal;
+}
+
+.card.pending .pending-attendance-table .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+.card.pending .pending-attendance-table .pending-attendance-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: auto;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 10px;
+    white-space: nowrap;
+    line-height: 1;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+@media (max-width: 800px) {
+    .card.pending .pending-attendance-wrap {
+        overflow-x: visible;
+    }
+
+    .card.pending .pending-attendance-table {
+        min-width: 0;
+        table-layout: auto;
+    }
+
+    .card.pending .pending-attendance-table td {
+        white-space: normal;
+        overflow-wrap: break-word;
+        word-break: normal;
+    }
+
+    .card.pending .pending-attendance-table .pending-attendance-link {
+        align-self: flex-start;
+        width: auto;
+        white-space: nowrap;
+    }
+}
+
 @media (max-width: 480px) {
     .card.calendar .mini-calendar {
         width: 100%;

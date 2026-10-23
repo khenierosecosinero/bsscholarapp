@@ -58,8 +58,8 @@
                             </div>
                         </td>
                         <td data-label="Date &amp; Time">
-                            {{ $event->starts_at?->format('M j, Y') }}
-                            <div class="staff-muted">{{ $event->starts_at?->format('g:i A') }}@if($event->ends_at) – {{ $event->ends_at->format('g:i A') }}@endif</div>
+                            {{ $event->dateRangeLabel() }}
+                            <div class="staff-muted">{{ $event->scheduleTimeLabel() }}</div>
                         </td>
                         <td data-label="Service Hours">{{ number_format((float) $event->service_hours, 1) }} hrs</td>
                         <td data-label="Status" class="staff-col-status"><span class="staff-badge {{ $event->statusBadgeClass() }}">{{ $event->statusLabel() }}</span></td>

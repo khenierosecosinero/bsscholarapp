@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\Attendance;
+use App\Models\AttendanceDaySession;
 use App\Models\AttendanceSessionLog;
 use App\Models\Event;
+use Carbon\Carbon;
 use App\Models\EventRegistration;
 use App\Models\ScholarNotification;
 use App\Models\User;
@@ -16,7 +18,7 @@ class AttendanceSessionService
 {
     public function __construct(private ScholarService $scholar) {}
 
-    public function open(Event $event, User $staff): Event
+    public function open(Event $event, User $staff, ?string $sessionDate = null): Event
     {
         if ($event->isAttendanceOpen()) {
             throw new \InvalidArgumentException('Attendance is already open for this event.');
@@ -24,18 +26,25 @@ class AttendanceSessionService
 
         $now = now();
 
-        $event->update([
-            'attendance_is_open' => true,
-            'attendance_opened_at' => $now,
-            'attendance_opened_by' => $staff->id,
-        ]);
+        DB::transaction(function () use ($event, $staff, $now) {
+            $locked = Event::query()->whereKey($event->id)->lockForUpdate()->first();
 
-        AttendanceSessionLog::create([
-            'event_id' => $event->id,
-            'staff_id' => $staff->id,
-            'action' => AttendanceSessionLog::ACTION_OPENED,
-            'acted_at' => $now,
-        ]);
+            if (! $locked) {
+                throw new \InvalidArgumentException('Event not found.');
+            }
+
+            if ($locked->isAttendanceOpen()) {
+                throw new \InvalidArgumentException('Attendance is already open for this event.');
+            }
+
+            $locked->update([
+                'attendance_is_open' => true,
+                'attendance_opened_at' => $now,
+                'attendance_opened_by' => $staff->id,
+            ]);
+
+            $this->writeSessionLog($locked, $staff, AttendanceSessionLog::ACTION_OPENED, null, $now);
+        });
 
         $event = $event->fresh();
         $this->scholar->restoreCheckInEligibility($event);
@@ -44,7 +53,7 @@ class AttendanceSessionService
         return $event;
     }
 
-    public function close(Event $event, User $staff): Event
+    public function close(Event $event, User $staff, ?string $sessionDate = null): Event
     {
         $lockKey = 'attendance.close.'.$event->id;
         if (! Cache::add($lockKey, 1, 15)) {
@@ -69,36 +78,32 @@ class AttendanceSessionService
                 }
 
                 $now = now();
-
                 $locked->update([
                     'attendance_is_open' => false,
                     'attendance_closed_at' => $now,
                     'attendance_closed_by' => $staff->id,
                 ]);
 
-                AttendanceSessionLog::create([
-                    'event_id' => $locked->id,
-                    'staff_id' => $staff->id,
-                    'action' => AttendanceSessionLog::ACTION_CLOSED,
-                    'acted_at' => $now,
-                ]);
+                $this->writeSessionLog($locked, $staff, AttendanceSessionLog::ACTION_CLOSED, null, $now);
 
                 return $locked->fresh();
             });
 
-            $eventId = (int) $closed->id;
-            dispatch(function () use ($eventId) {
-                try {
-                    $fresh = Event::query()->find($eventId);
-                    if (! $fresh || $fresh->isAttendanceOpen()) {
-                        return;
-                    }
+            if (! $closed->isAttendanceOpen() && $closed->attendanceSessionClosed()) {
+                $eventId = (int) $closed->id;
+                dispatch(function () use ($eventId) {
+                    try {
+                        $fresh = Event::query()->find($eventId);
+                        if (! $fresh || $fresh->isAttendanceOpen() || ! $fresh->attendanceSessionClosed()) {
+                            return;
+                        }
 
-                    app(AttendanceSessionService::class)->completeClosedSession($fresh);
-                } catch (\Throwable $e) {
-                    report($e);
-                }
-            })->afterResponse();
+                        app(AttendanceSessionService::class)->completeClosedSession($fresh);
+                    } catch (\Throwable $e) {
+                        report($e);
+                    }
+                })->afterResponse();
+            }
 
             return $closed;
         } finally {
@@ -108,12 +113,129 @@ class AttendanceSessionService
 
     public function completeClosedSession(Event $event): void
     {
-        if ($event->isAttendanceOpen()) {
+        if ($event->isAttendanceOpen() || ! $event->attendanceSessionClosed()) {
             return;
         }
 
         $this->scholar->syncMissedCheckInsForEvent($event);
         $this->notifyScholars($event, AttendanceSessionLog::ACTION_CLOSED);
+    }
+
+    public function resolveSessionDate(Event $event, ?string $sessionDate): string
+    {
+        $dates = $event->calendarDateKeys();
+        if ($dates === []) {
+            throw new \InvalidArgumentException('This event does not have a start and end date.');
+        }
+
+        if ($sessionDate !== null && $sessionDate !== '') {
+            $normalized = Carbon::parse($sessionDate)->timezone(config('app.timezone'))->toDateString();
+            if (! in_array($normalized, $dates, true)) {
+                throw new \InvalidArgumentException('Choose an event date between the start and end dates.');
+            }
+
+            return $normalized;
+        }
+
+        $today = now()->timezone(config('app.timezone'))->toDateString();
+
+        return in_array($today, $dates, true) ? $today : $dates[0];
+    }
+
+    /**
+     * @return list<array{date: string, date_label: string, is_open: bool, status: string, opened_at: string, closed_at: string, last_opened_at: string}>
+     */
+    public function dayPanels(Event $event): array
+    {
+        $sessions = $event->daySessions()->get()->keyBy(
+            fn (AttendanceDaySession $session) => $session->session_date?->toDateString()
+        );
+
+        $panels = [];
+        foreach ($event->calendarDateKeys() as $date) {
+            $session = $sessions->get($date);
+            $opened = $session?->opened_at;
+            $closed = $session?->closed_at;
+            $isOpen = (bool) $session?->is_open;
+            $openedLabel = $opened ? $event->timestampLabel($opened) : 'Not yet opened';
+            $currentCycleOpen = $isOpen || ($opened && $closed && $closed->lt($opened));
+            $closedLabel = (! $opened || $currentCycleOpen || ! $closed)
+                ? 'Not yet closed'
+                : $event->timestampLabel($closed);
+
+            $panels[] = [
+                'date' => $date,
+                'date_label' => Carbon::parse($date, config('app.timezone'))->format('F j, Y'),
+                'is_open' => $isOpen,
+                'status' => $isOpen ? 'OPEN' : 'CLOSED',
+                'opened_at' => $openedLabel,
+                'closed_at' => $closedLabel,
+                'last_opened_at' => $openedLabel,
+            ];
+        }
+
+        return $panels;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function historyLines(Event $event): array
+    {
+        return $event->attendanceSessionLogs()
+            ->orderBy('acted_at')
+            ->orderBy('id')
+            ->get()
+            ->map(function (AttendanceSessionLog $log) use ($event) {
+                $when = $event->timestampLabel($log->acted_at);
+                $verb = $log->action === AttendanceSessionLog::ACTION_OPENED ? 'Opened' : 'Closed';
+                $date = $log->session_date
+                    ? Carbon::parse($log->session_date->toDateString(), config('app.timezone'))->format('F j, Y')
+                    : null;
+
+                return $date
+                    ? "{$verb} the {$date} session at {$when}."
+                    : "{$verb} at {$when}.";
+            })
+            ->all();
+    }
+
+    private function defaultOpenDate(Event $event): ?string
+    {
+        $open = $event->daySessions()->where('is_open', true)->orderBy('session_date')->first();
+        if ($open?->session_date) {
+            return $open->session_date->toDateString();
+        }
+
+        if ($event->isAttendanceOpen()) {
+            return $this->resolveSessionDate($event, null);
+        }
+
+        return null;
+    }
+
+    private function daySession(Event $event, string $date, bool $lock = false): ?AttendanceDaySession
+    {
+        $query = AttendanceDaySession::query()
+            ->where('event_id', $event->id)
+            ->whereDate('session_date', $date);
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        return $query->first();
+    }
+
+    private function writeSessionLog(Event $event, User $staff, string $action, ?string $date, $actedAt): void
+    {
+        AttendanceSessionLog::create([
+            'event_id' => $event->id,
+            'session_date' => $date,
+            'staff_id' => $staff->id,
+            'action' => $action,
+            'acted_at' => $actedAt,
+        ]);
     }
 
     public function sessionPayload(Event $event): array
@@ -131,7 +253,7 @@ class AttendanceSessionService
 
         if ($event->isAttendanceOpen()) {
             $copy = 'Opened '.($opened ?? 'just now').'. Scholars can mark attendance until you click Close Attendance. This session will not close automatically.';
-        } elseif ($event->attendanceSessionClosed()) {
+        } elseif ($event->attendanceMayBeFinalized() && $event->attendanceSessionClosed()) {
             $copy = 'Closed '.$closed.'. Scholars can no longer submit or modify their attendance. You can still edit records below.';
         } else {
             $copy = 'Closed. Scholars cannot mark attendance until you click Open Attendance. The event schedule does not open or close this session.';
@@ -154,33 +276,27 @@ class AttendanceSessionService
         $attendances = $user->attendances()->get()->keyBy('event_id');
         $now = now();
 
-        return $this->scholar->scopeEventsForUser(
-            Event::query()
-                ->with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-                ->attendanceStatusVisible($now)
-                ->orderByRaw('case when starts_at <= ? and ends_at >= ? then 0 else 1 end', [$now, $now])
-                ->orderBy('ends_at')
-                ->limit($limit),
-            $user
-        )->get()->map(fn (Event $event) => $this->formatSession(
-            $event,
-            $user,
-            $event->registrations->first(),
-            $attendances->get($event->id)
-        ));
+        return $this->scholarAttendanceEventsQuery($user, $now)
+            ->orderByRaw('case when attendance_is_open = 1 then 0 else 1 end')
+            ->orderByRaw('case when starts_at <= ? and ends_at >= ? then 0 else 1 end', [$now, $now])
+            ->orderBy('ends_at')
+            ->limit($limit)
+            ->get()
+            ->map(fn (Event $event) => $this->formatSession(
+                $event,
+                $user,
+                $event->registrations->first(),
+                $attendances->get($event->id)
+            ));
     }
 
     public function liveStatusForUser(User $user, ?int $focusEventId = null): array
     {
         $now = now();
-        $events = $this->scholar->scopeEventsForUser(
-            Event::query()
-                ->with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
-                ->attendanceStatusVisible($now)
-                ->orderBy('ends_at')
-                ->limit(12),
-            $user
-        )->get();
+        $events = $this->scholarAttendanceEventsQuery($user, $now)
+            ->orderBy('ends_at')
+            ->limit(12)
+            ->get();
 
         if ($focusEventId && ! $events->contains('id', $focusEventId)) {
             $focus = $this->scholar->scopeEventsForUser(
@@ -211,7 +327,7 @@ class AttendanceSessionService
 
         $sessions = $formatted
             ->filter(fn (array $session) => ! empty($session['status_visible']))
-            ->sortBy(fn (array $session) => [$session['schedule_open'] ? 0 : 1, $session['ends_at'] ?? ''])
+            ->sortBy(fn (array $session) => [$session['is_open'] ? 0 : 1, $session['ends_at'] ?? ''])
             ->take(12)
             ->values();
 
@@ -248,9 +364,9 @@ class AttendanceSessionService
         ?Attendance $attendance = null,
     ): array {
         $open = $event->isAttendanceOpen();
-        $scheduleOpen = $event->isScheduleAttendanceOpen();
-        $statusVisible = $event->shouldShowAttendanceStatus();
-        $scheduleStatus = $event->scheduleAttendanceStatusLabel();
+        $statusVisible = $open || $event->shouldShowAttendanceStatus();
+        $label = $event->attendanceStatusLabel();
+        $message = $this->sessionMessage($event);
 
         if ($user && ! $registration) {
             $registration = $event->relationLoaded('registrations')
@@ -266,7 +382,7 @@ class AttendanceSessionService
             $attendance->setRelation('event', $event);
         }
 
-        $canMark = $open
+        $canMark = $event->allowsScholarAttendanceActions()
             && $registration
             && in_array($registration->status, [
                 EventRegistration::STATUS_CONFIRMED,
@@ -277,12 +393,13 @@ class AttendanceSessionService
             'event_id' => $event->id,
             'title' => $event->title,
             'location' => $event->location,
-            'full_date' => $event->starts_at?->format('F j, Y'),
-            'time' => $event->starts_at?->format('g:i A').($event->ends_at ? ' – '.$event->ends_at->format('g:i A') : ''),
-            'status' => $event->attendanceStatusLabel(),
+            'full_date' => $event->dateRangeLabel(),
+            'time' => $event->scheduleTimeLabel(),
+            'status' => $label,
             'is_open' => $open,
-            'schedule_status' => $scheduleStatus,
-            'schedule_open' => $scheduleOpen,
+            // The published scholar script still reads these keys. They follow the staff session, not the event clock.
+            'schedule_status' => $label,
+            'schedule_open' => $open,
             'status_visible' => $statusVisible,
             'ends_at' => $event->ends_at?->toIso8601String(),
             'opened_at' => $event->attendanceOpenedAtLabel(),
@@ -290,12 +407,11 @@ class AttendanceSessionService
             'can_check_in' => $canMark && ! $attendance?->hasCheckedIn(),
             'can_check_out' => $attendance?->scholarCanCheckOut() ?? false,
             'can_modify' => $attendance?->scholarCanModify() ?? false,
-            'message' => $this->sessionMessage($event),
-            'schedule_message' => $this->scheduleStatusMessage($event),
+            'message' => $message,
+            'schedule_message' => $message,
             'signature' => implode('|', [
                 $event->id,
-                $event->attendanceStatusLabel(),
-                $scheduleStatus,
+                $label,
                 $statusVisible ? '1' : '0',
                 $event->attendance_opened_at?->timestamp ?? 0,
                 $event->attendance_closed_at?->timestamp ?? 0,
@@ -307,26 +423,21 @@ class AttendanceSessionService
 
     public function sessionMessage(Event $event): string
     {
-        $eventStamp = sprintf(
-            '%s on %s at %s',
-            $event->title,
-            $event->starts_at?->format('M j, Y') ?? 'the scheduled date',
-            $event->starts_at?->format('g:i A') ?? 'the scheduled time'
-        );
+        $title = $event->title;
 
         if ($event->isAttendanceOpen()) {
             $opened = $event->attendanceOpenedAtLabel() ?? now()->format('M j, Y g:i A');
 
-            return "Attendance for {$eventStamp} is OPEN as of {$opened}. You may mark your attendance until Scholar Staff closes the session.";
+            return "Attendance for {$title} is OPEN as of {$opened}. You may mark your attendance until Scholar Staff closes the session.";
         }
 
-        if ($event->attendanceSessionClosed()) {
+        if ($event->attendanceMayBeFinalized() && $event->attendanceSessionClosed()) {
             $closed = $event->attendanceClosedAtLabel() ?? now()->format('M j, Y g:i A');
 
-            return "Attendance for {$eventStamp} is CLOSED as of {$closed}. You can no longer submit or modify your attendance.";
+            return "Attendance for {$title} is CLOSED as of {$closed}.";
         }
 
-        return "Attendance for {$eventStamp} is CLOSED. Scholars can mark attendance only after Scholar Staff opens the session.";
+        return "Attendance for {$title} is CLOSED. You can mark attendance only after Scholar Staff opens the session.";
     }
 
     public function scheduleStatusMessage(Event $event): string
@@ -349,6 +460,20 @@ class AttendanceSessionService
         return "Attendance for {$eventStamp} is CLOSED. The event ended at {$ended}.";
     }
 
+    private function scholarAttendanceEventsQuery(User $user, $now)
+    {
+        return $this->scholar->scopeEventsForUser(
+            Event::query()
+                ->with(['registrations' => fn ($q) => $q->where('user_id', $user->id)])
+                ->where(function ($query) use ($now) {
+                    $query->where(function ($visible) use ($now) {
+                        $visible->attendanceStatusVisible($now);
+                    })->orWhere('attendance_is_open', true);
+                }),
+            $user
+        );
+    }
+
     private function notifyScholars(Event $event, string $action): void
     {
         if (! $event->scholarship_program_id) {
@@ -356,16 +481,14 @@ class AttendanceSessionService
         }
 
         $opened = $action === AttendanceSessionLog::ACTION_OPENED;
-        $stamp = $event->starts_at?->format('M j, Y') ?? 'the scheduled date';
-        $time = $event->starts_at?->format('g:i A') ?? 'the scheduled time';
         $actedAt = $opened
             ? ($event->attendanceOpenedAtLabel() ?? now()->format('M j, Y g:i A'))
             : ($event->attendanceClosedAtLabel() ?? now()->format('M j, Y g:i A'));
 
         $title = $opened ? 'Attendance Opened' : 'Attendance Closed';
         $body = $opened
-            ? "Attendance for {$event->title} on {$stamp} at {$time} ({$event->location}) is now OPEN as of {$actedAt}. You can mark your attendance on the Events page until Scholar Staff closes the session."
-            : "Attendance for {$event->title} on {$stamp} at {$time} ({$event->location}) is now CLOSED as of {$actedAt}. You can no longer submit or modify your attendance.";
+            ? "Attendance for {$event->title} is now OPEN as of {$actedAt}. You can mark your attendance on the Events page until Scholar Staff closes the session."
+            : "Attendance for {$event->title} is now CLOSED as of {$actedAt}.";
 
         $now = now();
         $rows = [];

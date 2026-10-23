@@ -39,6 +39,12 @@
                     data-attendance-event="{{ $selected['id'] ?? '' }}"
                     data-attendance-status="{{ $selected['attendance_status'] ?? '' }}"
                     data-latest-notification="0"
+                    @if(($active ?? '') === 'calendar')
+                        data-calendar-year="{{ $monthDate->year ?? now()->year }}"
+                        data-calendar-month="{{ $monthDate->month ?? now()->month }}"
+                        data-calendar-ids="{{ collect($events ?? [])->pluck('id')->implode(',') }}"
+                        data-calendar-statuses="{{ collect($events ?? [])->map(fn ($event) => ($event['id'] ?? '').':'.($event['event_status'] ?? ''))->implode(',') }}"
+                    @endif
                 ></div>
             @endif
             @yield('page-content')

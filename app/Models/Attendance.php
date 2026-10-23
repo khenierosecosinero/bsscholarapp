@@ -69,17 +69,18 @@ class Attendance extends Model
     {
         $this->loadMissing('event');
 
-        return $this->event?->isAttendanceOpen() && $this->canReplacePhoto();
+        return (bool) ($this->event?->isAttendanceOpen() && $this->event->isWithinAttendancePeriod() && $this->canReplacePhoto());
     }
 
     public function scholarCanCheckOut(): bool
     {
         $this->loadMissing('event');
 
-        return $this->event?->isAttendanceOpen()
+        return (bool) ($this->event?->isAttendanceOpen()
+            && $this->event->isWithinAttendancePeriod()
             && $this->hasCheckedIn()
             && ! $this->check_out
-            && $this->status !== self::STATUS_FAILED_CHECK_IN;
+            && $this->status !== self::STATUS_FAILED_CHECK_IN);
     }
 
     public function isReadyForVerification(): bool

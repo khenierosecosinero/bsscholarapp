@@ -8,6 +8,7 @@ use App\Services\DocumentStorageService;
 use App\Services\ScholarService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 class DocumentActionController extends Controller
@@ -36,10 +37,6 @@ class DocumentActionController extends Controller
         $this->scholar->syncDocumentDeadlines([(int) $type->scholarship_program_id]);
         $type->refresh();
 
-        if (! $type->acceptsSubmissions()) {
-            return back()->with('error', $this->submissionBlockedMessage($type));
-        }
-
         $existing = Document::query()
             ->where('user_id', $user->id)
             ->where('document_type_id', $type->id)
@@ -47,10 +44,37 @@ class DocumentActionController extends Controller
 
         abort_if($existing?->status === 'approved', 403, 'Approved documents cannot be replaced.');
 
+        $replacingRejection = $existing?->status === 'rejected';
+
+        if (! $replacingRejection && ! $type->acceptsSubmissions()) {
+            return back()->with('error', $this->submissionBlockedMessage($type));
+        }
+
+        $lockKey = 'document-upload:'.$user->id.':'.$type->id;
+        if (! Cache::add($lockKey, 1, now()->addSeconds(15))) {
+            return back()->with('error', 'This document is already being uploaded. Please wait.');
+        }
+
         try {
             $this->files->store($user, $type, $request->file('file'));
         } catch (Throwable $e) {
             return back()->with('error', $e->getMessage());
+        } finally {
+            Cache::forget($lockKey);
+        }
+
+        if ($replacingRejection) {
+            $document = Document::query()
+                ->where('user_id', $user->id)
+                ->where('document_type_id', $type->id)
+                ->first();
+            $this->scholar->logActivity($user, 'document', "Replacement for \"{$type->name}\" submitted");
+            $this->scholar->notify($user, 'Replacement Submitted', "Your replacement {$type->name} is pending review by Scholar Staff.", 'documents');
+            if ($document) {
+                $this->scholar->notifyStaffOfDocumentReplacement($document);
+            }
+
+            return back()->with('success', 'Replacement submitted. It is pending Scholar Staff review.');
         }
 
         $this->scholar->logActivity($user, 'document', "Document \"{$type->name}\" uploaded");

@@ -27,7 +27,19 @@
             </div>
             <div class="admin-scholar-field">
                 <span>Schedule</span>
-                <strong>{{ $event->starts_at?->format('M j, Y g:i A') ?? '—' }}</strong>
+                <strong>{{ $event->scheduleWhenLabel() }}</strong>
+            </div>
+            <div class="admin-scholar-field">
+                <span>Attendance</span>
+                <strong>{{ $event->attendanceStatusLabel() }}</strong>
+            </div>
+            <div class="admin-scholar-field">
+                <span>Opened At</span>
+                <strong>{{ $event->attendanceOpenedAtLabel() ?? 'Not yet opened' }}</strong>
+            </div>
+            <div class="admin-scholar-field">
+                <span>Closed At</span>
+                <strong>{{ $event->attendanceSessionClosed() ? ($event->attendanceClosedAtLabel() ?? 'Not yet closed') : 'Not yet closed' }}</strong>
             </div>
             <div class="admin-scholar-field">
                 <span>Event Service Hours</span>

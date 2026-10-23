@@ -9,7 +9,7 @@
     </div>
 
     <p class="staff-muted" style="margin-bottom:20px">
-        The start and end date you set here is saved immediately and shown on the same day in the scholar Events page and Calendar of Activities.
+        Set the event start date and event end date. A later end date keeps the event on each day in the scholar calendar. The end date cannot be earlier than the start date. Attendance stays closed until you open it.
     </p>
 
     <form method="POST" action="{{ route('staff.events.store') }}" class="staff-settings-grid" enctype="multipart/form-data">
@@ -42,14 +42,14 @@
 
         <div class="staff-form-grid staff-datetime-grid">
             <div class="staff-form-group staff-form-group-datetime">
-                <label for="starts_at">Start Date &amp; Time *</label>
+                <label for="starts_at">Event Start Date *</label>
                 <div class="date-input-wrap">
                     <input type="datetime-local" id="starts_at" name="starts_at" value="{{ old('starts_at') }}" required>
                 </div>
                 @error('starts_at')<div class="staff-field-error">{{ $message }}</div>@enderror
             </div>
             <div class="staff-form-group staff-form-group-datetime">
-                <label for="ends_at">End Date &amp; Time *</label>
+                <label for="ends_at">Event End Date *</label>
                 <div class="date-input-wrap">
                     <input type="datetime-local" id="ends_at" name="ends_at" value="{{ old('ends_at') }}" required>
                 </div>

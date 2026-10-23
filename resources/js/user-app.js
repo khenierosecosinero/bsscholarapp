@@ -167,6 +167,16 @@ function initAttendanceLive() {
         pollUrl = `${pollUrl}${separator}event=${encodeURIComponent(eventId)}`;
     }
 
+    if (page === 'calendar') {
+        const separator = pollUrl.includes('?') ? '&' : '?';
+        const params = new URLSearchParams({
+            calendar: '1',
+            year: root.dataset.calendarYear || '',
+            month: root.dataset.calendarMonth || '',
+        });
+        pollUrl = `${pollUrl}${separator}${params.toString()}`;
+    }
+
     const poll = async () => {
         if (document.hidden || inFlight) return;
 
@@ -183,6 +193,10 @@ function initAttendanceLive() {
                 updateUnreadNotificationBadge(data.unread_notifications);
             }
 
+            if (refreshCalendarSelection(root, data)) {
+                return;
+            }
+
             if (!primed) {
                 lastSignature = data.signature || '';
                 lastNotificationId = Number(data.latest_notification_id || 0);
@@ -191,6 +205,7 @@ function initAttendanceLive() {
                 }
                 primed = true;
                 renderAttendanceSessions(data.sessions || [], eventsUrl);
+                syncAttendanceEventBadges(data.events || {});
                 return;
             }
 
@@ -207,6 +222,7 @@ function initAttendanceLive() {
             if (data.signature && data.signature !== lastSignature) {
                 lastSignature = data.signature;
                 renderAttendanceSessions(data.sessions || [], eventsUrl);
+                syncAttendanceEventBadges(data.events || {});
                 updateEventAttendanceBadge(data.events?.[eventId]);
             }
 
@@ -223,6 +239,49 @@ function initAttendanceLive() {
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) poll();
     });
+}
+
+function refreshCalendarSelection(root, data) {
+    if ((root.dataset.attendancePage || '') !== 'calendar' || !data.calendar_selection) {
+        return false;
+    }
+
+    const selection = data.calendar_selection;
+    const currentIds = (root.dataset.calendarIds || '').split(',').filter(Boolean).sort().join(',');
+    const eligibleIds = (selection.eligible_ids || []).map(String).filter(Boolean).sort().join(',');
+    const currentEvent = String(root.dataset.attendanceEvent || '');
+    const requestedEligible = selection.requested_eligible !== false;
+    const nextId = selection.selected_id ? String(selection.selected_id) : '';
+    const selectionChanged = (currentEvent && !requestedEligible) || currentIds !== eligibleIds;
+    const statusesChanged = (selection.status_key || '') !== (root.dataset.calendarStatuses || '');
+
+    if (!selectionChanged && !statusesChanged) {
+        return false;
+    }
+
+    if (!selectionChanged) {
+        window.location.reload();
+        return true;
+    }
+
+    const url = new URL(window.location.href);
+    if (nextId) {
+        url.searchParams.set('event', nextId);
+    } else {
+        url.searchParams.delete('event');
+    }
+    if (root.dataset.calendarYear) url.searchParams.set('year', root.dataset.calendarYear);
+    if (root.dataset.calendarMonth) url.searchParams.set('month', root.dataset.calendarMonth);
+
+    const nextUrl = `${url.pathname}${url.search}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    if (nextUrl !== currentUrl) {
+        window.location.replace(nextUrl);
+    } else {
+        window.location.reload();
+    }
+
+    return true;
 }
 
 function renderAttendanceSessions(sessions, eventsUrl) {
@@ -242,17 +301,16 @@ function renderAttendanceSessions(sessions, eventsUrl) {
 
     const base = eventsUrl || '/user/events';
     list.innerHTML = visible.map((session) => {
-        const isOpen = !!session.schedule_open;
-        const status = session.schedule_status || session.status || (isOpen ? 'OPEN' : 'CLOSED');
-        const message = session.schedule_message || session.message || '';
+        const isOpen = !!session.is_open;
+        const status = session.status || (isOpen ? 'OPEN' : 'CLOSED');
+        const message = session.message || '';
 
         return `
         <article class="attendance-status-item ${isOpen ? 'is-open' : 'is-closed'}" data-event-id="${session.event_id}">
             <div class="attendance-status-top">
                 <strong>${escapeHtml(session.title)}</strong>
-                <span class="badge ${isOpen ? 'attendance-open' : 'attendance-closed'}">${escapeHtml(status)}</span>
+                <span class="badge ${isOpen ? 'attendance-open' : 'attendance-closed'}" data-attendance-event-id="${escapeHtml(session.event_id)}">${escapeHtml(status)}</span>
             </div>
-            <div class="muted">${escapeHtml(session.full_date || '')} · ${escapeHtml(session.time || '')}</div>
             <p>${escapeHtml(message)}</p>
             <a href="${base}?event=${encodeURIComponent(session.event_id)}" class="link small">View Event</a>
         </article>
@@ -284,8 +342,26 @@ function updateUnreadNotificationBadge(count) {
     }
 }
 
+function syncAttendanceEventBadges(events) {
+    Object.values(events || {}).forEach((session) => applyAttendanceEventBadge(session));
+}
+
+function applyAttendanceEventBadge(session) {
+    if (!session?.event_id) return;
+
+    const isOpen = !!session.is_open;
+    const status = session.status || (isOpen ? 'OPEN' : 'CLOSED');
+
+    document.querySelectorAll(`[data-attendance-event-id="${session.event_id}"]`).forEach((badge) => {
+        badge.textContent = status;
+        badge.classList.toggle('attendance-open', isOpen);
+        badge.classList.toggle('attendance-closed', !isOpen);
+    });
+}
+
 function updateEventAttendanceBadge(session) {
     if (!session) return;
+    applyAttendanceEventBadge(session);
     const badge = document.querySelector('[data-attendance-event-badge]');
     const message = document.querySelector('[data-attendance-event-message]');
     if (badge) {
@@ -306,6 +382,12 @@ function updateEventAttendanceBadge(session) {
         } else {
             message.innerHTML = `<strong>Attendance ${escapeHtml(session.status)}:</strong> ${escapeHtml(session.message)}`;
         }
+    }
+
+    if (!session.is_open) {
+        document.querySelectorAll('.checkin-btn, .attendance-checkout-form button[type="submit"]').forEach((button) => {
+            button.disabled = true;
+        });
     }
 }
 
