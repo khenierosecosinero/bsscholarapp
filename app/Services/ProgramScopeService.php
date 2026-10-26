@@ -32,8 +32,13 @@ class ProgramScopeService
         abort_unless(
             $programId && (int) $programId === (int) $user->scholarship_program_id,
             403,
-            'This content belongs to a different scholarship program.'
+            'This content belongs to a different scholarship location.'
         );
+    }
+
+    public function assertClubVisibleTo(User $user, ?int $clubId, string $message): void
+    {
+        abort_unless($user->matchesScholarshipClub($clubId), 403, $message);
     }
 
     public function assertStaffManagesProgram(User $staff, ?int $programId): void
@@ -48,6 +53,7 @@ class ProgramScopeService
     public function assertEventVisibleToScholar(Event $event, User $user): void
     {
         $this->assertScholarCanAccessProgram($user, $event->scholarship_program_id);
+        $this->assertClubVisibleTo($user, $event->scholarship_club_id, 'This event belongs to a different scholarship club.');
 
         abort_unless(
             $event->isVisibleAfter($user->eventsVisibleFrom()),
@@ -59,16 +65,19 @@ class ProgramScopeService
     public function assertAnnouncementVisibleToScholar(Announcement $announcement, User $user): void
     {
         $this->assertScholarCanAccessProgram($user, $announcement->scholarship_program_id);
+        $this->assertClubVisibleTo($user, $announcement->scholarship_club_id, 'This announcement belongs to a different scholarship club.');
     }
 
     public function assertDocumentTypeVisibleToScholar(DocumentType $type, User $user): void
     {
         $this->assertScholarCanAccessProgram($user, $type->scholarship_program_id);
+        $this->assertClubVisibleTo($user, $type->scholarship_club_id, 'This document belongs to a different scholarship club.');
     }
 
     public function assertDocumentTypeManagedByStaff(DocumentType $type, User $staff): void
     {
         $this->assertStaffManagesProgram($staff, $type->scholarship_program_id);
+        $this->assertClubVisibleTo($staff, $type->scholarship_club_id, 'You can only manage documents for your Scholarship Club.');
     }
 
     /**

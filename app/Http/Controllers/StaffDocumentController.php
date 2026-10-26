@@ -33,6 +33,7 @@ class StaffDocumentController extends Controller
 
         $types = DocumentType::query()
             ->whereIn('scholarship_program_id', $programIds ?: [0])
+            ->visibleToClubMember($staff)
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($inner) use ($search) {
                     $inner->where('name', 'like', "%{$search}%")
@@ -51,7 +52,7 @@ class StaffDocumentController extends Controller
         $docsQuery = Document::query()->whereHas('user', $scholarScope);
 
         $stats = [
-            'types' => DocumentType::query()->whereIn('scholarship_program_id', $programIds ?: [0])->count(),
+            'types' => DocumentType::query()->whereIn('scholarship_program_id', $programIds ?: [0])->visibleToClubMember($staff)->count(),
             'submitted' => (clone $docsQuery)->whereNotNull('file_path')->where('file_path', '!=', '')->count(),
             'pending' => (clone $docsQuery)->whereNotNull('file_path')->whereIn('status', ['pending', 'submitted'])->count(),
             'approved' => (clone $docsQuery)->where('status', 'approved')->count(),
@@ -96,6 +97,7 @@ class StaffDocumentController extends Controller
             'description' => $data['description'] ?? null,
             'required' => $request->boolean('required'),
             'scholarship_program_id' => $programId,
+            'scholarship_club_id' => $staff->scholarship_club_id,
             'submission_deadline' => $deadline,
             'submissions_open' => true,
             'submissions_opened_at' => ($deadline === null || $deadline->gt(now())) ? now() : null,
@@ -161,6 +163,7 @@ class StaffDocumentController extends Controller
         ];
         $programTypes = DocumentType::query()
             ->whereIn('scholarship_program_id', $programIds ?: [0])
+            ->visibleToClubMember($staff)
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -425,9 +428,18 @@ class StaffDocumentController extends Controller
 
     private function scholarScope(array $programIds): \Closure
     {
-        return function ($q) use ($programIds) {
+        $staff = Auth::user();
+
+        return function ($q) use ($programIds, $staff) {
             $q->where('role', User::ROLE_SCHOLAR)
                 ->whereIn('scholarship_program_id', $programIds ?: [0]);
+
+            if ($staff?->scholarship_club_id) {
+                $q->where(function ($club) use ($staff) {
+                    $club->where('scholarship_club_id', $staff->scholarship_club_id)
+                        ->orWhereNull('scholarship_club_id');
+                });
+            }
         };
     }
 

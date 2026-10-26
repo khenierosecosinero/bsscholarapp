@@ -53,7 +53,7 @@ class ScholarshipProgramImportService
                 'psgc_code' => $psgcCode,
                 'location_name' => $name,
                 'location_type' => $locationType,
-                'name' => "{$name} Scholarship Program",
+                'name' => ScholarshipProgram::storedNameForLocation($name, $locationType, $provinceName),
                 'display_name' => $displayName,
                 'province_name' => $provinceName ?: null,
                 'region_name' => $regionName,

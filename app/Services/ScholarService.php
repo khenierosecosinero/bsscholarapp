@@ -50,7 +50,7 @@ class ScholarService
 
         $this->programScope->scopeByPrograms($query, $user->visibleLocationIds());
 
-        return $query->visibleToAccount($user);
+        return $query->visibleToClubMember($user)->visibleToAccount($user);
     }
 
     public function scopeEventsForSelectedPeriod(Builder $query): Builder
@@ -66,7 +66,8 @@ class ScholarService
             return $query->whereRaw('1 = 0');
         }
 
-        return $this->programScope->scopeByPrograms($query, $user->visibleLocationIds());
+        return $this->programScope->scopeByPrograms($query, $user->visibleLocationIds())
+            ->visibleToClubMember($user);
     }
 
     public function assertEventVisibleToUser(Event $event, User $user): void
@@ -1385,13 +1386,14 @@ class ScholarService
             return;
         }
 
-        $cacheKey = 'scholar.docs_ensured.'.$user->id.'.'.$user->scholarship_program_id;
+        $cacheKey = 'scholar.docs_ensured.'.$user->id.'.'.$user->scholarship_program_id.'.'.($user->scholarship_club_id ?? 0);
         if (Cache::get($cacheKey)) {
             return;
         }
 
         $types = DocumentType::query()
             ->where('scholarship_program_id', $user->scholarship_program_id)
+            ->visibleToClubMember($user)
             ->get();
 
         $existingTypeIds = Document::query()
@@ -1457,9 +1459,7 @@ class ScholarService
 
         $count = 0;
 
-        User::query()
-            ->where('role', User::ROLE_SCHOLAR)
-            ->where('scholarship_program_id', $type->scholarship_program_id)
+        $this->scholarsAtLocation($type->scholarship_program_id, $type->scholarship_club_id)
             ->chunkById(100, function ($scholars) use ($type, &$count) {
                 foreach ($scholars as $scholar) {
                     Document::firstOrCreate(
@@ -1467,7 +1467,7 @@ class ScholarService
                         ['status' => 'not_submitted']
                     );
                     $count++;
-                    Cache::forget('scholar.docs_ensured.'.$scholar->id.'.'.$type->scholarship_program_id);
+                    Cache::forget('scholar.docs_ensured.'.$scholar->id.'.'.$type->scholarship_program_id.'.'.($scholar->scholarship_club_id ?? 0));
                 }
             });
 
@@ -1480,10 +1480,8 @@ class ScholarService
             return 0;
         }
 
-        $scholarsQuery = User::query()
-            ->where('role', User::ROLE_SCHOLAR)
-            ->where('status', User::STATUS_APPROVED)
-            ->where('scholarship_program_id', $type->scholarship_program_id);
+        $scholarsQuery = $this->scholarsAtLocation($type->scholarship_program_id, $type->scholarship_club_id)
+            ->where('status', User::STATUS_APPROVED);
 
         $title = 'Required document: '.$type->name;
         $deadline = $type->deadlineLabel();
@@ -1613,10 +1611,8 @@ class ScholarService
 
         $count = 0;
 
-        User::query()
-            ->where('role', User::ROLE_SCHOLAR)
+        $this->scholarsAtLocation($type->scholarship_program_id, $type->scholarship_club_id)
             ->where('status', User::STATUS_APPROVED)
-            ->where('scholarship_program_id', $type->scholarship_program_id)
             ->orderBy('id')
             ->each(function (User $scholar) use ($title, $body, &$count) {
                 $exists = ScholarNotification::query()
@@ -1904,17 +1900,27 @@ class ScholarService
      */
     public function scholarsQueryForEvent(Event $event): Builder
     {
-        $scholarsQuery = User::query()
-            ->where('role', User::ROLE_SCHOLAR)
-            ->where('status', User::STATUS_APPROVED)
-            ->where('scholarship_program_id', $event->scholarship_program_id);
-
         $staff = auth()->user();
-        if ($staff?->isScholarStaff() && $staff->scholarship_club_id) {
-            $scholarsQuery->where('scholarship_club_id', $staff->scholarship_club_id);
-        }
+        $clubId = $event->scholarship_club_id
+            ?: (($staff?->isScholarStaff() && $staff->scholarship_club_id) ? (int) $staff->scholarship_club_id : null);
+
+        $scholarsQuery = $this->scholarsAtLocation((int) $event->scholarship_program_id, $clubId)
+            ->where('status', User::STATUS_APPROVED);
 
         return $scholarsQuery;
+    }
+
+    private function scholarsAtLocation(int $programId, ?int $clubId): Builder
+    {
+        return User::query()
+            ->where('role', User::ROLE_SCHOLAR)
+            ->where('scholarship_program_id', $programId)
+            ->when($clubId, function (Builder $query) use ($clubId) {
+                $query->where(function (Builder $scoped) use ($clubId) {
+                    $scoped->where('scholarship_club_id', $clubId)
+                        ->orWhereNull('scholarship_club_id');
+                });
+            });
     }
 
     private function attendancesByEvent(User $user): Collection

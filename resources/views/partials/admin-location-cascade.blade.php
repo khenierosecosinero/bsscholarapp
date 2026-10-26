@@ -19,7 +19,7 @@
             <label class="admin-location-cascade-label" for="{{ $idPrefix ?? 'admin' }}-program-type">Scholarship category</label>
             <select name="program_type" id="{{ $idPrefix ?? 'admin' }}-program-type" data-admin-program-type aria-label="Scholarship category">
                 <option value="city_municipality" {{ $isCityScholar ? 'selected' : '' }}>City Scholar</option>
-                <option value="province" {{ ! $isCityScholar ? 'selected' : '' }}>Province Scholar</option>
+                <option value="province" {{ ! $isCityScholar ? 'selected' : '' }}>Province</option>
             </select>
         </div>
     @endif
@@ -40,7 +40,7 @@
         <div class="admin-location-cascade-field">
             <label class="admin-location-cascade-label" for="{{ $idPrefix ?? 'admin' }}-city">Municipality / City</label>
             <select id="{{ $idPrefix ?? 'admin' }}-city" data-admin-city aria-label="Municipality or City" @disabled(! $cityEnabled)>
-                <option value="">{{ $cityEnabled ? 'Select municipality or city' : 'Not used for Province Scholar' }}</option>
+                <option value="">Select municipality or city</option>
             </select>
         </div>
     </div>

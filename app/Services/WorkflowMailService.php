@@ -75,9 +75,9 @@ class WorkflowMailService
             return;
         }
 
-        $program = $scholar->scholarshipProgram?->programLabel() ?? 'a scholarship program';
+        $coverage = $scholar->coverageLabel();
         $title = 'New scholar registration';
-        $body = "{$scholar->full_name} ({$scholar->scholar_id}) registered for {$program} and is waiting for review.";
+        $body = "{$scholar->full_name} ({$scholar->scholar_id}) registered for {$coverage} and is waiting for review.";
         [$url, $label] = OutboundAppUrl::withRoot(fn () => [route('staff.approval-requests'), 'Review registrations']);
 
         $this->approvedStaffFor($scholar)->each(function (User $staff) use ($title, $body, $url, $label, $scholar) {
@@ -103,12 +103,12 @@ class WorkflowMailService
             return;
         }
 
-        $program = $staff->scholarshipProgram?->programLabel() ?? 'a scholarship program';
+        $coverage = $staff->coverageLabel();
         [$url, $label] = OutboundAppUrl::withRoot(fn () => [route('admin.staff'), 'Review staff']);
         $this->alertAdministrators(
             'new-staff:'.$staff->id,
             'New scholar staff registration',
-            "{$staff->full_name} registered as Scholar Staff for {$program} and is waiting for administrator approval.",
+            "{$staff->full_name} registered as Scholar Staff for {$coverage} and is waiting for administrator approval.",
             $url,
             $label,
             now()->addDays(30)

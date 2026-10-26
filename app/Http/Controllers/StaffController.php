@@ -330,6 +330,7 @@ class StaffController extends Controller
             'status' => Event::STATUS_PENDING,
             'attendance_is_open' => false,
             'scholarship_program_id' => $staff->scholarship_program_id,
+            'scholarship_club_id' => $staff->scholarship_club_id,
         ]);
 
         $notifiedCount = $this->scholar->notifyScholarsOfEventStatusChange($event, Event::STATUS_PENDING);

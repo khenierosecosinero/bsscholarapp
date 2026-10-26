@@ -172,6 +172,16 @@ class AcademicSettingsService
     }
 
     /**
+     * The administrator's active academic year and semester.
+     * Falls back to the recording period when no year has been activated yet.
+     */
+    public function activePeriod(): AcademicSetting
+    {
+        return AcademicSetting::query()->active()->orderByDesc('year_start')->orderByDesc('id')->first()
+            ?? $this->current();
+    }
+
+    /**
      * Current academic period for service hours, dashboards, and new attendance.
      * The administrator's active academic year is the system-wide reference.
      * A scholar's saved year does not replace it, and historical attendance

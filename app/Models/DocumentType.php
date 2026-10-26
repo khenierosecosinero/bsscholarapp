@@ -2,14 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToScholarshipClub;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DocumentType extends Model
 {
+    use BelongsToScholarshipClub;
+
     protected $fillable = [
-        'name', 'slug', 'description', 'required', 'scholarship_program_id',
+        'name', 'slug', 'description', 'required', 'scholarship_program_id', 'scholarship_club_id',
         'submissions_open', 'submissions_opened_at', 'submissions_closed_at', 'submission_deadline',
     ];
 

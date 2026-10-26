@@ -225,7 +225,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!requireCity && province.id) {
                 var allOption = document.createElement('option');
                 allOption.value = String(province.id);
-                allOption.textContent = province.name + ' — Province Scholar Program';
+                allOption.textContent = province.name;
                 if (selectedCityId && String(selectedCityId) === String(province.id)) {
                     allOption.selected = true;
                 }
@@ -235,7 +235,7 @@ document.addEventListener('DOMContentLoaded', function () {
             (province.cities || []).forEach(function (city) {
                 var option = document.createElement('option');
                 option.value = String(city.id);
-                option.textContent = addressMode ? city.name : (city.name + ' — City Scholar Program');
+                option.textContent = city.name;
                 if (selectedCityId && String(selectedCityId) === String(city.id)) {
                     option.selected = true;
                 }

@@ -87,6 +87,10 @@ class AnnouncementService
             'scholarship_program_id' => $data['scholarship_program_id'] ?? null,
         ];
 
+        if (array_key_exists('scholarship_club_id', $data)) {
+            $payload['scholarship_club_id'] = $data['scholarship_club_id'];
+        }
+
         if ($announcement) {
             $announcement->update($payload);
         } else {
@@ -108,6 +112,12 @@ class AnnouncementService
             ->where('role', User::ROLE_SCHOLAR)
             ->when($announcement->scholarship_program_id, function ($query) use ($announcement) {
                 $query->where('scholarship_program_id', $announcement->scholarship_program_id);
+                if ($announcement->scholarship_club_id) {
+                    $query->where(function ($club) use ($announcement) {
+                        $club->where('scholarship_club_id', $announcement->scholarship_club_id)
+                            ->orWhereNull('scholarship_club_id');
+                    });
+                }
             }, fn ($query) => $query->whereRaw('1 = 0'))
             ->each(function (User $user) use ($announcement) {
             $prefs = $user->notificationPreferences();

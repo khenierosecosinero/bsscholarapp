@@ -77,8 +77,8 @@ class AdminController extends Controller
             'locationKey' => $locationKey,
             'programType' => $programType,
             'programTypeLabel' => match ($programType) {
-                'province' => 'Province Scholar',
-                default => 'City Scholar',
+                'province' => 'Province',
+                default => 'Municipality / City',
             },
             'programIds' => $this->admin->resolveAdminProgramIds($locationKey, $programType),
             'selectedLocation' => $this->admin->selectedLocation($locationKey),
@@ -195,7 +195,7 @@ class AdminController extends Controller
 
     private function locationLabelForScope(array $scope): string
     {
-        $type = $scope['programTypeLabel'] ?? 'City Scholar';
+        $type = $scope['programTypeLabel'] ?? 'Municipality / City';
         $address = $scope['selectedAddress'] ?? ['province' => null, 'city' => null];
 
         if (! empty($address['city']) && ! empty($address['province'])) {

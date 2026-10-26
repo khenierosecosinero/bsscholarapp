@@ -277,6 +277,32 @@ class User extends Authenticatable
         };
     }
 
+    /**
+     * Scholar dashboard Account Summary label. Approved stays "Approved".
+     */
+    public function dashboardAccountStatusLabel(): string
+    {
+        return match ($this->status) {
+            self::STATUS_APPROVED => 'Approved',
+            self::STATUS_PENDING => 'Pending',
+            self::STATUS_REJECTED => 'Rejected',
+            self::STATUS_BLOCKED => 'Blocked',
+            self::STATUS_SUSPENDED => 'Suspended',
+            self::STATUS_INACTIVE => 'Inactive',
+            default => filled($this->status) ? ucfirst(str_replace('_', ' ', (string) $this->status)) : 'Unknown',
+        };
+    }
+
+    public function dashboardAccountStatusTone(): string
+    {
+        return match ($this->status) {
+            self::STATUS_APPROVED => 'approved',
+            self::STATUS_PENDING, self::STATUS_SUSPENDED => 'pending',
+            self::STATUS_REJECTED, self::STATUS_BLOCKED => 'alert',
+            default => 'neutral',
+        };
+    }
+
     public function staffStatusLabel(): string
     {
         return $this->accountStatusLabel();
@@ -367,7 +393,7 @@ class User extends Authenticatable
         $programOk = $event->scholarship_program_id
             && in_array((int) $event->scholarship_program_id, array_map('intval', $this->managedLocationIds()), true);
 
-        if (! $programOk) {
+        if (! $programOk || ! $this->matchesScholarshipClub($event->scholarship_club_id)) {
             return false;
         }
 
@@ -555,6 +581,58 @@ class User extends Authenticatable
         $address = $this->scholarshipClubAddress();
 
         return $address !== '' ? $name.' — '.$address : $name;
+    }
+
+    /**
+     * A club-owned record is visible only to that club. Older rows with no club
+     * stay available to the municipality or city they were saved under.
+     */
+    public function matchesScholarshipClub(?int $clubId): bool
+    {
+        if (! $clubId || ! $this->scholarship_club_id) {
+            return true;
+        }
+
+        return (int) $this->scholarship_club_id === (int) $clubId;
+    }
+
+    /**
+     * Human label for notifications. Surigao City is the named scholarship
+     * program. Clubs elsewhere are named as clubs in their municipality or city.
+     */
+    public function coverageLabel(): string
+    {
+        $club = $this->scholarshipClub?->name;
+        if ($club && ScholarshipClub::isRetiredName($club)) {
+            $club = null;
+        }
+
+        $place = trim(implode(', ', array_filter([
+            $this->municipalityName(),
+            $this->provinceName(),
+        ])));
+
+        if ($this->scholarshipProgram?->isSurigaoCityScholarshipProgram()) {
+            if ($club) {
+                return "{$club} under the Surigao City Scholarship Program";
+            }
+
+            return 'the Surigao City Scholarship Program';
+        }
+
+        if ($club && $place) {
+            return "{$club} in {$place}";
+        }
+
+        if ($club) {
+            return $club;
+        }
+
+        if ($place) {
+            return "a scholarship club in {$place}";
+        }
+
+        return 'your scholarship club';
     }
 
     public function locationLabel(): string

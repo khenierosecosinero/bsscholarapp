@@ -105,20 +105,50 @@ class ScholarshipProgram extends Model
         return $this->programLabel();
     }
 
+    public function isSurigaoCityScholarshipProgram(): bool
+    {
+        return $this->isCityOrMunicipality()
+            && strcasecmp(trim((string) $this->location_name), 'Surigao City') === 0
+            && strcasecmp(trim((string) ($this->province_name ?: '')), 'Surigao del Norte') === 0;
+    }
+
+    /**
+     * Stored name for a geographic row. Only Surigao City is a scholarship
+     * program. Other provinces and municipalities locate scholarship clubs.
+     */
+    public static function storedNameForLocation(string $locationName, string $locationType, ?string $provinceName): string
+    {
+        $locationName = trim($locationName);
+
+        if ($locationType === 'city_municipality'
+            && strcasecmp($locationName, 'Surigao City') === 0
+            && strcasecmp(trim((string) $provinceName), 'Surigao del Norte') === 0) {
+            return 'Surigao City Scholarship Program';
+        }
+
+        return $locationName;
+    }
+
     public function programTypeLabel(): string
     {
-        return match ($this->location_type) {
-            'province' => 'Province Scholar Program',
-            'city_municipality' => 'City Scholar Program',
-            default => 'Scholar Program',
-        };
+        if ($this->isSurigaoCityScholarshipProgram()) {
+            return 'Surigao City Scholarship Program';
+        }
+
+        return 'Scholarship Club';
     }
 
     public function programLabel(): string
     {
-        $name = $this->display_name ?: $this->location_name;
+        if ($this->isSurigaoCityScholarshipProgram()) {
+            return 'Surigao City Scholarship Program';
+        }
 
-        return "{$name} — {$this->programTypeLabel()}";
+        if ($this->isProvince()) {
+            return $this->location_name ?: ($this->display_name ?: (string) $this->name);
+        }
+
+        return $this->display_name ?: $this->location_name ?: (string) $this->name;
     }
 
     public function clubName(): string

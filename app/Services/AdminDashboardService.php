@@ -203,8 +203,9 @@ class AdminDashboardService
     }
 
     /**
-     * Unified Admin Events directory (no City Scholar / Province Scholar split).
-     * Events are stored on a scholarship program; a club filter uses that club's program.
+     * Admin Events directory for every scholarship club.
+     * A club filter uses events.scholarship_club_id. Older events with no club
+     * stay on that municipality or city.
      */
     public function eventsDirectoryQuery(?string $locationKey, ?int $clubId)
     {
@@ -218,7 +219,13 @@ class AdminDashboardService
 
         if ($clubId) {
             $clubProgramId = (int) (ScholarshipClub::query()->whereKey($clubId)->value('scholarship_program_id') ?? 0);
-            $query->where('scholarship_program_id', $clubProgramId ?: 0);
+            $query->where(function ($scoped) use ($clubId, $clubProgramId) {
+                $scoped->where('scholarship_club_id', $clubId)
+                    ->orWhere(function ($legacy) use ($clubProgramId) {
+                        $legacy->whereNull('scholarship_club_id')
+                            ->where('scholarship_program_id', $clubProgramId ?: 0);
+                    });
+            });
         }
 
         $this->academic->scopeEventsForReport($query, $this->academic->adminYearFilter());

@@ -456,6 +456,7 @@ class StaffDashboardService
                 'attendances:id,event_id,user_id,status,check_in',
             ])
             ->whereIn('scholarship_program_id', $programIds ?: [0])
+            ->visibleToClubMember($staff)
             ->where(function ($query) use ($filter) {
                 $query->where(function ($dated) use ($filter) {
                     $this->applyReportEventWindow($dated, null, $filter);

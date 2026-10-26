@@ -130,8 +130,7 @@ class UserController extends Controller
             ),
             'events' => $this->scholar->upcomingEvents($user, 5),
             'activities' => UserActivity::where('user_id', $user->id)->latest()->limit(5)->get(),
-            'announcements' => $this->announcements->forUser($user, 5),
-            'announcementStats' => $this->announcements->statsForUser($user),
+            'activeAcademicPeriod' => $this->academic->activePeriod(),
             'pendingAttendances' => $this->academic->scopeAttendancesForPeriod(
                 $user->attendances()->with('event')->where('status', 'pending')->whereNotNull('check_in'),
                 $this->academic->selectedPeriod()

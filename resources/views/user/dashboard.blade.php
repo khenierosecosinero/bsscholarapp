@@ -172,55 +172,6 @@
                 @endforelse
             </div>
         </div>
-    </div>
-
-    <aside class="right-col">
-        <div class="card activities">
-            <div class="card-header">RECENT ACTIVITIES</div>
-            <ul class="activity-list">
-                @forelse($activities as $act)
-                    <li>
-                        <div class="activity-icon green">&#10003;</div>
-                        <div><div class="text">{{ $act->description }}</div><div class="time">{{ $act->created_at->format('M d Y - g:i A') }}</div></div>
-                    </li>
-                @empty
-                    <li><p class="muted">No recent activities.</p></li>
-                @endforelse
-            </ul>
-        </div>
-
-        <div class="card announcements">
-            <div class="card-header">
-                ANNOUNCEMENTS
-                <a class="view-all" href="{{ route('user.announcements') }}">View All</a>
-            </div>
-            <ul class="ann-list">
-                @forelse($announcements as $ann)
-                    <li class="{{ !$ann->is_read ? 'unread' : '' }}">
-                        <a href="{{ route('user.announcements.show', $ann) }}" class="ann-link">
-                            <div class="ann-icon blue">&#128226;</div>
-                            <div class="ann-content">
-                                <div class="ann-title-row">
-                                    <strong>{{ $ann->title }}</strong>
-                                    @if(!$ann->is_read)
-                                        <span class="status-dot blue" aria-label="Unread"></span>
-                                    @endif
-                                </div>
-                                <div class="muted ann-excerpt">{{ Str::limit($ann->body, 72) }}</div>
-                                <div class="ann-date">{{ $ann->published_at?->format('M d Y') ?? $ann->created_at->format('M d Y') }}</div>
-                            </div>
-                        </a>
-                    </li>
-                @empty
-                    <li><p class="muted">No announcements.</p></li>
-                @endforelse
-            </ul>
-            @if(($announcementStats['unread'] ?? 0) > 0)
-                <a href="{{ route('user.announcements', ['filter' => 'unread']) }}" class="link center small">
-                    {{ $announcementStats['unread'] }} unread announcement{{ $announcementStats['unread'] === 1 ? '' : 's' }}
-                </a>
-            @endif
-        </div>
 
         <div class="card calendar">
             <div class="card-header">CALENDAR OF ACTIVITIES</div>
@@ -252,6 +203,27 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <aside class="right-col">
+        <div class="card activities">
+            <div class="card-header">RECENT ACTIVITIES</div>
+            <ul class="activity-list">
+                @forelse($activities as $act)
+                    <li>
+                        <div class="activity-icon green">&#10003;</div>
+                        <div><div class="text">{{ $act->description }}</div><div class="time">{{ $act->created_at->format('M d Y - g:i A') }}</div></div>
+                    </li>
+                @empty
+                    <li><p class="muted">No recent activities.</p></li>
+                @endforelse
+            </ul>
+        </div>
+
+        @include('partials.user-account-summary', [
+            'account' => auth()->user(),
+            'activeAcademicPeriod' => $activeAcademicPeriod,
+        ])
     </aside>
 </section>
 

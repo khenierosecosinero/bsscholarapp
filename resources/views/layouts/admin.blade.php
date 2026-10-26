@@ -77,7 +77,7 @@
                 citySelect.innerHTML = '';
                 var empty = document.createElement('option');
                 empty.value = '';
-                empty.textContent = isCityScholar ? 'Select municipality or city' : 'Not used for Province Scholar';
+                empty.textContent = 'Select municipality or city';
                 citySelect.appendChild(empty);
 
                 if (!isCityScholar) {

@@ -222,7 +222,8 @@ class EventActionController extends Controller
         if ($user->isScholarStaff()) {
             abort_unless(
                 $event->scholarship_program_id
-                    && in_array((int) $event->scholarship_program_id, array_map('intval', $user->managedLocationIds()), true),
+                    && in_array((int) $event->scholarship_program_id, array_map('intval', $user->managedLocationIds()), true)
+                    && $user->matchesScholarshipClub($event->scholarship_club_id),
                 403
             );
 

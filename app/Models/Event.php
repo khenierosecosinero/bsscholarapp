@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToScholarshipClub;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\Storage;
 
 class Event extends Model
 {
+    use BelongsToScholarshipClub;
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_CONFIRMED = 'confirmed';
@@ -27,6 +30,7 @@ class Event extends Model
     protected $fillable = [
         'title', 'description', 'location', 'starts_at', 'ends_at',
         'service_hours', 'organizer', 'image_url', 'image_path', 'status', 'scholarship_program_id',
+        'scholarship_club_id',
         'attendance_is_open', 'attendance_opened_at', 'attendance_closed_at',
         'attendance_opened_by', 'attendance_closed_by',
     ];
@@ -752,6 +756,8 @@ class Event extends Model
 
     public function scopeVisibleToStaff(Builder $query, ?User $staff): Builder
     {
+        $query->visibleToClubMember($staff);
+
         $from = $staff?->staffEventsVisibleFrom();
         if ($from === null) {
             return $query;

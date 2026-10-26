@@ -21,7 +21,7 @@ class ScholarshipProgramAssignmentService
 
         if (! $program) {
             throw ValidationException::withMessages([
-                'scholarship_program_id' => 'Please select a valid City or Province Scholarship Program for your area.',
+                'scholarship_program_id' => 'Please select a valid Municipality or City for the Scholarship Club.',
             ]);
         }
 

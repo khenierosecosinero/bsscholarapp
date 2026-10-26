@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToScholarshipClub;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,7 +10,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class Announcement extends Model
 {
-    protected $fillable = ['title', 'body', 'published_at', 'scholarship_program_id'];
+    use BelongsToScholarshipClub;
+
+    protected $fillable = ['title', 'body', 'published_at', 'scholarship_program_id', 'scholarship_club_id'];
 
     protected function casts(): array
     {
