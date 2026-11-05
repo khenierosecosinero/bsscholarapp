@@ -16,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+
+        // Fix HTTPS detection when running behind Railway's proxy.
+        $middleware->trustProxies(at: '*');
+
         $middleware->web(append: [
             \App\Http\Middleware\EnsureAccountAccess::class,
         ]);
@@ -46,17 +50,19 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            // Keep intentional removals (e.g. email verification) as real 404s.
+            // Keep intentional removals as real 404s.
             if ($request->is('email/*', 'up', 'favicon.ico')) {
                 return null;
             }
 
             $previous = $e->getPrevious();
-            $isMissingModel = $previous instanceof ModelNotFoundException
-                || str_contains(strtolower((string) $e->getMessage()), 'no query results');
 
-            // Soft-land only when a bound model is missing (e.g. deleted scholar ID).
-            // Leave unmatched routes and controller abort(404) gates unchanged.
+            $isMissingModel = $previous instanceof ModelNotFoundException
+                || str_contains(
+                    strtolower((string) $e->getMessage()),
+                    'no query results'
+                );
+
             if ($isMissingModel) {
                 return MissingResourceRedirect::toSafePage($request);
             }
