@@ -24,7 +24,7 @@
 <div class="staff-card">
     <div class="staff-card-header"><h2>Scholar Service Hours</h2></div>
     <div class="staff-table-wrap admin-data-table-wrap">
-        <table class="staff-table staff-manage-table admin-data-table admin-hours-table">
+        <table class="staff-table staff-stack-table staff-manage-table admin-data-table admin-hours-table">
             <thead>
                 <tr>
                     <th>Scholar</th>

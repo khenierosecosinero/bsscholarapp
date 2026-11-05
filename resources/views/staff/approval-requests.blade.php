@@ -28,7 +28,7 @@
 
 <div class="staff-card staff-approval-card">
     <div class="staff-table-wrap staff-data-table-wrap">
-        <table class="staff-table staff-manage-table staff-approval-table staff-data-table">
+        <table class="staff-table staff-stack-table staff-manage-table staff-approval-table staff-data-table">
             <thead>
                 <tr>
                     <th>Scholar Information</th>

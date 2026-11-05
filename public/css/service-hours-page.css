@@ -233,9 +233,16 @@
 
 .page-service-hours .service-table {
     width: 100%;
-    min-width: 780px;
-    table-layout: fixed;
+    min-width: 0;
+    table-layout: auto;
     border-collapse: collapse;
+}
+
+@media (min-width: 801px) {
+    .page-service-hours .service-table {
+        min-width: 780px;
+        table-layout: fixed;
+    }
 }
 
 .page-service-hours .service-table th,
@@ -302,43 +309,19 @@
 }
 
 @media (max-width: 800px) {
+    .page-service-hours .table-wrap {
+        overflow-x: visible;
+    }
+
     .page-service-hours .service-table {
-        min-width: 780px;
+        min-width: 0;
+        table-layout: auto;
     }
 
-    .page-service-hours .table.stack-table thead {
-        display: table-header-group;
-    }
-
-    .page-service-hours .table.stack-table,
-    .page-service-hours .table.stack-table tbody {
-        display: table;
-        width: 100%;
-    }
-
-    .page-service-hours .table.stack-table tbody {
-        display: table-row-group;
-    }
-
-    .page-service-hours .table.stack-table tr {
-        display: table-row;
-        border: none;
-        border-radius: 0;
-        padding: 0;
-        margin: 0;
-        background: transparent;
-    }
-
-    .page-service-hours .table.stack-table td {
-        display: table-cell;
-        max-width: none;
-        padding: 12px 10px;
-        border-top: 1px solid #f1f5f9;
-        border-bottom: none;
-    }
-
-    .page-service-hours .table.stack-table td::before {
-        content: none;
-        display: none;
+    .page-service-hours .service-table th,
+    .page-service-hours .service-table td {
+        width: auto;
+        min-width: 0;
+        white-space: normal;
     }
 }

@@ -1149,4 +1149,30 @@ body:has(.admin-shell) {
     .admin-data-table td.staff-col-actions .admin-staff-actions form .staff-btn {
         min-height: 40px;
     }
+
+    .admin-scholars-table.admin-data-table,
+    .admin-staff-pending-table.admin-data-table,
+    .admin-staff-accounts-table.admin-data-table,
+    .admin-events-table.admin-data-table,
+    .admin-hours-table.admin-data-table,
+    .admin-documents-table.admin-data-table {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .admin-data-table.staff-stack-table th,
+    .admin-data-table.staff-stack-table td {
+        min-width: 0;
+        width: auto;
+        max-width: 100%;
+        white-space: normal;
+        text-align: left;
+        height: auto;
+    }
+
+    .admin-data-table td.staff-col-actions .admin-staff-actions.staff-action-group {
+        width: 100%;
+        max-width: 220px;
+        margin: 0;
+    }
 }

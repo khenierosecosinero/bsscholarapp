@@ -1339,10 +1339,10 @@ body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica
 .progress-bar{height:12px;background:#eef3f6;border-radius:99px;overflow:hidden}
 .progress-fill{height:100%;background:var(--green);border-radius:99px;transition:width .3s}
 
-.tabs{display:flex;gap:4px;border-bottom:2px solid #eef3f6;margin-bottom:16px}
+.tabs{display:flex;gap:4px;border-bottom:2px solid #eef3f6;margin-bottom:16px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
 .tab{background:none;border:none;padding:10px 16px;font-weight:600;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px}
 .tab.active{color:#2563eb;border-bottom-color:#2563eb}
-.tabs-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+.tabs-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
 .tabs-row .tabs{margin-bottom:0;border-bottom:none}
 
 .service-table{font-size:13px}
@@ -2897,9 +2897,15 @@ body.nav-locked .staff-sidebar{
     width:100%;
 }
 .tabs,.tabs-row .tabs{
+    width:100%;
+    max-width:100%;
+    min-width:0;
     overflow-x:auto;
+    overscroll-behavior-x:contain;
     -webkit-overflow-scrolling:touch;
     flex-wrap:nowrap;
+    box-sizing:border-box;
+    scroll-padding-inline:8px;
 }
 .tabs .tab,.tabs a.tab{white-space:nowrap;flex-shrink:0}
 .connection-status{
@@ -3077,10 +3083,14 @@ img,video{max-width:100%}
         flex-direction:column;
         align-items:flex-start;
         gap:4px;
+        height:auto;
+        min-height:0;
+        min-width:0;
         padding:8px 0;
         border-top:none;
         border-bottom:1px solid #f1f5f9;
         white-space:normal;
+        overflow:visible;
         overflow-wrap:anywhere;
         word-wrap:break-word;
     }
@@ -3088,11 +3098,18 @@ img,video{max-width:100%}
     .table.stack-table td:first-child{padding-top:0}
     .table.stack-table td::before{
         content:attr(data-label);
+        display:block;
+        flex:none;
+        width:100%;
         font-size:11px;
         font-weight:700;
         letter-spacing:.04em;
         text-transform:uppercase;
         color:var(--muted);
+    }
+    .table.stack-table td > *{
+        min-width:0;
+        max-width:100%;
     }
     .table.stack-table td:not([data-label])::before,
     .table.stack-table td[colspan]::before{content:none;display:none}

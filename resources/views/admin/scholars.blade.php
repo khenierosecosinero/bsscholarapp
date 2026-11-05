@@ -6,7 +6,7 @@
 
 <div class="staff-card">
     <div class="staff-table-wrap admin-data-table-wrap">
-        <table class="staff-table staff-manage-table admin-data-table admin-scholars-table">
+        <table class="staff-table staff-stack-table staff-manage-table admin-data-table admin-scholars-table">
                 <thead>
                     <tr>
                         <th>Scholar</th>

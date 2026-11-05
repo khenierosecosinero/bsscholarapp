@@ -30,7 +30,7 @@
 
 <div class="staff-card">
     <div class="staff-table-wrap staff-data-table-wrap">
-        <table class="staff-table staff-manage-table staff-data-table staff-events-table">
+        <table class="staff-table staff-stack-table staff-manage-table staff-data-table staff-events-table">
             <thead>
                 <tr>
                     <th>Event Information</th>

@@ -52,7 +52,7 @@
         <span class="staff-badge orange">{{ $pendingStaff->count() }} awaiting approval</span>
     </div>
     <div class="staff-table-wrap admin-data-table-wrap admin-staff-pending-wrap">
-        <table class="staff-table staff-manage-table admin-data-table admin-staff-pending-table">
+        <table class="staff-table staff-stack-table staff-manage-table admin-data-table admin-staff-pending-table">
             <thead>
                 <tr>
                     <th class="admin-staff-pending-name-col">Staff Member</th>
@@ -114,7 +114,7 @@
 <div class="staff-card admin-staff-accounts-card">
     <div class="staff-card-header"><h2>All Scholar Staff Accounts</h2></div>
     <div class="staff-table-wrap admin-data-table-wrap admin-staff-accounts-wrap">
-        <table class="staff-table staff-manage-table admin-data-table admin-staff-accounts-table">
+        <table class="staff-table staff-stack-table staff-manage-table admin-data-table admin-staff-accounts-table">
             <thead>
                 <tr>
                     <th class="admin-staff-accounts-name-col">Staff Member</th>

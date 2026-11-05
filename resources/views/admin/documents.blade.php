@@ -23,7 +23,7 @@
 <div class="staff-card">
     <div class="staff-card-header"><h2>Document Submissions</h2></div>
     <div class="staff-table-wrap admin-data-table-wrap">
-        <table class="staff-table staff-manage-table admin-data-table admin-documents-table">
+        <table class="staff-table staff-stack-table staff-manage-table admin-data-table admin-documents-table">
             <thead>
                 <tr>
                     <th>Scholar</th>

@@ -112,7 +112,7 @@
 
 <div class="staff-card">
     <div class="staff-table-wrap staff-data-table-wrap">
-        <table class="staff-table staff-manage-table staff-documents-table staff-data-table">
+        <table class="staff-table staff-stack-table staff-manage-table staff-documents-table staff-data-table">
             <colgroup>
                 <col class="staff-documents-col-scholar">
                 <col class="staff-documents-col-date">
