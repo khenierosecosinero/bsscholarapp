@@ -22,6 +22,19 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
+/*
+|--------------------------------------------------------------------------
+| Public Privacy Policy
+|--------------------------------------------------------------------------
+|
+| This page is accessible without authentication.
+| Google OAuth can use it as the application's privacy policy URL.
+|
+*/
+
+Route::view('/privacy-policy', 'privacy-policy')
+    ->name('privacy.policy');
+
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.post');
 Route::get('/backup-email/verify/{backupEmail}', [AdminController::class, 'verifyBackupEmail'])

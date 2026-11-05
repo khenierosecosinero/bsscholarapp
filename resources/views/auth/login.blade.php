@@ -33,6 +33,7 @@
                 <div class="auth-form-footer">
                     <button class="btn login-btn" type="submit">Login</button>
                     <p class="muted form-note">New scholar? <a href="{{ route('register') }}" class="create">Create an Account</a></p>
+                    <p class="muted form-note"><a href="{{ route('privacy.policy') }}" class="create">Privacy Policy</a></p>
                 </div>
             </form>
         </div>
