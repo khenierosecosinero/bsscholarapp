@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Support\MailEnv;
+use Illuminate\Support\Facades\Mail;
 
 class MailConfigService
 {
@@ -138,11 +139,11 @@ class MailConfigService
             return;
         }
 
-        [$username, $usernameSource] = $this->resolveCredential(
+        [$username] = $this->resolveCredential(
             (string) config('mail.mailers.smtp.username'),
             'MAIL_USERNAME'
         );
-        [$password, $passwordSource] = $this->resolveCredential(
+        [$password] = $this->resolveCredential(
             (string) config('mail.mailers.smtp.password'),
             'MAIL_PASSWORD',
             stripInternalWhitespace: true
@@ -158,20 +159,23 @@ class MailConfigService
 
         $updates = [];
 
-        if ($username !== '' && in_array($usernameSource, ['env-fallback', 'dotenv-file'], true)) {
+        $configuredUsername = (string) config('mail.mailers.smtp.username');
+        if ($username !== '' && $username !== $configuredUsername) {
             $updates['mail.mailers.smtp.username'] = $username;
         }
 
-        if ($password !== '' && in_array($passwordSource, ['env-fallback', 'dotenv-file'], true)) {
+        $configuredPassword = (string) config('mail.mailers.smtp.password');
+        if ($password !== '' && $password !== $configuredPassword) {
             $updates['mail.mailers.smtp.password'] = $password;
         }
 
-        if ($from !== '' && trim((string) config('mail.from.address')) === '') {
+        if ($from !== '' && trim((string) config('mail.from.address')) !== $from) {
             $updates['mail.from.address'] = $from;
         }
 
         if ($updates !== []) {
             config($updates);
+            Mail::purge('smtp');
         }
     }
 

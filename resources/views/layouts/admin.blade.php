@@ -188,48 +188,49 @@
 
         document.querySelectorAll('[data-admin-location-form]').forEach(bindAdminLocationForm);
 
-        var staffNav = document.querySelector('[data-admin-nav="staff"]');
-        if (staffNav) {
-            var badgesUrl = @json(route('admin.sidebar-badges'));
-            var updateStaffBadge = function (count) {
-                count = parseInt(count, 10) || 0;
-                var badge = staffNav.querySelector('[data-admin-staff-badge]');
-                if (count > 0) {
-                    if (!badge) {
-                        badge = document.createElement('span');
-                        badge.className = 'staff-nav-badge';
-                        badge.setAttribute('data-admin-staff-badge', '');
-                        staffNav.appendChild(badge);
-                    }
-                    badge.textContent = count > 99 ? '99+' : String(count);
-                    badge.setAttribute('aria-label', count + ' pending staff registrations');
-                } else if (badge) {
-                    badge.remove();
+        var badgesUrl = @json(route('admin.sidebar-badges'));
+        var badgeRequestInFlight = false;
+        var updateSidebarBadge = function (key, count) {
+            var nav = document.querySelector('[data-admin-nav="' + key + '"]');
+            if (!nav) return;
+            count = parseInt(count, 10) || 0;
+            var badge = nav.querySelector('[data-admin-badge="' + key + '"]');
+            var label = nav.getAttribute('data-badge-label') || 'items requiring attention';
+            if (count > 0) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'staff-nav-badge';
+                    badge.setAttribute('data-admin-badge', key);
+                    nav.appendChild(badge);
                 }
-            };
-            var pollStaffBadge = function () {
-                if (document.hidden || staffBadgeInFlight) return;
-                staffBadgeInFlight = true;
-                fetch(badgesUrl, {
-                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                    credentials: 'same-origin'
-                }).then(function (response) {
-                    if (!response.ok) return null;
-                    return response.json();
-                }).then(function (data) {
-                    if (data && typeof data.staff !== 'undefined') {
-                        updateStaffBadge(data.staff);
-                    }
-                }).catch(function () {}).finally(function () {
-                    staffBadgeInFlight = false;
+                badge.textContent = count > 99 ? '99+' : String(count);
+                badge.setAttribute('aria-label', count + ' ' + label);
+            } else if (badge) {
+                badge.remove();
+            }
+        };
+        var pollSidebarBadges = function () {
+            if (document.hidden || badgeRequestInFlight) return;
+            badgeRequestInFlight = true;
+            fetch(badgesUrl, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            }).then(function (response) {
+                if (!response.ok) return null;
+                return response.json();
+            }).then(function (data) {
+                if (!data) return;
+                Object.keys(data).forEach(function (key) {
+                    updateSidebarBadge(key, data[key]);
                 });
-            };
-            var staffBadgeInFlight = false;
-            setInterval(pollStaffBadge, 20000);
-            document.addEventListener('visibilitychange', function () {
-                if (!document.hidden) pollStaffBadge();
+            }).catch(function () {}).finally(function () {
+                badgeRequestInFlight = false;
             });
-        }
+        };
+        setInterval(pollSidebarBadges, 20000);
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) pollSidebarBadges();
+        });
     });
     </script>
     @stack('scripts')

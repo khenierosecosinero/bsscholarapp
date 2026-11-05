@@ -56,11 +56,11 @@
                         ? array_filter(['location' => $navLocation !== 'all' ? $navLocation : null])
                         : $navQuery;
                 @endphp
-                <a href="{{ route($item['route'], $itemQuery) }}" class="staff-nav-item {{ $active === $item['key'] ? 'active' : '' }}" @if($item['key'] === 'staff') data-admin-nav="staff" @endif>
+                <a href="{{ route($item['route'], $itemQuery) }}" class="staff-nav-item {{ $active === $item['key'] ? 'active' : '' }}" data-admin-nav="{{ $item['key'] }}" data-badge-label="{{ $item['badgeLabel'] }}">
                     <span class="staff-nav-icon {{ $iconClass }}"></span>
                     <span class="staff-nav-label">{{ $item['label'] }}</span>
                     @if($badgeCount > 0)
-                        <span class="staff-nav-badge" @if($item['key'] === 'staff') data-admin-staff-badge @endif aria-label="{{ $badgeCount }} {{ $item['badgeLabel'] }}">{{ $badgeCount > 99 ? '99+' : $badgeCount }}</span>
+                        <span class="staff-nav-badge" data-admin-badge="{{ $item['key'] }}" aria-label="{{ $badgeCount }} {{ $item['badgeLabel'] }}">{{ $badgeCount > 99 ? '99+' : $badgeCount }}</span>
                     @endif
                 </a>
             @endforeach

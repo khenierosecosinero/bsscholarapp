@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Testing\Fakes\MailFake;
+use RuntimeException;
 use Throwable;
 
 class WorkflowMailService
@@ -306,7 +307,7 @@ class WorkflowMailService
                 $ttl,
                 $alertOnFailure
             ) {
-                SendWorkflowMail::dispatch(
+                $job = new SendWorkflowMail(
                     $email,
                     $name,
                     $title,
@@ -316,7 +317,39 @@ class WorkflowMailService
                     $dedupeKey,
                     $ttl,
                     $alertOnFailure
-                )->onQueue('emails');
+                );
+
+                // Tests and an explicit sync queue send immediately. A database
+                // queue would otherwise wait for a worker, and the "emails"
+                // queue is not consumed by the default worker on WAMP or Railway.
+                if (app()->runningUnitTests() || config('queue.default') === 'sync') {
+                    dispatch_sync($job);
+
+                    return;
+                }
+
+                app()->terminating(function () use ($job) {
+                    try {
+                        dispatch_sync($job);
+                    } catch (Throwable $e) {
+                        Log::error('Workflow email failed after the response and was queued for retry.', [
+                            'title' => $job->title,
+                            'exception' => $e::class,
+                        ]);
+
+                        dispatch(new SendWorkflowMail(
+                            $job->email,
+                            $job->name,
+                            $job->title,
+                            $job->body,
+                            $job->actionUrl,
+                            $job->actionLabel,
+                            $job->dedupeKey,
+                            $job->expiresAt,
+                            $job->alertOnFailure,
+                        ))->onQueue('default')->delay(now()->addMinute());
+                    }
+                });
             }
         );
     }
@@ -365,6 +398,8 @@ class WorkflowMailService
         if ($alertOnFailure) {
             $this->recordDeliveryFailure();
         }
+
+        throw new RuntimeException('Workflow email was not accepted by the mail transport.');
     }
 
     /**

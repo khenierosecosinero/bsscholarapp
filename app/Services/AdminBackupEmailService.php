@@ -257,7 +257,6 @@ class AdminBackupEmailService
         } catch (Throwable $e) {
             Log::error('Admin backup email verification mail failed.', [
                 'exception' => $e::class,
-                'hint' => $e->getMessage(),
             ]);
 
             throw ValidationException::withMessages([

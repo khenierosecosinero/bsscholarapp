@@ -106,13 +106,6 @@
                     ? 'No required documents have been posted by Scholar Staff yet.'
                     : 'No documents found.';
             @endphp
-            <div class="doc-mobile-list">
-                @forelse($filtered as $doc)
-                    @include('partials.scholar-document-entry', ['presentation' => 'card'])
-                @empty
-                    <p class="doc-mobile-empty muted">{{ $documentsEmptyMessage }}</p>
-                @endforelse
-            </div>
             <div class="table-wrap doc-table-wrap">
             <table class="table doc-table">
                 <thead><tr><th>Document Type</th><th>Description</th><th>Status</th><th>Deadline</th><th>Date Uploaded</th><th>Action</th></tr></thead>
@@ -160,6 +153,18 @@
 
 @push('scripts')
 <script>
+var activeDocumentTab = document.querySelector('.page-documents .tabs .tab.active');
+if (activeDocumentTab && activeDocumentTab.parentElement) {
+    var tabScroller = activeDocumentTab.parentElement;
+    var tabLeft = activeDocumentTab.offsetLeft;
+    var tabRight = tabLeft + activeDocumentTab.offsetWidth;
+    if (tabLeft < tabScroller.scrollLeft) {
+        tabScroller.scrollLeft = tabLeft;
+    } else if (tabRight > tabScroller.scrollLeft + tabScroller.clientWidth) {
+        tabScroller.scrollLeft = tabRight - tabScroller.clientWidth;
+    }
+}
+
 document.querySelectorAll('.doc-replace-form').forEach(function (form) {
     var input = form.querySelector('input[type="file"]');
     var filename = form.querySelector('.doc-replace-filename');

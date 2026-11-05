@@ -179,14 +179,21 @@ class AdminController extends Controller
     {
         $scope = $this->scope($request);
 
+        $user = Auth::user();
+        if ($user) {
+            $this->admin->markSectionViewed($user, $active, $scope['programIds']);
+        }
+
         return array_merge($scope, [
-            'admin' => Auth::user(),
+            'admin' => $user,
             'active' => $active,
             'pageTitle' => $title,
             'pageSubtitle' => $subtitle ?: 'System-wide administration for Batang Surigaonon Scholar\'s App.',
             'breadcrumb' => $title,
             'locationLabel' => $this->locationLabelForScope($scope),
-            'adminSidebarBadges' => $this->admin->adminSidebarBadges($scope['programIds']),
+            'adminSidebarBadges' => $user
+                ? $this->admin->adminSidebarBadges($user, $scope['programIds'])
+                : [],
             'academicPeriod' => $this->academic->selectedPeriod(),
             'academicYearOptions' => $this->academic->yearOptions(),
             'adminAcademicYearFilter' => $this->academic->adminYearFilter(),
@@ -877,9 +884,6 @@ class AdminController extends Controller
 
     public function reports(Request $request)
     {
-        $scope = $this->scope($request);
-        $this->admin->markReportsViewed($scope['programIds']);
-
         $reportContext = $this->admin->reportContext($request);
 
         return view('admin.reports', array_merge(
@@ -1065,9 +1069,10 @@ class AdminController extends Controller
     public function sidebarBadges(Request $request)
     {
         $scope = $this->scope($request);
+        $admin = $request->user();
 
-        return response()->json([
-            'staff' => $this->admin->pendingStaffQuery($scope['programIds'])->count(),
-        ]);
+        return response()->json(
+            $admin ? $this->admin->adminSidebarBadges($admin, $scope['programIds']) : []
+        );
     }
 }

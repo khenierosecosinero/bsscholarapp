@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AdminSectionView;
 use App\Models\Attendance;
 use App\Models\Document;
 use App\Models\DocumentType;
@@ -907,130 +908,266 @@ class AdminDashboardService
         return $query;
     }
 
+    public const SIDEBAR_SECTIONS = [
+        'dashboard',
+        'scholars',
+        'staff',
+        'events',
+        'service-hours',
+        'documents',
+        'reports',
+        'settings',
+    ];
+
     /**
-     * Pending/new item counts for each admin sidebar section (scoped to program IDs).
+     * Unviewed item counts for each admin sidebar section.
+     * Counts are limited to activity newer than this admin's last visit to that section.
      *
      * @return array<string, int>
      */
-    public function adminSidebarBadges(array $programIds): array
+    public function adminSidebarBadges(User $admin, array $programIds): array
     {
-        $payload = $this->sidebarBadgePayload($programIds);
-        $badges = $payload['badges'];
-        $badges['reports'] = $this->unreadReportsCount($programIds, $payload);
+        $programIds = $this->normalizeProgramIds($programIds);
+        $views = $this->sectionViews($admin);
 
-        return $badges;
+        return $this->computeSidebarBadges($programIds, $views);
     }
 
-    public function markReportsViewed(array $programIds): void
+    public function markSectionViewed(User $admin, string $section, array $programIds): void
     {
-        $payload = $this->sidebarBadgePayload($programIds);
-        session([$this->reportsSeenSessionKey($programIds) => $payload['reports_signature']]);
+        if (! in_array($section, self::SIDEBAR_SECTIONS, true)) {
+            return;
+        }
+
+        $values = ['viewed_at' => now()];
+
+        if ($section === 'reports') {
+            $values['seen_signature'] = $this->rememberedReportSignature(
+                $admin,
+                $this->reportsSignature($programIds),
+                $programIds
+            );
+        }
+
+        AdminSectionView::query()->updateOrCreate(
+            ['user_id' => $admin->id, 'section' => $section],
+            $values
+        );
     }
 
     /**
-     * @return array{badges: array<string, int>, reports_attention: int, reports_signature: string}
+     * @param  Collection<string, AdminSectionView>  $views
+     * @return array<string, int>
      */
-    private function sidebarBadgePayload(array $programIds): array
+    private function computeSidebarBadges(array $programIds, Collection $views): array
     {
-        $programIds = $programIds ?: [0];
-        $cacheKey = 'admin.sidebar_badges.v3.'.md5(implode(',', array_map('intval', $programIds)));
-
-        return Cache::remember($cacheKey, 20, function () use ($programIds) {
-            $pendingScholars = $this->scholarsQuery($programIds)
-                ->where('status', User::STATUS_PENDING)
-                ->count();
-
-            $pendingStaff = $this->pendingStaffQuery($programIds)->count();
-
-            $pendingEvents = $this->eventsQuery($programIds)
-                ->where('status', 'pending')
-                ->count();
-
-            $pendingAttendances = Attendance::query()
-                ->where('status', Attendance::STATUS_PENDING)
-                ->whereNotNull('check_in')
-                ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds))
-                ->count();
-
-            $pendingServiceHours = Attendance::query()
+        $pendingScholars = $this->countSince(
+            $this->scholarsQuery($programIds)->where('status', User::STATUS_PENDING),
+            $this->viewedAt($views, 'scholars')
+        );
+        $pendingStaff = $this->countSince(
+            $this->pendingStaffQuery($programIds),
+            $this->viewedAt($views, 'staff')
+        );
+        $pendingEvents = $this->countSince(
+            $this->eventsQuery($programIds)->where('status', 'pending'),
+            $this->viewedAt($views, 'events')
+        );
+        $pendingServiceHours = $this->countSince(
+            Attendance::query()
                 ->where('status', Attendance::STATUS_PENDING)
                 ->whereNotNull('check_in')
                 ->where('hours_earned', '>', 0)
-                ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds))
-                ->distinct('user_id')
-                ->count('user_id');
-
-            $pendingDocuments = Document::query()
+                ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds)),
+            $this->viewedAt($views, 'service-hours'),
+            'check_in',
+            true
+        );
+        $pendingDocuments = $this->countSince(
+            Document::query()
                 ->whereIn('status', ['pending', 'submitted'])
                 ->whereNotNull('file_path')
-                ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds))
-                ->count();
+                ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds)),
+            $this->viewedAt($views, 'documents'),
+            'uploaded_at'
+        );
 
-            $failedParticipation = EventRegistration::query()
-                ->where('status', EventRegistration::STATUS_FAILED_CHECK_IN)
-                ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds))
-                ->count();
+        $dashboardSince = $this->viewedAt($views, 'dashboard');
+        $dashboardScholars = $this->countSince(
+            $this->scholarsQuery($programIds)->where('status', User::STATUS_PENDING),
+            $dashboardSince
+        );
+        $dashboardStaff = $this->countSince(
+            $this->pendingStaffQuery($programIds),
+            $dashboardSince
+        );
+        $dashboardEvents = $this->countSince(
+            $this->eventsQuery($programIds)->where('status', 'pending'),
+            $dashboardSince
+        );
+        $dashboardAttendances = $this->countSince(
+            Attendance::query()
+                ->where('status', Attendance::STATUS_PENDING)
+                ->whereNotNull('check_in')
+                ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds)),
+            $dashboardSince,
+            'check_in'
+        );
+        $dashboardDocuments = $this->countSince(
+            Document::query()
+                ->whereIn('status', ['pending', 'submitted'])
+                ->whereNotNull('file_path')
+                ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds)),
+            $dashboardSince,
+            'uploaded_at'
+        );
 
-            $completion = $this->staff->completionCounts($programIds);
+        $report = $this->reportAttention($programIds);
 
-            $reportsAttention = (int) ($completion['in_progress'] ?? 0)
-                + (int) ($completion['not_started'] ?? 0);
+        return [
+            'dashboard' => $dashboardScholars + $dashboardStaff + $dashboardEvents + $dashboardAttendances + $dashboardDocuments,
+            'scholars' => $pendingScholars,
+            'staff' => $pendingStaff,
+            'events' => $pendingEvents,
+            'service-hours' => (int) $pendingServiceHours,
+            'documents' => $pendingDocuments,
+            'reports' => $this->unreadReportsCount($programIds, $views, $report),
+            'settings' => 0,
+        ];
+    }
 
-            $badges = [
-                'scholars' => $pendingScholars,
-                'staff' => $pendingStaff,
-                'events' => $pendingEvents,
-                'service-hours' => $pendingServiceHours,
-                'documents' => $pendingDocuments,
-                'reports' => 0,
-                'settings' => 0,
-            ];
+    private function countSince(Builder $query, ?CarbonInterface $since, string $column = 'created_at', bool $distinctUsers = false): int
+    {
+        if ($since) {
+            $query->where($column, '>', $since);
+        }
 
-            $badges['dashboard'] = $pendingScholars
-                + $pendingStaff
-                + $pendingEvents
-                + $pendingAttendances
-                + $pendingDocuments;
+        if ($distinctUsers) {
+            return (int) $query->distinct('user_id')->count('user_id');
+        }
 
-            return [
-                'badges' => $badges,
-                'reports_attention' => $reportsAttention,
-                'reports_signature' => md5(json_encode([
-                    'completed' => (int) ($completion['completed'] ?? 0),
-                    'in_progress' => (int) ($completion['in_progress'] ?? 0),
-                    'not_started' => (int) ($completion['not_started'] ?? 0),
-                    'approved_hours' => (float) ($completion['approved_hours'] ?? 0),
-                    'pending_attendances' => $pendingAttendances,
-                    'failed_participation' => $failedParticipation,
-                ])),
-            ];
-        });
+        return (int) $query->count();
     }
 
     /**
-     * @param  array{badges: array<string, int>, reports_attention: int, reports_signature: string}  $payload
+     * @param  Collection<string, AdminSectionView>  $views
+     * @param  array{attention: int, signature: string}  $report
      */
-    private function unreadReportsCount(array $programIds, array $payload): int
+    private function unreadReportsCount(array $programIds, Collection $views, array $report): int
     {
-        $attention = (int) ($payload['reports_attention'] ?? 0);
+        $attention = (int) ($report['attention'] ?? 0);
         if ($attention < 1) {
             return 0;
         }
 
-        $seen = session($this->reportsSeenSessionKey($programIds));
-        if (is_string($seen) && $seen === ($payload['reports_signature'] ?? '')) {
-            return 0;
-        }
+        $seen = $this->reportSignatures($views->get('reports'))[$this->reportsScopeKey($programIds)] ?? null;
 
-        return $attention;
+        return $seen === ($report['signature'] ?? '') ? 0 : $attention;
     }
 
-    private function reportsSeenSessionKey(array $programIds): string
+    /**
+     * @return array{attention: int, signature: string}
+     */
+    private function reportAttention(array $programIds): array
+    {
+        $pendingAttendances = Attendance::query()
+            ->where('status', Attendance::STATUS_PENDING)
+            ->whereNotNull('check_in')
+            ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds))
+            ->count();
+        $failedParticipation = EventRegistration::query()
+            ->where('status', EventRegistration::STATUS_FAILED_CHECK_IN)
+            ->whereHas('user', fn ($q) => $this->scopeScholars($q, $programIds))
+            ->count();
+        $completion = $this->staff->completionCounts($programIds);
+
+        return [
+            'attention' => (int) ($completion['in_progress'] ?? 0) + (int) ($completion['not_started'] ?? 0),
+            'signature' => md5(json_encode([
+                'completed' => (int) ($completion['completed'] ?? 0),
+                'in_progress' => (int) ($completion['in_progress'] ?? 0),
+                'not_started' => (int) ($completion['not_started'] ?? 0),
+                'approved_hours' => (float) ($completion['approved_hours'] ?? 0),
+                'pending_attendances' => $pendingAttendances,
+                'failed_participation' => $failedParticipation,
+            ])),
+        ];
+    }
+
+    private function reportsSignature(array $programIds): string
+    {
+        return $this->reportAttention($this->normalizeProgramIds($programIds))['signature'];
+    }
+
+    private function rememberedReportSignature(User $admin, string $signature, array $programIds): string
+    {
+        $existing = AdminSectionView::query()
+            ->where('user_id', $admin->id)
+            ->where('section', 'reports')
+            ->value('seen_signature');
+        $map = $this->decodeReportSignatures(is_string($existing) ? $existing : null);
+        $map[$this->reportsScopeKey($programIds)] = $signature;
+
+        return json_encode($map) ?: '{}';
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function reportSignatures(?AdminSectionView $view): array
+    {
+        return $this->decodeReportSignatures($view?->seen_signature);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function decodeReportSignatures(?string $stored): array
+    {
+        if ($stored === null || $stored === '') {
+            return [];
+        }
+
+        $decoded = json_decode($stored, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @return Collection<string, AdminSectionView>
+     */
+    private function sectionViews(User $admin): Collection
+    {
+        return AdminSectionView::query()
+            ->where('user_id', $admin->id)
+            ->get()
+            ->keyBy('section');
+    }
+
+    /**
+     * @param  Collection<string, AdminSectionView>  $views
+     */
+    private function viewedAt(Collection $views, string $section): ?CarbonInterface
+    {
+        $viewedAt = $views->get($section)?->viewed_at;
+
+        return $viewedAt instanceof CarbonInterface ? $viewedAt : null;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function normalizeProgramIds(array $programIds): array
     {
         $programIds = array_values(array_unique(array_map('intval', $programIds ?: [0])));
         sort($programIds);
 
-        return 'admin_reports_seen.'.md5(implode(',', $programIds));
+        return $programIds === [] ? [0] : $programIds;
+    }
+
+    private function reportsScopeKey(array $programIds): string
+    {
+        return md5(implode(',', $this->normalizeProgramIds($programIds)));
     }
 
     public function forgetLocationCaches(): void

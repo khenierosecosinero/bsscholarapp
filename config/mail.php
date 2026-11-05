@@ -75,7 +75,7 @@ return [
             // waiting indefinitely.
             'timeout' => (int) env(
                 'MAIL_TIMEOUT',
-                10
+                20
             ),
 
             'local_domain' => MailEnv::string(
