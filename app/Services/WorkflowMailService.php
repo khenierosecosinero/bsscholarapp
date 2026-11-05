@@ -458,7 +458,7 @@ class WorkflowMailService
                         ),
                         'attempt' => $attempts,
                         'exception' => $e::class,
-                        'reason' => $this->safeError($e),
+                        'reason' => app(MailConfigService::class)->deliveryError($e),
                     ]
                 );
             }
@@ -721,46 +721,11 @@ class WorkflowMailService
             trim((string) config('mail.default'))
         );
 
-        if (in_array(
-            $default,
-            ['array', 'log'],
-            true
-        )) {
-            return Mail::mailer($default);
+        if ($default === '') {
+            $default = 'smtp';
         }
 
-        return Mail::mailer('smtp');
+        return Mail::mailer($default);
     }
 
-    /**
-     * Return safe error details without
-     * exposing SMTP credentials.
-     */
-    private function safeError(
-        Throwable $e
-    ): string {
-        $raw = strtolower($e->getMessage());
-
-        if (
-            str_contains($raw, 'auth') ||
-            str_contains($raw, '535') ||
-            str_contains($raw, '534') ||
-            str_contains($raw, 'username') ||
-            str_contains($raw, 'password') ||
-            str_contains($raw, 'credentials')
-        ) {
-            return 'The mail server rejected the SMTP login.';
-        }
-
-        if (
-            str_contains($raw, 'connect') ||
-            str_contains($raw, 'timed out') ||
-            str_contains($raw, 'timeout') ||
-            str_contains($raw, 'connection refused')
-        ) {
-            return 'The mail server could not be reached.';
-        }
-
-        return 'The mail server did not accept the message.';
-    }
 }

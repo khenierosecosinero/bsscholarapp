@@ -228,7 +228,7 @@ class AdminBackupEmailService
 
         if (! $mailStatus['ready']) {
             throw ValidationException::withMessages([
-                'backup_email' => 'Email delivery is not configured. Set Gmail SMTP in the environment before verifying a backup email.',
+                'backup_email' => $mailConfig->notConfiguredMessage(),
             ]);
         }
 
@@ -251,16 +251,17 @@ class AdminBackupEmailService
         ]);
 
         try {
-            Mail::mailer('smtp')->to($backup->normalizedEmail())->send(
+            Mail::mailer($mailStatus['mailer'])->to($backup->normalizedEmail())->send(
                 new AdminBackupEmailVerificationMail($admin, $backup->normalizedEmail(), $url, self::EXPIRE_MINUTES)
             );
         } catch (Throwable $e) {
             Log::error('Admin backup email verification mail failed.', [
                 'exception' => $e::class,
+                'mailer' => $mailStatus['mailer'],
             ]);
 
             throw ValidationException::withMessages([
-                'backup_email' => 'The verification email could not be sent through Gmail SMTP. Try again after confirming mail settings.',
+                'backup_email' => $mailConfig->deliveryError($e),
             ]);
         }
     }

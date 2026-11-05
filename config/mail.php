@@ -101,6 +101,7 @@ return [
 
         'resend' => [
             'transport' => 'resend',
+            'key' => MailEnv::string(env('RESEND_API_KEY')),
         ],
 
         'sendmail' => [

@@ -44,6 +44,7 @@ class PasswordResetEmailTest extends TestCase
 
         $this->mock(MailConfigService::class, function ($mail) {
             $mail->shouldReceive('syncRuntimeCredentials')->andReturnNull();
+            $mail->shouldReceive('notConfiguredMessage')->andReturn('Email delivery is not configured.');
             $mail->shouldReceive('status')->andReturn([
                 'ready' => false,
                 'mailer' => 'smtp',

@@ -94,4 +94,48 @@ class MailConfigServiceTest extends TestCase
             $this->assertContains($status['username_source'], ['config', 'env-fallback', 'dotenv-file', 'missing']);
         }
     }
+
+    public function test_resend_is_ready_with_an_api_key_and_verified_from_address(): void
+    {
+        config([
+            'mail.default' => 'resend',
+            'services.resend.key' => 're_test_key_value_123456',
+            'mail.from.address' => 'noreply@bsscholar.app',
+        ]);
+
+        $status = app(MailConfigService::class)->status();
+
+        $this->assertTrue($status['ready'], implode('; ', $status['issues']));
+        $this->assertSame('resend', $status['mailer']);
+        $this->assertSame('api.resend.com', $status['host']);
+        $this->assertSame('n***@bsscholar.app', $status['username_preview']);
+    }
+
+    public function test_resend_rejects_a_gmail_sending_address(): void
+    {
+        config([
+            'mail.default' => 'resend',
+            'services.resend.key' => 're_test_key_value_123456',
+            'mail.from.address' => 'batangsurigaononscholarsapp@gmail.com',
+        ]);
+
+        $status = app(MailConfigService::class)->status();
+
+        $this->assertFalse($status['ready']);
+        $this->assertTrue(collect($status['issues'])->contains(
+            fn (string $issue) => str_contains($issue, 'cannot send from a Gmail address')
+        ));
+    }
+
+    public function test_smtp_connection_error_explains_the_railway_block(): void
+    {
+        config(['mail.default' => 'smtp']);
+
+        $message = app(MailConfigService::class)->deliveryError(
+            new \RuntimeException('Connection to smtp.gmail.com:587 timed out.')
+        );
+
+        $this->assertStringContainsString('Railway Hobby blocks outbound SMTP', $message);
+        $this->assertStringContainsString('MAIL_MAILER=resend', $message);
+    }
 }

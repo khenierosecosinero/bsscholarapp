@@ -183,7 +183,7 @@ class PasswordResetService
             ]);
 
             throw ValidationException::withMessages([
-                'email' => 'Email delivery is not configured. Ask an administrator to set Gmail SMTP (MAIL_USERNAME, Google App Password, MAIL_FROM_ADDRESS) in the environment and run php artisan config:clear.',
+                'email' => $mailConfig->notConfiguredMessage(),
             ]);
         }
 
@@ -211,10 +211,10 @@ class PasswordResetService
         });
 
         try {
-            Mail::mailer('smtp')->to($email)->send(new PasswordResetCodeMail($user, $code, $resetUrl));
+            Mail::mailer($mailStatus['mailer'])->to($email)->send(new PasswordResetCodeMail($user, $code, $resetUrl));
 
-            Log::info('Password reset email sent via SMTP.', [
-                'mailer' => 'smtp',
+            Log::info('Password reset email accepted by the mail transport.', [
+                'mailer' => $mailStatus['mailer'],
                 'host' => $mailStatus['host'],
                 'port' => $mailStatus['port'],
                 'username_preview' => $mailStatus['username_preview'] ?? null,
@@ -224,20 +224,19 @@ class PasswordResetService
                 'queued' => false,
             ]);
         } catch (Throwable $e) {
-            Log::error('Password reset email failed at SMTP transport.', [
-                'mailer' => 'smtp',
+            Log::error('Password reset email failed at the mail transport.', [
+                'mailer' => $mailStatus['mailer'],
                 'host' => $mailStatus['host'],
                 'port' => $mailStatus['port'],
                 'encryption' => $mailStatus['encryption'],
                 'username_preview' => $mailStatus['username_preview'] ?? null,
                 'exception' => $e::class,
-                'hint' => $this->safeMailError($e),
             ]);
 
             DB::table('password_reset_tokens')->where('email', $email)->delete();
 
             throw ValidationException::withMessages([
-                'recovery_email' => $this->safeMailError($e),
+                'recovery_email' => $mailConfig->deliveryError($e),
             ]);
         }
     }
@@ -362,18 +361,4 @@ class PasswordResetService
         return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
     }
 
-    private function safeMailError(Throwable $e): string
-    {
-        $raw = strtolower($e->getMessage());
-
-        if (str_contains($raw, 'auth') || str_contains($raw, '535') || str_contains($raw, '534') || str_contains($raw, 'username') || str_contains($raw, 'password') || str_contains($raw, 'credentials')) {
-            return 'Gmail rejected the SMTP login. MAIL_USERNAME and MAIL_FROM_ADDRESS must be the sending Gmail, MAIL_PASSWORD must be a Google App Password, then run php artisan config:clear.';
-        }
-
-        if (str_contains($raw, 'connect') || str_contains($raw, 'timed out') || str_contains($raw, 'timeout') || str_contains($raw, 'connection refused')) {
-            return 'Could not connect to Gmail SMTP. Confirm MAIL_HOST=smtp.gmail.com, MAIL_PORT=587, and MAIL_ENCRYPTION=tls.';
-        }
-
-        return 'The verification code could not be sent through Gmail SMTP.';
-    }
 }
