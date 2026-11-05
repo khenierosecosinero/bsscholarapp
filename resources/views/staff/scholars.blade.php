@@ -77,6 +77,7 @@
             </tbody>
         </table>
     </div>
+    <div class="staff-pagination">{{ $scholars->links() }}</div>
 </div>
 
 <div hidden id="staff-scholar-presence-root" data-presence-url="{{ route('staff.scholars.presence') }}"></div>

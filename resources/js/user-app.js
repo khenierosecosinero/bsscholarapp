@@ -537,6 +537,8 @@ function initStaffScholarPresence() {
     };
 
     const poll = async () => {
+        if (document.hidden) return;
+
         try {
             const response = await fetch(root.dataset.presenceUrl, {
                 headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },

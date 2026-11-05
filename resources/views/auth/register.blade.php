@@ -16,11 +16,8 @@
                     @include('partials.scholar-club-select', [
                         'clubs' => $clubs,
                     ])
-                    <label class="location-cascade-label" for="street" style="display:block;font-size:12px;font-weight:600;color:#6b7280;margin:0 0 6px;padding-left:4px">No./Street</label>
+                    <label class="location-cascade-label" for="street" style="display:block;font-size:12px;font-weight:600;color:#6b7280;margin:0 0 6px;padding-left:4px;line-height:1.35">ADDRESS (No./Street & Barangay)</label>
                     <input class="form-input" id="street" type="text" name="street" placeholder="House number and street name" value="{{ old('street') }}" maxlength="255" autocomplete="address-line1" />
-                    <p class="muted small" style="margin:-4px 0 12px;padding-left:4px">
-                        Choose a Scholarship Club. Province and Municipality/City come from that club. No./Street is your house number and street name.
-                    </p>
                     <input class="form-input" type="email" name="email" placeholder="Email" value="{{ old('email') }}" required autocomplete="email" />
                     <label class="location-cascade-label" for="course_year_level" style="display:block;font-size:12px;font-weight:600;color:#6b7280;margin:0 0 6px;padding-left:4px">Course</label>
                     <input

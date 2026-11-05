@@ -35,9 +35,9 @@ class StaffDashboardService
         $counts = Event::query()
             ->whereIn('scholarship_program_id', $this->programIds($staff) ?: [0])
             ->visibleToStaff($staff)
-            ->get(['id', 'status'])
-            ->unique('id')
-            ->countBy('status');
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
 
         return [
             'confirmed' => (int) ($counts[Event::STATUS_CONFIRMED] ?? 0) + (int) ($counts[Event::STATUS_ONGOING] ?? 0),
@@ -141,11 +141,11 @@ class StaffDashboardService
             ->whereIn('scholarship_program_id', $programIds ?: [0])
             ->visibleToStaff($staff);
         $this->academic->scopeEventsForReport($events, $periodFilter);
+        $eventTotals = $this->eventAggregates($events);
 
-        $pendingAttendances = $this->attendanceQuery($programIds, $periodFilter, $staff, $clubIds)
-            ->where('status', Attendance::STATUS_PENDING)
-            ->whereNotNull('check_in')
-            ->count();
+        $attendanceTotals = $this->attendanceAggregates(
+            $this->attendanceQuery($programIds, $periodFilter, $staff, $clubIds)
+        );
 
         $pendingDocuments = Document::query()
             ->where('status', 'pending')
@@ -156,21 +156,16 @@ class StaffDashboardService
             });
         $this->academic->scopeDocumentsForReport($pendingDocuments, $periodFilter);
 
-        $totalServiceHours = $this->attendanceQuery($programIds, $periodFilter, $staff, $clubIds)
-            ->where('status', Attendance::STATUS_APPROVED)
-            ->whereNotNull('check_in')
-            ->sum('hours_earned');
-
         return [
             'total_scholars' => $totalScholars,
             'active_scholars' => $statusCounts['approved'] ?? 0,
             'pending_scholars' => $statusCounts['pending'] ?? 0,
             'rejected_scholars' => $statusCounts['rejected'] ?? 0,
-            'total_events' => (clone $events)->count(),
-            'upcoming_events' => (clone $events)->where('starts_at', '>=', now())->count(),
-            'pending_attendances' => $pendingAttendances,
+            'total_events' => (int) $eventTotals->total_events,
+            'upcoming_events' => (int) $eventTotals->upcoming_events,
+            'pending_attendances' => (int) $attendanceTotals->pending_count,
             'pending_documents' => $pendingDocuments->count(),
-            'total_service_hours' => number_format((float) $totalServiceHours, 2),
+            'total_service_hours' => number_format((float) $attendanceTotals->approved_hours, 2),
             'period' => $periodFilter,
         ];
     }
@@ -222,12 +217,14 @@ class StaffDashboardService
 
     public function attendanceBreakdown(array $programIds, ?array $filter = null, ?User $staff = null, ?array $clubIds = null, ?array $schoolFilter = null): array
     {
-        $base = $this->attendanceQuery($programIds, $filter, $staff, $clubIds, $schoolFilter);
+        $totals = $this->attendanceAggregates(
+            $this->attendanceQuery($programIds, $filter, $staff, $clubIds, $schoolFilter)
+        );
 
-        $approved = (clone $base)->where('status', Attendance::STATUS_APPROVED)->whereNotNull('check_in')->count();
-        $pending = (clone $base)->where('status', Attendance::STATUS_PENDING)->whereNotNull('check_in')->count();
-        $rejected = (clone $base)->where('status', Attendance::STATUS_REJECTED)->count();
-        $failedCheckIn = (clone $base)->where('status', Attendance::STATUS_FAILED_CHECK_IN)->count();
+        $approved = (int) $totals->approved_count;
+        $pending = (int) $totals->pending_count;
+        $rejected = (int) $totals->rejected_count;
+        $failedCheckIn = (int) $totals->failed_count;
         $total = max(1, $approved + $pending + $rejected + $failedCheckIn);
 
         return compact('approved', 'pending', 'rejected', 'failedCheckIn', 'total');
@@ -283,15 +280,15 @@ class StaffDashboardService
     public function hoursOverview(array $programIds): array
     {
         $period = $this->academic->selectedPeriod();
-        $base = $this->attendanceQuery($programIds, $this->academic->resolveReportFilter(
+        $totals = $this->attendanceAggregates($this->attendanceQuery($programIds, $this->academic->resolveReportFilter(
             (int) $period->year_start,
             $period->semester
-        ));
+        )));
 
-        $approvedHours = (float) (clone $base)->where('status', Attendance::STATUS_APPROVED)->whereNotNull('check_in')->sum('hours_earned');
-        $pendingHours = (float) (clone $base)->where('status', Attendance::STATUS_PENDING)->whereNotNull('check_in')->sum('hours_earned');
-        $rejectedCount = (clone $base)->where('status', Attendance::STATUS_REJECTED)->count();
-        $failedCount = (clone $base)->where('status', Attendance::STATUS_FAILED_CHECK_IN)->count();
+        $approvedHours = (float) $totals->approved_hours;
+        $pendingHours = (float) $totals->pending_hours;
+        $rejectedCount = (int) $totals->rejected_count;
+        $failedCount = (int) $totals->failed_count;
 
         return [
             'approved_hours' => $approvedHours,
@@ -593,6 +590,40 @@ class StaffDashboardService
         $current = $this->academic->selectedPeriod();
 
         return $this->academic->resolveReportFilter((int) $current->year_start, $current->semester);
+    }
+
+    private function attendanceAggregates($query): object
+    {
+        return (clone $query)
+            ->reorder()
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN status = ? AND check_in IS NOT NULL THEN 1 ELSE 0 END), 0) as approved_count,
+                 COALESCE(SUM(CASE WHEN status = ? AND check_in IS NOT NULL THEN hours_earned ELSE 0 END), 0) as approved_hours,
+                 COALESCE(SUM(CASE WHEN status = ? AND check_in IS NOT NULL THEN 1 ELSE 0 END), 0) as pending_count,
+                 COALESCE(SUM(CASE WHEN status = ? AND check_in IS NOT NULL THEN hours_earned ELSE 0 END), 0) as pending_hours,
+                 COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) as rejected_count,
+                 COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) as failed_count',
+                [
+                    Attendance::STATUS_APPROVED,
+                    Attendance::STATUS_APPROVED,
+                    Attendance::STATUS_PENDING,
+                    Attendance::STATUS_PENDING,
+                    Attendance::STATUS_REJECTED,
+                    Attendance::STATUS_FAILED_CHECK_IN,
+                ]
+            )
+            ->first();
+    }
+
+    private function eventAggregates($query): object
+    {
+        return (clone $query)
+            ->reorder()
+            ->selectRaw(
+                'COUNT(*) as total_events, COALESCE(SUM(CASE WHEN starts_at >= ? THEN 1 ELSE 0 END), 0) as upcoming_events',
+                [now()]
+            )
+            ->first();
     }
 
     private function attendanceQuery(array $programIds, ?array $filter = null, ?User $staff = null, ?array $clubIds = null, ?array $schoolFilter = null)

@@ -55,7 +55,7 @@
                     <div class="event-item">
                         <div class="event-date"><span class="month">{{ $ev['month'] }}</span><span class="day">{{ $ev['day'] }}</span><span class="dow">{{ $ev['dow'] }}</span></div>
                         @if($ev['image_url'])
-                            <img class="event-thumb" src="{{ $ev['image_url'] }}" alt="">
+                            <img class="event-thumb" src="{{ $ev['image_url'] }}" alt="" loading="lazy" decoding="async">
                         @else
                             <span class="event-thumb event-thumb-placeholder" aria-hidden="true"></span>
                         @endif
@@ -113,7 +113,7 @@
                                     <td data-label="Event">
                                         <div class="table-event">
                                             @if($att->event?->image_url)
-                                                <img src="{{ $att->event->image_url }}" alt="">
+                                                <img src="{{ $att->event->image_url }}" alt="" loading="lazy" decoding="async">
                                             @endif
                                             <span class="table-event-title">{{ $att->event?->title }}</span>
                                         </div>

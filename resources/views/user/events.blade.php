@@ -34,7 +34,7 @@
                 @forelse($events as $ev)
                     <a href="{{ route('user.events', array_merge(request()->only('search', 'status'), ['event' => $ev['id']])) }}" class="event-item {{ ($selected && $selected['id'] === $ev['id']) ? 'selected' : '' }}">
                         <div class="event-date"><span class="month">{{ $ev['month'] }}</span><span class="day">{{ $ev['day'] }}</span><span class="dow">{{ $ev['dow'] }}</span></div>
-                        @if($ev['image_url'])<img class="event-thumb" src="{{ $ev['image_url'] }}" alt="">@endif
+                        @if($ev['image_url'])<img class="event-thumb" src="{{ $ev['image_url'] }}" alt="" loading="lazy" decoding="async">@endif
                         <div class="event-details">
                             <div class="event-title">{{ $ev['title'] }}</div>
                             <div class="event-meta">{{ $ev['full_date'] }} · {{ $ev['time'] }} · {{ $ev['location'] }}</div>

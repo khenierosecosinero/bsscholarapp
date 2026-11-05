@@ -26,40 +26,46 @@ class AcademicSettingsService
 
     public function current(): AcademicSetting
     {
-        $cached = Cache::get(self::CACHE_KEY);
-        if ($cached instanceof AcademicSetting) {
-            $fresh = AcademicSetting::query()->find($cached->getKey());
-            if ($fresh) {
-                return $fresh;
+        return $this->rememberRequest('current', function () {
+            $cached = Cache::get(self::CACHE_KEY);
+            if ($cached instanceof AcademicSetting) {
+                // Tests rebuild the database underneath a warm cache, so re-read the row.
+                if (app()->runningUnitTests()) {
+                    $fresh = AcademicSetting::query()->find($cached->getKey());
+                    if ($fresh) {
+                        return $fresh;
+                    }
+
+                    Cache::forget(self::CACHE_KEY);
+                } else {
+                    return $cached;
+                }
+            } elseif ($cached !== null) {
+                Cache::forget(self::CACHE_KEY);
             }
 
-            // Stale cache (e.g. after RefreshDatabase rollback or settings wipe).
-            Cache::forget(self::CACHE_KEY);
-        } elseif ($cached !== null) {
-            Cache::forget(self::CACHE_KEY);
-        }
+            return Cache::remember(self::CACHE_KEY, 3600, function () {
+                $match = AcademicSetting::query()
+                    ->where('year_start', $this->calendarYearStart())
+                    ->first();
+                if ($match) {
+                    return $match;
+                }
 
-        return Cache::remember(self::CACHE_KEY, 3600, function () {
-            $match = AcademicSetting::query()
-                ->where('year_start', $this->calendarYearStart())
-                ->first();
-            if ($match) {
-                return $match;
-            }
+                $existing = AcademicSetting::query()->orderByDesc('year_start')->orderByDesc('id')->first();
+                if ($existing) {
+                    return $existing;
+                }
 
-            $existing = AcademicSetting::query()->orderByDesc('year_start')->orderByDesc('id')->first();
-            if ($existing) {
-                return $existing;
-            }
+                $year = $this->calendarYearStart();
 
-            $year = $this->calendarYearStart();
-
-            return AcademicSetting::create([
-                'year_start' => $year,
-                'year_end' => $year + 1,
-                'semester' => $this->calendarSemester(),
-                'is_active' => false,
-            ]);
+                return AcademicSetting::create([
+                    'year_start' => $year,
+                    'year_end' => $year + 1,
+                    'semester' => $this->calendarSemester(),
+                    'is_active' => false,
+                ]);
+            });
         });
     }
 
@@ -69,6 +75,13 @@ class AcademicSettingsService
      * the administrator's academic years or stamped attendance.
      */
     public function selectedPeriod(): AcademicSetting
+    {
+        return $this->rememberRequest('selected', function () {
+            return $this->resolveSelectedPeriod();
+        });
+    }
+
+    private function resolveSelectedPeriod(): AcademicSetting
     {
         $stored = session(self::SESSION_KEY);
         $year = is_array($stored) ? (int) ($stored['year_start'] ?? 0) : 0;
@@ -139,6 +152,9 @@ class AcademicSettingsService
             ],
         ]);
 
+        $this->forgetRequestMemo('selected');
+        $this->forgetRequestMemo('admin_filter');
+
         return $this->selectedPeriod();
     }
 
@@ -169,6 +185,7 @@ class AcademicSettingsService
     public function clearCache(): void
     {
         Cache::forget(self::CACHE_KEY);
+        $this->forgetAcademicMemos();
     }
 
     /**
@@ -177,8 +194,10 @@ class AcademicSettingsService
      */
     public function activePeriod(): AcademicSetting
     {
-        return AcademicSetting::query()->active()->orderByDesc('year_start')->orderByDesc('id')->first()
-            ?? $this->current();
+        return $this->rememberRequest('active', function () {
+            return AcademicSetting::query()->active()->orderByDesc('year_start')->orderByDesc('id')->first()
+                ?? $this->current();
+        });
     }
 
     /**
@@ -504,17 +523,19 @@ class AcademicSettingsService
 
     public function yearOptions(int $range = 5): array
     {
-        $this->current();
+        return $this->rememberRequest('years', function () {
+            $this->current();
 
-        $years = [];
-        AcademicSetting::query()
-            ->orderBy('year_start')
-            ->get(['year_start', 'year_end'])
-            ->each(function (AcademicSetting $setting) use (&$years) {
-                $years[(int) $setting->year_start] = $setting->periodLabel();
-            });
+            $years = [];
+            AcademicSetting::query()
+                ->orderBy('year_start')
+                ->get(['year_start', 'year_end'])
+                ->each(function (AcademicSetting $setting) use (&$years) {
+                    $years[(int) $setting->year_start] = $setting->periodLabel();
+                });
 
-        return $years;
+            return $years;
+        });
     }
 
     /**
@@ -669,7 +690,9 @@ class AcademicSettingsService
      */
     public function adminYearFilter(): array
     {
-        return $this->selectedReportFilter(self::SEMESTER_ALL);
+        return $this->rememberRequest('admin_filter', function () {
+            return $this->selectedReportFilter(self::SEMESTER_ALL);
+        });
     }
 
     /**
@@ -822,5 +845,49 @@ class AcademicSettingsService
             'status_slug' => $statusSlug,
             'is_global' => true,
         ];
+    }
+
+    /**
+     * Reuse academic-period lookups for the rest of this HTTP request.
+     */
+    private function rememberRequest(string $key, callable $resolve): mixed
+    {
+        if (! app()->bound('request')) {
+            return $resolve();
+        }
+
+        $attribute = 'academic_memo.'.$key;
+        $request = request();
+
+        if ($request->attributes->has($attribute)) {
+            return $request->attributes->get($attribute);
+        }
+
+        $value = $resolve();
+        $request->attributes->set($attribute, $value);
+
+        return $value;
+    }
+
+    private function forgetRequestMemo(string $key): void
+    {
+        if (app()->bound('request')) {
+            request()->attributes->remove('academic_memo.'.$key);
+        }
+    }
+
+    private function forgetAcademicMemos(): void
+    {
+        if (! app()->bound('request')) {
+            return;
+        }
+
+        $request = request();
+
+        foreach (array_keys($request->attributes->all()) as $name) {
+            if (is_string($name) && str_starts_with($name, 'academic_memo.')) {
+                $request->attributes->remove($name);
+            }
+        }
     }
 }

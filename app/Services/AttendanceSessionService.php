@@ -48,7 +48,16 @@ class AttendanceSessionService
 
         $event = $event->fresh();
         $this->scholar->restoreCheckInEligibility($event);
-        $this->notifyScholars($event, AttendanceSessionLog::ACTION_OPENED);
+
+        $eventId = (int) $event->id;
+        dispatch(function () use ($eventId) {
+            $fresh = Event::query()->find($eventId);
+            if (! $fresh || ! $fresh->isAttendanceOpen()) {
+                return;
+            }
+
+            app(AttendanceSessionService::class)->notifyScholars($fresh, AttendanceSessionLog::ACTION_OPENED);
+        })->afterResponse();
 
         return $event;
     }
@@ -273,21 +282,25 @@ class AttendanceSessionService
 
     public function sessionsForUser(User $user, int $limit = 8): Collection
     {
-        $attendances = $user->attendances()->get()->keyBy('event_id');
         $now = now();
-
-        return $this->scholarAttendanceEventsQuery($user, $now)
+        $events = $this->scholarAttendanceEventsQuery($user, $now)
             ->orderByRaw('case when attendance_is_open = 1 then 0 else 1 end')
             ->orderByRaw('case when starts_at <= ? and ends_at >= ? then 0 else 1 end', [$now, $now])
             ->orderBy('ends_at')
             ->limit($limit)
+            ->get();
+
+        $attendances = $user->attendances()
+            ->whereIn('event_id', $events->pluck('id')->all() ?: [0])
             ->get()
-            ->map(fn (Event $event) => $this->formatSession(
-                $event,
-                $user,
-                $event->registrations->first(),
-                $attendances->get($event->id)
-            ));
+            ->keyBy('event_id');
+
+        return $events->map(fn (Event $event) => $this->formatSession(
+            $event,
+            $user,
+            $event->registrations->first(),
+            $attendances->get($event->id)
+        ));
     }
 
     public function liveStatusForUser(User $user, ?int $focusEventId = null): array
@@ -474,7 +487,7 @@ class AttendanceSessionService
         );
     }
 
-    private function notifyScholars(Event $event, string $action): void
+    public function notifyScholars(Event $event, string $action): void
     {
         if (! $event->scholarship_program_id) {
             return;

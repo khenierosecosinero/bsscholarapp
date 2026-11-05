@@ -40,7 +40,7 @@
                     <tbody>
                         @foreach($records as $rec)
                             <tr>
-                                <td data-label="Event / Activity"><div class="table-event">@if($rec->event?->image_url)<img src="{{ $rec->event->image_url }}" alt="">@endif<span class="service-event-name">{{ $rec->event?->title ?? 'N/A' }}</span></div></td>
+                                <td data-label="Event / Activity"><div class="table-event">@if($rec->event?->image_url)<img src="{{ $rec->event->image_url }}" alt="" loading="lazy" decoding="async">@endif<span class="service-event-name">{{ $rec->event?->title ?? 'N/A' }}</span></div></td>
                                 <td data-label="Date">{{ $rec->event?->starts_at?->format('M d Y') ?? '—' }}</td>
                                 <td data-label="Time In">{{ $rec->check_in?->format('g:i A') ?? '—' }}</td>
                                 <td data-label="Time Out">{{ $rec->check_out?->format('g:i A') ?? '—' }}</td>

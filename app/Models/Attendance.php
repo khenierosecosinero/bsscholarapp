@@ -16,6 +16,10 @@ class Attendance extends Model
 
     public const STATUS_FAILED_CHECK_IN = 'failed_to_check_in';
 
+    private ?string $photoExistsPath = null;
+
+    private ?bool $photoExists = null;
+
     protected $fillable = [
         'user_id', 'event_id', 'academic_year_start', 'academic_year_end', 'semester',
         'check_in', 'check_out', 'hours_earned', 'status', 'remarks',
@@ -50,7 +54,15 @@ class Attendance extends Model
 
     public function hasPhoto(): bool
     {
-        return filled($this->photo_path)
+        $path = (string) $this->photo_path;
+
+        if ($this->photoExistsPath === $path && $this->photoExists !== null) {
+            return $this->photoExists;
+        }
+
+        $this->photoExistsPath = $path;
+
+        return $this->photoExists = filled($this->photo_path)
             && Storage::disk('public')->exists($this->photo_path);
     }
 

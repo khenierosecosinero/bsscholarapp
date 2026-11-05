@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ScholarSuspension;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -36,11 +37,22 @@ class AccountAccessService
 
     public function releaseExpiredSuspensions(): int
     {
+        // A 7-day suspension does not need a lookup on every click.
+        $slot = intdiv(now()->getTimestamp(), 60);
+        if (! Cache::add('account.release_suspensions.'.$slot, 1, 90)) {
+            return 0;
+        }
+
         $due = ScholarSuspension::query()
             ->whereNull('lifted_at')
             ->where('ends_at', '<=', now())
-            ->with('scholar')
             ->get();
+
+        if ($due->isEmpty()) {
+            return 0;
+        }
+
+        $due->load('scholar');
 
         $released = 0;
 

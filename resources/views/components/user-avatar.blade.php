@@ -17,7 +17,7 @@
             'aria-label' => 'View profile photo of '.$name,
         ]) }}
     >
-        <img src="{{ $url }}" alt="{{ $name }}" class="user-avatar-image">
+        <img src="{{ $url }}" alt="{{ $name }}" class="user-avatar-image" loading="lazy" decoding="async">
     </button>
 @else
     <div {{ $attributes->merge(['class' => 'user-avatar-wrap', 'title' => $name]) }}>

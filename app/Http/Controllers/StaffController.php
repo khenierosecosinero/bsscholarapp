@@ -103,7 +103,8 @@ class StaffController extends Controller
 
         $scholars = $scholarsQuery
             ->orderBy('full_name')
-            ->get();
+            ->paginate(15)
+            ->withQueryString();
 
         $stats = $this->staffData->scholarPageStats($programIds, $staff);
         $stats['total_scholars'] = $this->staffData->scholarsQuery($programIds, $staff)
@@ -1148,11 +1149,51 @@ class StaffController extends Controller
 
     private function attendanceEventPanel(array $programIds, int $selectedEventId, string $search = '', ?array $schoolFilter = null): array
     {
-        $events = Event::query()
-            ->with(['registrations.user', 'attendances.user'])
+        $base = Event::query()
             ->whereIn('scholarship_program_id', $programIds ?: [0])
-            ->visibleToStaff(Auth::user())
-            ->when($search !== '' && $selectedEventId <= 0, function ($q) use ($search) {
+            ->visibleToStaff(Auth::user());
+
+        $selected = $selectedEventId > 0
+            ? (clone $base)->whereKey($selectedEventId)->first()
+            : null;
+
+        if ($selected) {
+            $selected->load([
+                'registrations.user',
+                'attendances',
+            ]);
+
+            foreach ($selected->registrations as $registration) {
+                if ($registration->user) {
+                    $this->scholar->applyMissedCheckIn(
+                        $selected,
+                        $registration->user,
+                        $registration,
+                        $selected->attendances->firstWhere('user_id', $registration->user_id)
+                    );
+                }
+            }
+
+            $selected->load([
+                'registrations.user.scholarshipClubSchool',
+                'attendances.user.scholarshipClubSchool',
+            ]);
+
+            return [
+                'events' => collect(),
+                'selected' => $selected,
+                'approved' => $this->attendanceRows($selected, Attendance::STATUS_APPROVED, $schoolFilter),
+                'pending' => $this->attendanceRows($selected, Attendance::STATUS_PENDING, $schoolFilter),
+                'failed' => $this->failedAttendanceRows($selected, $schoolFilter),
+            ];
+        }
+
+        $events = (clone $base)
+            ->with([
+                'registrations:id,event_id,user_id,status',
+                'attendances:id,event_id,user_id,status,check_in',
+            ])
+            ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($inner) use ($search) {
                     $inner->where('title', 'like', "%{$search}%")
                         ->orWhere('location', 'like', "%{$search}%")
@@ -1181,63 +1222,57 @@ class StaffController extends Controller
                 })->count());
             });
 
-        $selected = $selectedEventId > 0
-            ? $events->firstWhere('id', $selectedEventId)
-            : null;
-
-        $approved = collect();
-        $pending = collect();
-        $failed = collect();
-
-        if ($selected) {
-            foreach ($selected->registrations as $registration) {
-                if ($registration->user) {
-                    $this->scholar->applyMissedCheckIn(
-                        $selected,
-                        $registration->user,
-                        $registration,
-                        $selected->attendances->firstWhere('user_id', $registration->user_id)
-                    );
-                }
-            }
-
-            $selected->load(['registrations.user.scholarshipClubSchool', 'attendances.user.scholarshipClubSchool']);
-            $attendanceFinalized = $selected->attendanceMayBeFinalized();
-
-            foreach ($selected->registrations as $registration) {
-                $attendance = $selected->attendances->firstWhere('user_id', $registration->user_id);
-                $row = [
-                    'user' => $registration->user,
-                    'attendance' => $attendance,
-                ];
-
-                if ($attendance?->hasCheckedIn()) {
-                    if ($attendance->status === Attendance::STATUS_APPROVED) {
-                        $approved->push($row);
-                    } elseif ($attendance->status === Attendance::STATUS_PENDING) {
-                        $pending->push($row);
-                    }
-                } elseif (
-                    $attendanceFinalized
-                    || $attendance?->status === Attendance::STATUS_FAILED_CHECK_IN
-                    || $registration->status === EventRegistration::STATUS_FAILED_CHECK_IN
-                ) {
-                    $failed->push($row);
-                }
-            }
-
-            $matchesSchool = fn (array $row) => $this->staffData->userMatchesSchoolFilter($row['user'] ?? null, $schoolFilter);
-            $approved = $approved->filter($matchesSchool)->values();
-            $pending = $pending->filter($matchesSchool)->values();
-            $failed = $failed->filter($matchesSchool)->values();
-        }
-
         return [
             'events' => $events,
-            'selected' => $selected,
-            'approved' => $approved,
-            'pending' => $pending,
-            'failed' => $failed,
+            'selected' => null,
+            'approved' => collect(),
+            'pending' => collect(),
+            'failed' => collect(),
         ];
+    }
+
+    private function attendanceRows(Event $event, string $status, ?array $schoolFilter)
+    {
+        return $event->registrations
+            ->map(function ($registration) use ($event) {
+                return [
+                    'user' => $registration->user,
+                    'attendance' => $event->attendances->firstWhere('user_id', $registration->user_id),
+                ];
+            })
+            ->filter(function (array $row) use ($status) {
+                $attendance = $row['attendance'];
+
+                return $attendance?->hasCheckedIn() && $attendance->status === $status;
+            })
+            ->filter(fn (array $row) => $this->staffData->userMatchesSchoolFilter($row['user'] ?? null, $schoolFilter))
+            ->values();
+    }
+
+    private function failedAttendanceRows(Event $event, ?array $schoolFilter)
+    {
+        $attendanceFinalized = $event->attendanceMayBeFinalized();
+
+        return $event->registrations
+            ->map(function ($registration) use ($event) {
+                return [
+                    'user' => $registration->user,
+                    'attendance' => $event->attendances->firstWhere('user_id', $registration->user_id),
+                    'registration' => $registration,
+                ];
+            })
+            ->filter(function (array $row) use ($attendanceFinalized) {
+                $attendance = $row['attendance'];
+
+                if ($attendance?->hasCheckedIn()) {
+                    return false;
+                }
+
+                return $attendanceFinalized
+                    || $attendance?->status === Attendance::STATUS_FAILED_CHECK_IN
+                    || $row['registration']->status === EventRegistration::STATUS_FAILED_CHECK_IN;
+            })
+            ->filter(fn (array $row) => $this->staffData->userMatchesSchoolFilter($row['user'] ?? null, $schoolFilter))
+            ->values();
     }
 }

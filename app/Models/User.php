@@ -874,9 +874,21 @@ class User extends Authenticatable
         return strtoupper(substr($this->full_name ?: 'U', 0, 1));
     }
 
+    private ?string $avatarExistsPath = null;
+
+    private ?bool $avatarExists = null;
+
     public function hasAvatar(): bool
     {
-        return filled($this->avatar_path)
+        $path = (string) $this->avatar_path;
+
+        if ($this->avatarExistsPath === $path && $this->avatarExists !== null) {
+            return $this->avatarExists;
+        }
+
+        $this->avatarExistsPath = $path;
+
+        return $this->avatarExists = filled($this->avatar_path)
             && Storage::disk('public')->exists($this->avatar_path);
     }
 

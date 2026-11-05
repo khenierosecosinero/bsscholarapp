@@ -15,7 +15,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="{{ asset('icons/icon-192.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   @vite(['resources/css/styles.css', 'resources/js/app.js'])
   @stack('styles')
 </head>
@@ -89,13 +89,22 @@
       }, true);
 
       var loading = document.getElementById('nav-loading');
+      var navTimer = null;
       function showNavLoading() {
-        if (!loading) return;
-        loading.hidden = false;
-        loading.setAttribute('aria-busy', 'true');
-        document.body.classList.add('is-navigating');
+        if (!loading || navTimer) return;
+        navTimer = setTimeout(function () {
+          navTimer = null;
+          if (!loading) return;
+          loading.hidden = false;
+          loading.setAttribute('aria-busy', 'true');
+          document.body.classList.add('is-navigating');
+        }, 220);
       }
       function hideNavLoading() {
+        if (navTimer) {
+          clearTimeout(navTimer);
+          navTimer = null;
+        }
         if (!loading) return;
         loading.hidden = true;
         loading.setAttribute('aria-busy', 'false');

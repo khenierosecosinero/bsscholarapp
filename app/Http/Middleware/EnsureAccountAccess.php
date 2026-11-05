@@ -14,7 +14,11 @@ class EnsureAccountAccess
 
     public function handle(Request $request, Closure $next): Response
     {
-        $this->accountAccess->releaseExpiredSuspensions();
+        // Guest pages do not change suspension state. Login still releases
+        // an expired suspension before the password is checked.
+        if ($request->user() || ($request->isMethod('POST') && $request->is('login'))) {
+            $this->accountAccess->releaseExpiredSuspensions();
+        }
 
         if ($redirect = AccountAccessGuard::redirectIfRestricted($request)) {
             return $redirect;

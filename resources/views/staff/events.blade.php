@@ -47,7 +47,7 @@
                         <td data-label="Event Information">
                             <div class="staff-event-cell">
                                 @if($event->image_url)
-                                    <img src="{{ $event->image_url }}" alt="" class="staff-event-thumb">
+                                    <img src="{{ $event->image_url }}" alt="" class="staff-event-thumb" loading="lazy" decoding="async">
                                 @endif
                                 <div>
                                     <strong>{{ $event->title }}</strong>

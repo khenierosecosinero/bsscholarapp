@@ -76,7 +76,19 @@ class AppServiceProvider extends ServiceProvider
             'admin.*',
             'partials.admin-*',
         ], function ($view) {
-            if (! Schema::hasTable('academic_settings')) {
+            $hasAcademicSettings = app()->bound('request')
+                ? request()->attributes->get('academic_settings_table')
+                : null;
+
+            if ($hasAcademicSettings === null) {
+                $hasAcademicSettings = Schema::hasTable('academic_settings');
+
+                if (app()->bound('request')) {
+                    request()->attributes->set('academic_settings_table', $hasAcademicSettings);
+                }
+            }
+
+            if (! $hasAcademicSettings) {
                 return;
             }
 

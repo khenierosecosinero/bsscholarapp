@@ -937,21 +937,19 @@ class ScholarService
             return;
         }
 
-        $registrations = EventRegistration::query()
+        $registrations = $this->missedCheckInRegistrations()
             ->with('event')
             ->where('user_id', $user->id)
-            ->whereIn('status', [EventRegistration::STATUS_CONFIRMED, EventRegistration::STATUS_FAILED_CHECK_IN])
-            ->whereHas('event', fn ($q) => $q->where(function ($event) {
-                $event->where('ends_at', '<', now())
-                    ->orWhere(function ($closed) {
-                        $closed->where('attendance_is_open', false)
-                            ->whereNotNull('attendance_opened_at')
-                            ->whereNotNull('attendance_closed_at');
-                    });
-            }))
             ->get();
 
-        $attendances = $this->attendancesByEvent($user);
+        if ($registrations->isEmpty()) {
+            return;
+        }
+
+        $attendances = $user->attendances()
+            ->whereIn('event_id', $registrations->pluck('event_id')->all())
+            ->get()
+            ->keyBy('event_id');
 
         foreach ($registrations as $registration) {
             if ($registration->event) {
@@ -971,36 +969,32 @@ class ScholarService
             return;
         }
 
-        $registrations = EventRegistration::query()
+        $registrations = $this->missedCheckInRegistrations()
             ->with(['event', 'user'])
-            ->whereIn('status', [EventRegistration::STATUS_CONFIRMED, EventRegistration::STATUS_FAILED_CHECK_IN])
-            ->whereHas('event', fn ($q) => $q->where(function ($event) {
-                $event->where('ends_at', '<', now())
-                    ->orWhere(function ($closed) {
-                        $closed->where('attendance_is_open', false)
-                            ->whereNotNull('attendance_opened_at')
-                            ->whereNotNull('attendance_closed_at');
-                    });
-            }))
             ->whereHas('user', fn ($q) => $q->where('role', User::ROLE_SCHOLAR)
                 ->whereIn('scholarship_program_id', $programIds ?: [0]))
             ->get();
+
+        if ($registrations->isEmpty()) {
+            return;
+        }
+
+        $attendances = Attendance::query()
+            ->whereIn('event_id', $registrations->pluck('event_id')->unique()->all())
+            ->whereIn('user_id', $registrations->pluck('user_id')->unique()->all())
+            ->get()
+            ->keyBy(fn (Attendance $attendance) => $attendance->user_id.'-'.$attendance->event_id);
 
         foreach ($registrations as $registration) {
             if (! $registration->event || ! $registration->user) {
                 continue;
             }
 
-            $attendance = Attendance::query()
-                ->where('user_id', $registration->user_id)
-                ->where('event_id', $registration->event_id)
-                ->first();
-
             $this->applyMissedCheckIn(
                 $registration->event,
                 $registration->user,
                 $registration,
-                $attendance
+                $attendances->get($registration->user_id.'-'.$registration->event_id)
             );
         }
     }
@@ -1044,24 +1038,46 @@ class ScholarService
             ->where('status', EventRegistration::STATUS_FAILED_CHECK_IN)
             ->get();
 
+        if ($registrations->isEmpty()) {
+            return;
+        }
+
+        $attendances = Attendance::query()
+            ->where('event_id', $event->id)
+            ->whereIn('user_id', $registrations->pluck('user_id')->all())
+            ->get()
+            ->keyBy('user_id');
+
+        $registrationIds = [];
+        $attendanceIds = [];
+
         foreach ($registrations as $registration) {
-            $attendance = Attendance::query()
-                ->where('user_id', $registration->user_id)
-                ->where('event_id', $event->id)
-                ->first();
+            $attendance = $attendances->get($registration->user_id);
 
             if ($attendance?->hasCheckedIn()) {
                 continue;
             }
 
-            $registration->update(['status' => EventRegistration::STATUS_CONFIRMED]);
+            $registrationIds[] = $registration->id;
 
             if ($attendance && $attendance->status === Attendance::STATUS_FAILED_CHECK_IN) {
-                $attendance->update([
+                $attendanceIds[] = $attendance->id;
+            }
+        }
+
+        if ($registrationIds !== []) {
+            EventRegistration::query()
+                ->whereIn('id', $registrationIds)
+                ->update(['status' => EventRegistration::STATUS_CONFIRMED]);
+        }
+
+        if ($attendanceIds !== []) {
+            Attendance::query()
+                ->whereIn('id', $attendanceIds)
+                ->update([
                     'status' => Attendance::STATUS_PENDING,
                     'remarks' => null,
                 ]);
-            }
         }
     }
 
@@ -1294,10 +1310,16 @@ class ScholarService
         }
 
         Attendance::query()
+            ->select('attendances.*')
             ->with('event')
-            ->whereNotNull('check_in')
-            ->whereNotNull('check_out')
-            ->whereIn('status', [Attendance::STATUS_PENDING, Attendance::STATUS_APPROVED])
+            ->join('events', 'events.id', '=', 'attendances.event_id')
+            ->whereNotNull('attendances.check_in')
+            ->whereNotNull('attendances.check_out')
+            ->whereIn('attendances.status', [Attendance::STATUS_PENDING, Attendance::STATUS_APPROVED])
+            ->where(function ($query) {
+                $query->whereNull('attendances.hours_earned')
+                    ->orWhereColumn('attendances.hours_earned', '!=', 'events.service_hours');
+            })
             ->whereHas('user', fn ($q) => $q->where('role', User::ROLE_SCHOLAR)
                 ->whereIn('scholarship_program_id', $programIds ?: [0]))
             ->get()
@@ -1921,6 +1943,47 @@ class ScholarService
                         ->orWhereNull('scholarship_club_id');
                 });
             });
+    }
+
+    /**
+     * Registrations that can still become a missed check-in.
+     * Rows already checked in, or already marked failed, are left out.
+     */
+    private function missedCheckInRegistrations()
+    {
+        return EventRegistration::query()
+            ->where(function ($status) {
+                $status->where('status', EventRegistration::STATUS_CONFIRMED)
+                    ->orWhere(function ($failed) {
+                        $failed->where('status', EventRegistration::STATUS_FAILED_CHECK_IN)
+                            ->whereNotExists(function ($attendance) {
+                                $attendance->selectRaw('1')
+                                    ->from('attendances')
+                                    ->whereColumn('attendances.user_id', 'event_registrations.user_id')
+                                    ->whereColumn('attendances.event_id', 'event_registrations.event_id')
+                                    ->where('attendances.status', Attendance::STATUS_FAILED_CHECK_IN)
+                                    ->where(function ($hours) {
+                                        $hours->whereNull('attendances.hours_earned')
+                                            ->orWhere('attendances.hours_earned', '<=', 0);
+                                    });
+                            });
+                    });
+            })
+            ->whereNotExists(function ($checkedIn) {
+                $checkedIn->selectRaw('1')
+                    ->from('attendances')
+                    ->whereColumn('attendances.user_id', 'event_registrations.user_id')
+                    ->whereColumn('attendances.event_id', 'event_registrations.event_id')
+                    ->whereNotNull('attendances.check_in');
+            })
+            ->whereHas('event', fn ($q) => $q->where(function ($event) {
+                $event->where('ends_at', '<', now())
+                    ->orWhere(function ($closed) {
+                        $closed->where('attendance_is_open', false)
+                            ->whereNotNull('attendance_opened_at')
+                            ->whereNotNull('attendance_closed_at');
+                    });
+            }));
     }
 
     private function attendancesByEvent(User $user): Collection
