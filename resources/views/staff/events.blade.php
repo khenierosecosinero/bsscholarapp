@@ -84,6 +84,7 @@
                                     data-confirm-yes="Cancel Event"
                                     data-confirm-no="Keep Event"
                                     data-confirm-variant="danger"
+                                    data-submit-loading="Cancelling…"
                                 >
                                     @csrf
                                     @method('PATCH')
@@ -153,93 +154,250 @@
 
 @endsection
 
+
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('[data-event-status-select]').forEach(function (select) {
-        var form = select.closest('[data-event-status-form]');
-        if (!form || select.disabled) return;
 
-        select.addEventListener('change', function () {
-            var previous = select.getAttribute('data-previous') || '';
-            if (select.value === previous) return;
+    document.querySelectorAll('[data-event-status-select]')
+        .forEach(function (select) {
 
-            if (select.value === 'cancelled') {
-                form.dataset.confirmed = '';
-                if (typeof form.requestSubmit === 'function') {
-                    form.requestSubmit();
-                } else {
-                    form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-                }
+            var form = select.closest(
+                '[data-event-status-form]'
+            );
 
-                var modal = document.getElementById('staff-confirm-modal');
-                if (!modal) return;
-
-                var resetIfDismissed = function () {
-                    if (!modal.classList.contains('is-open') && form.dataset.confirmed !== 'true') {
-                        select.value = previous;
-                        modal.removeEventListener('transitionend', resetIfDismissed);
-                    }
-                };
-
-                setTimeout(function () {
-                    if (!modal.classList.contains('is-open') && form.dataset.confirmed !== 'true') {
-                        select.value = previous;
-                        return;
-                    }
-                    var observer = new MutationObserver(function () {
-                        if (!modal.classList.contains('is-open')) {
-                            if (form.dataset.confirmed !== 'true') {
-                                select.value = previous;
-                            }
-                            observer.disconnect();
-                        }
-                    });
-                    observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
-                }, 0);
+            if (!form || select.disabled) {
                 return;
             }
 
-            form.dataset.confirmed = 'true';
-            form.submit();
+            select.addEventListener('change', function () {
+
+                // Ignore changes while a request is processing.
+                if (form.dataset.submitting === 'true') {
+                    return;
+                }
+
+                var previous = select.getAttribute(
+                    'data-previous'
+                ) || '';
+
+                if (select.value === previous) {
+                    return;
+                }
+
+                // Cancellation requires confirmation.
+                if (select.value === 'cancelled') {
+
+                    form.dataset.confirmed = '';
+
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit();
+                    } else {
+                        form.dispatchEvent(
+                            new Event('submit', {
+                                cancelable: true,
+                                bubbles: true
+                            })
+                        );
+                    }
+
+                    var modal = document.getElementById(
+                        'staff-confirm-modal'
+                    );
+
+                    if (!modal) {
+                        select.value = previous;
+                        return;
+                    }
+
+                    // Restore the previous status if
+                    // the cancellation is dismissed.
+                    setTimeout(function () {
+
+                        if (
+                            !modal.classList.contains('is-open') &&
+                            form.dataset.confirmed !== 'true'
+                        ) {
+                            select.value = previous;
+                            return;
+                        }
+
+                        var observer = new MutationObserver(
+                            function () {
+
+                                if (!modal.classList.contains('is-open')) {
+
+                                    if (
+                                        form.dataset.confirmed !== 'true'
+                                    ) {
+                                        select.value = previous;
+                                    }
+
+                                    observer.disconnect();
+                                }
+                            }
+                        );
+
+                        observer.observe(modal, {
+                            attributes: true,
+                            attributeFilter: ['class']
+                        });
+
+                    }, 0);
+
+                    return;
+                }
+
+                // Prevent repeated status changes.
+                form.dataset.submitting = 'true';
+
+                form.setAttribute(
+                    'aria-busy',
+                    'true'
+                );
+
+                select.setAttribute(
+                    'aria-disabled',
+                    'true'
+                );
+
+                select.style.pointerEvents = 'none';
+
+                // Display the existing navigation loader.
+                var loading = document.getElementById(
+                    'nav-loading'
+                );
+
+                if (loading) {
+                    loading.hidden = false;
+
+                    loading.setAttribute(
+                        'aria-busy',
+                        'true'
+                    );
+
+                    document.body.classList.add(
+                        'is-navigating'
+                    );
+                }
+
+                // Submit the selected status.
+                // The select is not disabled, so its
+                // value is included in the request.
+                form.submit();
+            });
+        });
+
+    // Restore controls if the browser returns
+    // to a cached version of this page.
+    window.addEventListener('pageshow', function (event) {
+
+        if (!event.persisted) {
+            return;
+        }
+
+        document.querySelectorAll(
+            '[data-event-status-form]'
+        ).forEach(function (form) {
+
+            form.dataset.submitting = '';
+
+            form.removeAttribute('aria-busy');
+
+            var select = form.querySelector(
+                '[data-event-status-select]'
+            );
+
+            if (select) {
+                select.style.pointerEvents = '';
+
+                select.removeAttribute(
+                    'aria-disabled'
+                );
+            }
         });
     });
 
-    var menus = document.querySelectorAll('[data-staff-action-menu]');
-    if (!menus.length) return;
+    // Preserve the existing More Actions menu.
+    var menus = document.querySelectorAll(
+        '[data-staff-action-menu]'
+    );
+
+    if (!menus.length) {
+        return;
+    }
 
     function closeAll() {
+
         menus.forEach(function (menu) {
-            var toggle = menu.querySelector('[data-staff-action-menu-toggle]');
-            var panel = menu.querySelector('[data-staff-action-menu-panel]');
-            if (panel) panel.hidden = true;
-            if (toggle) toggle.setAttribute('aria-expanded', 'false');
+
+            var toggle = menu.querySelector(
+                '[data-staff-action-menu-toggle]'
+            );
+
+            var panel = menu.querySelector(
+                '[data-staff-action-menu-panel]'
+            );
+
+            if (panel) {
+                panel.hidden = true;
+            }
+
+            if (toggle) {
+                toggle.setAttribute(
+                    'aria-expanded',
+                    'false'
+                );
+            }
+
             menu.classList.remove('is-open');
         });
     }
 
     menus.forEach(function (menu) {
-        var toggle = menu.querySelector('[data-staff-action-menu-toggle]');
-        var panel = menu.querySelector('[data-staff-action-menu-panel]');
-        if (!toggle || !panel) return;
+
+        var toggle = menu.querySelector(
+            '[data-staff-action-menu-toggle]'
+        );
+
+        var panel = menu.querySelector(
+            '[data-staff-action-menu-panel]'
+        );
+
+        if (!toggle || !panel) {
+            return;
+        }
 
         toggle.addEventListener('click', function (event) {
+
             event.preventDefault();
             event.stopPropagation();
+
             var willOpen = panel.hidden;
+
             closeAll();
+
             if (willOpen) {
                 panel.hidden = false;
-                toggle.setAttribute('aria-expanded', 'true');
+
+                toggle.setAttribute(
+                    'aria-expanded',
+                    'true'
+                );
+
                 menu.classList.add('is-open');
             }
         });
     });
 
     document.addEventListener('click', closeAll);
+
     document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') closeAll();
+        if (event.key === 'Escape') {
+            closeAll();
+        }
     });
 });
 </script>
 @endpush
+

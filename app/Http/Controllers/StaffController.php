@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -351,53 +352,116 @@ class StaffController extends Controller
             ->with('success', $message);
     }
 
-    public function updateEventStatus(Request $request, Event $event)
-    {
-        $staff = Auth::user();
+    
+public function updateEventStatus(Request $request, Event $event)
+{
+    // Start measuring request processing time.
+    $startedAt = microtime(true);
 
-        abort_unless(
-            $staff->canViewStaffManagedEvent($event),
-            403,
-            'You can only manage events created after your scholar staff account became active for your assigned scholarship program.'
-        );
+    $staff = Auth::user();
 
-        $data = $request->validate([
-            'status' => ['required', 'string', Rule::in([
+    // Verify that the staff member has permission
+    // to manage the selected event.
+    abort_unless(
+        $staff->canViewStaffManagedEvent($event),
+        403,
+        'You can only manage events created after your scholar staff account became active for your assigned scholarship program.'
+    );
+
+    // Validate the requested event status.
+    $data = $request->validate([
+        'status' => [
+            'required',
+            'string',
+            Rule::in([
                 Event::STATUS_PENDING,
                 Event::STATUS_CONFIRMED,
                 Event::STATUS_CANCELLED,
-            ])],
-        ]);
+            ]),
+        ],
+    ]);
 
-        $target = $data['status'];
+    $target = $data['status'];
 
-        if (! $event->canEditStaffStatus() && $event->staffStatusSelectValue() !== $target) {
-            return redirect()
-                ->route('staff.events')
-                ->with('error', "\"{$event->title}\" status can no longer be changed.");
-        }
+    // Prepare the status label.
+    $label = match ($target) {
+        Event::STATUS_PENDING => 'Pending',
+        Event::STATUS_CONFIRMED => 'Confirmed',
+        Event::STATUS_CANCELLED => 'Cancelled',
+    };
 
-        if (! $event->applyStaffStatus($target)) {
-            return redirect()
-                ->route('staff.events')
-                ->with('error', "\"{$event->title}\" could not be updated to ".ucfirst($target).'.');
-        }
-
-        $event->refresh();
-        $this->scholar->syncRegistrationsWithEventStatus($event);
-        $this->scholar->notifyScholarsOfEventStatusChange($event, $target);
-
-        $label = match ($target) {
-            Event::STATUS_PENDING => 'Pending',
-            Event::STATUS_CONFIRMED => 'Confirmed',
-            Event::STATUS_CANCELLED => 'Cancelled',
-            default => ucfirst($target),
-        };
-
+    // Prevent unnecessary processing when
+    // the requested status is already applied.
+    if ($event->staffStatusSelectValue() === $target) {
         return redirect()
             ->route('staff.events')
-            ->with('success', "\"{$event->title}\" is now {$label}.");
+            ->with(
+                'success',
+                "\"{$event->title}\" is already {$label}."
+            );
     }
+
+    // Prevent invalid status transitions.
+    if (
+        ! $event->canEditStaffStatus() &&
+        $event->staffStatusSelectValue() !== $target
+    ) {
+        return redirect()
+            ->route('staff.events')
+            ->with(
+                'error',
+                "\"{$event->title}\" status can no longer be changed."
+            );
+    }
+
+    // Apply the requested event status.
+    if (! $event->applyStaffStatus($target)) {
+        return redirect()
+            ->route('staff.events')
+            ->with(
+                'error',
+                "\"{$event->title}\" could not be updated to "
+                    .ucfirst($target).'.'
+            );
+    }
+
+    // Reload the latest event information.
+    $event->refresh();
+
+    // Synchronize scholar registrations
+    // with the updated event status.
+    $this->scholar->syncRegistrationsWithEventStatus(
+        $event
+    );
+
+    // Create in-app notifications and queue
+    // corresponding emails for eligible scholars.
+    $notified = $this->scholar
+        ->notifyScholarsOfEventStatusChange(
+            $event,
+            $target
+        );
+
+    // Record processing details for debugging.
+    // Do not log passwords or sensitive data.
+    Log::info('Staff event status changed.', [
+        'event_id' => $event->id,
+        'status' => $target,
+        'scholars_notified' => $notified,
+        'elapsed_ms' => (int) round(
+            (microtime(true) - $startedAt) * 1000
+        ),
+    ]);
+
+    // Return to the event management page.
+    return redirect()
+        ->route('staff.events')
+        ->with(
+            'success',
+            "\"{$event->title}\" is now {$label}."
+        );
+}
+
 
     public function markEventPending(Event $event)
     {

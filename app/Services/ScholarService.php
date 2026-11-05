@@ -1867,55 +1867,134 @@ class ScholarService
      * Deduplicated in-app notification for a staff/admin event lifecycle action.
      * Same user + event + action title is updated in place (no duplicate rows).
      */
-    public function notifyScholarsOfEventAction(
-        Event $event,
-        string $actionKey,
-        string $title,
-        string $body,
-        bool $important = false
-    ): int {
-        if (! $event->scholarship_program_id) {
-            return 0;
-        }
-
-        $scholarsQuery = $this->scholarsQueryForEvent($event);
-        $count = 0;
-
-        $scholarsQuery->each(function (User $scholar) use ($event, $title, $body, $important, &$count) {
-            if (! $event->isVisibleAfter($scholar->eventsVisibleFrom())) {
-                return;
-            }
-
-            $existing = ScholarNotification::query()
-                ->where('user_id', $scholar->id)
-                ->where('event_id', $event->id)
-                ->where('title', $title)
-                ->first();
-            $changed = ! $existing || $existing->body !== $body;
-
-            ScholarNotification::updateOrCreate(
-                [
-                    'user_id' => $scholar->id,
-                    'event_id' => $event->id,
-                    'title' => $title,
-                ],
-                [
-                    'body' => $body,
-                    'category' => 'event_reminder',
-                    'is_important' => $important,
-                    'is_read' => false,
-                ]
-            );
-
-            if ($changed) {
-                app(WorkflowMailService::class)->sendForNotification($scholar, $title, $body, 'event_reminder', $event->id);
-            }
-
-            $count++;
-        });
-
-        return $count;
+    
+public function notifyScholarsOfEventAction(
+    Event $event,
+    string $actionKey,
+    string $title,
+    string $body,
+    bool $important = false
+): int {
+    if (! $event->scholarship_program_id) {
+        return 0;
     }
+
+    $count = 0;
+
+    // Process scholars in batches to avoid
+    // excessive individual database queries.
+    $this->scholarsQueryForEvent($event)
+        ->chunkById(
+            200,
+            function (Collection $scholars) use (
+                $event,
+                $title,
+                $body,
+                $important,
+                &$count
+            ) {
+                // Only notify scholars eligible
+                // to view this event.
+                $eligible = $scholars->filter(
+                    fn (User $scholar) =>
+                        $event->isVisibleAfter(
+                            $scholar->eventsVisibleFrom()
+                        )
+                );
+
+                if ($eligible->isEmpty()) {
+                    return;
+                }
+
+                // Get existing notifications in
+                // one database query per batch.
+                $existingByUser = ScholarNotification::query()
+                    ->where('event_id', $event->id)
+                    ->where('title', $title)
+                    ->whereIn(
+                        'user_id',
+                        $eligible->pluck('id')
+                    )
+                    ->get()
+                    ->keyBy('user_id');
+
+                $existingIds = [];
+                $newRows = [];
+                $mailRecipients = [];
+
+                $timestamp = now();
+
+                foreach ($eligible as $scholar) {
+                    $existing = $existingByUser->get(
+                        $scholar->id
+                    );
+
+                    if ($existing) {
+                        $existingIds[] = $existing->id;
+                    } else {
+                        $newRows[] = [
+                            'user_id' => $scholar->id,
+                            'event_id' => $event->id,
+                            'title' => $title,
+                            'body' => $body,
+                            'category' => 'event_reminder',
+                            'is_important' => $important,
+                            'is_read' => false,
+                            'created_at' => $timestamp,
+                            'updated_at' => $timestamp,
+                        ];
+                    }
+
+                    // Send email only when the
+                    // notification is new or changed.
+                    if (
+                        ! $existing ||
+                        $existing->body !== $body
+                    ) {
+                        $mailRecipients[] = $scholar;
+                    }
+                }
+
+                // Update existing notifications
+                // using one batch operation.
+                if ($existingIds !== []) {
+                    ScholarNotification::query()
+                        ->whereIn('id', $existingIds)
+                        ->update([
+                            'body' => $body,
+                            'category' => 'event_reminder',
+                            'is_important' => $important,
+                            'is_read' => false,
+                        ]);
+                }
+
+                // Insert new notifications
+                // using one database operation.
+                if ($newRows !== []) {
+                    ScholarNotification::query()
+                        ->insert($newRows);
+                }
+
+                // Emails are placed in the background
+                // queue by WorkflowMailService.
+                foreach ($mailRecipients as $scholar) {
+                    app(WorkflowMailService::class)
+                        ->sendForNotification(
+                            $scholar,
+                            $title,
+                            $body,
+                            'event_reminder',
+                            $event->id
+                        );
+                }
+
+                $count += $eligible->count();
+            }
+        );
+
+    return $count;
+}
+
 
     /**
      * Approved scholars in the event's program (scoped to the acting staff club when present).

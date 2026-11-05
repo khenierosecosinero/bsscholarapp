@@ -397,23 +397,56 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    yesBtn.addEventListener('click', function () {
-        if (!pendingForm || busy) return;
+    
 
-        if (pendingForm.getAttribute('data-ajax-close') === 'true') {
-            submitCloseAjax(pendingForm);
-            return;
-        }
+yesBtn.addEventListener('click', function () {
 
-        if (pendingForm.getAttribute('data-ajax-approval')) {
-            submitApprovalAjax(pendingForm, true);
-            return;
-        }
+    if (!pendingForm || busy) {
+        return;
+    }
 
-        pendingForm.dataset.confirmed = 'true';
-        pendingForm.submit();
-        closeModal();
-    });
+    // Preserve the existing AJAX attendance
+    // closing functionality.
+    if (
+        pendingForm.getAttribute('data-ajax-close') === 'true'
+    ) {
+        submitCloseAjax(pendingForm);
+        return;
+    }
+
+    // Preserve the existing AJAX approval
+    // functionality.
+    if (
+        pendingForm.getAttribute('data-ajax-approval')
+    ) {
+        submitApprovalAjax(pendingForm, true);
+        return;
+    }
+
+    var submittedForm = pendingForm;
+
+    submittedForm.dataset.confirmed = 'true';
+
+    submittedForm.dataset.submitting = 'true';
+
+    submittedForm.setAttribute(
+        'aria-busy',
+        'true'
+    );
+
+    // Disable the confirmation buttons and
+    // show the existing spinner.
+    setBusy(
+        true,
+        submittedForm.getAttribute('data-submit-loading')
+            || 'Saving…'
+    );
+
+    // Submit once.
+    submittedForm.submit();
+});
+
+
 
     noBtn.addEventListener('click', function () {
         if (busy) return;
@@ -433,4 +466,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 });
+
+window.addEventListener('pageshow', function (event) {
+    if (event.persisted && busy) {
+        busy = false;
+        closeModal();
+    }
+});
+
 </script>
