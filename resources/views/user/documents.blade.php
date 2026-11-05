@@ -87,109 +87,40 @@
         </form>
         <div class="card">
             <div class="tabs-row">
-                <div class="tabs">
+                <div class="tabs" role="tablist">
                     @foreach(['all' => 'All Documents', 'submitted' => 'Submitted', 'pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected', 'not_submitted' => 'Not Submitted'] as $key => $label)
-                        <a href="{{ route('user.documents', ['tab' => $key]) }}" class="tab {{ $activeTab === $key ? 'active' : '' }}">{{ $label }}</a>
+                        <a href="{{ route('user.documents', ['tab' => $key]) }}" class="tab {{ $activeTab === $key ? 'active' : '' }}" role="tab" @if($activeTab === $key) aria-selected="true" @endif>{{ $label }}</a>
                     @endforeach
                 </div>
             </div>
-            <div class="table-wrap">
-            <table class="table doc-table stack-table">
+            @php
+                $filtered = match ($activeTab) {
+                    'submitted' => $documents->filter(fn ($doc) => $doc->hasFile()),
+                    'pending' => $documents->whereIn('status', ['pending', 'submitted']),
+                    'approved' => $documents->where('status', 'approved'),
+                    'rejected' => $documents->where('status', 'rejected'),
+                    'not_submitted' => $documents->where('status', 'not_submitted'),
+                    default => $documents,
+                };
+                $documentsEmptyMessage = $documentTypes->isEmpty()
+                    ? 'No required documents have been posted by Scholar Staff yet.'
+                    : 'No documents found.';
+            @endphp
+            <div class="doc-mobile-list">
+                @forelse($filtered as $doc)
+                    @include('partials.scholar-document-entry', ['presentation' => 'card'])
+                @empty
+                    <p class="doc-mobile-empty muted">{{ $documentsEmptyMessage }}</p>
+                @endforelse
+            </div>
+            <div class="table-wrap doc-table-wrap">
+            <table class="table doc-table">
                 <thead><tr><th>Document Type</th><th>Description</th><th>Status</th><th>Deadline</th><th>Date Uploaded</th><th>Action</th></tr></thead>
                 <tbody>
-                    @php
-                        $filtered = match ($activeTab) {
-                            'submitted' => $documents->filter(fn ($doc) => $doc->hasFile()),
-                            'pending' => $documents->whereIn('status', ['pending', 'submitted']),
-                            'approved' => $documents->where('status', 'approved'),
-                            'rejected' => $documents->where('status', 'rejected'),
-                            'not_submitted' => $documents->where('status', 'not_submitted'),
-                            default => $documents,
-                        };
-                    @endphp
                     @forelse($filtered as $doc)
-                        @php
-                            $badgeClass = match ($doc->status) {
-                                'approved' => 'confirmed',
-                                'submitted' => 'confirmed',
-                                'pending' => 'pending',
-                                'rejected' => 'rejected',
-                                'not_submitted' => 'muted',
-                                default => 'muted',
-                            };
-                            $statusLabel = match ($doc->status) {
-                                'approved' => 'Approved',
-                                'submitted' => 'Submitted',
-                                'pending' => 'Pending',
-                                'rejected' => 'Rejected',
-                                'not_submitted' => 'Not Submitted',
-                                default => ucfirst(str_replace('_', ' ', $doc->status)),
-                            };
-                        @endphp
-                        <tr>
-                            <td data-label="Document Type"><div class="table-event">@include('partials.document-icon', ['slug' => $doc->documentType->slug, 'size' => 'sm'])<span class="doc-name">{{ $doc->documentType->name }}</span></div></td>
-                            <td data-label="Description">{{ $doc->documentType->description }}</td>
-                            <td data-label="Status">
-                                <span class="badge {{ $badgeClass }}">{{ $statusLabel }}</span>
-                                @if($doc->status === 'rejected' && $doc->review_notes)
-                                    <div class="doc-review-note">Reason: {{ $doc->review_notes }}</div>
-                                @elseif($doc->status === 'pending' && $doc->latestRejectionNote())
-                                    <div class="doc-review-note">Previous rejection: {{ $doc->latestRejectionNote() }}</div>
-                                @endif
-                            </td>
-                            <td class="doc-date" data-label="Deadline">{{ $doc->documentType->deadlineLabel() }}</td>
-                            <td class="doc-date" data-label="Date Uploaded">{{ $doc->uploaded_at?->format('M d Y') ?? '—' }}</td>
-                            <td data-label="Action">
-                                <div class="doc-actions">
-                                    @if($doc->hasFile())
-                                        <div class="doc-action-links">
-                                            <a href="{{ route('user.documents.view', $doc) }}" class="btn small" target="_blank" rel="noopener">View</a>
-                                            <a href="{{ route('user.documents.download', $doc) }}" class="btn small">Download</a>
-                                        </div>
-                                    @endif
-                                    @if($doc->status === 'rejected')
-                                        @include('partials.document-replacement-form', ['doc' => $doc])
-                                        @if($doc->hasFile() && $doc->documentType->acceptsSubmissions())
-                                            <form
-                                                method="POST"
-                                                action="{{ route('user.documents.destroy', $doc) }}"
-                                                data-confirm="This file will be removed. You can upload a new one afterward."
-                                                data-confirm-title="Delete this {{ $doc->documentType->name }}?"
-                                                data-confirm-yes="Delete"
-                                                data-confirm-no="Cancel"
-                                                data-confirm-variant="danger"
-                                            >
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="btn small danger">Delete</button>
-                                            </form>
-                                        @endif
-                                    @elseif($doc->documentType->acceptsSubmissions() && $doc->status !== 'approved')
-                                        @php
-                                            $submissionAction = $doc->hasFile() ? 'Replace' : 'Upload';
-                                        @endphp
-                                        <button type="button" class="btn small" onclick="document.getElementById('doc-type-select').value='{{ $doc->document_type_id }}';document.getElementById('file-input').click()">{{ $submissionAction }}</button>
-                                        @if($doc->hasFile())
-                                            <form
-                                                method="POST"
-                                                action="{{ route('user.documents.destroy', $doc) }}"
-                                                data-confirm="This file will be removed. You can upload a new one afterward."
-                                                data-confirm-title="Delete this {{ $doc->documentType->name }}?"
-                                                data-confirm-yes="Delete"
-                                                data-confirm-no="Cancel"
-                                                data-confirm-variant="danger"
-                                            >
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="btn small danger">Delete</button>
-                                            </form>
-                                        @endif
-                                    @endif
-                                </div>
-                            </td>
-                        </tr>
+                        @include('partials.scholar-document-entry', ['presentation' => 'row'])
                     @empty
-                        <tr><td colspan="6" class="muted center">{{ $documentTypes->isEmpty() ? 'No required documents have been posted by Scholar Staff yet.' : 'No documents found.' }}</td></tr>
+                        <tr><td colspan="6" class="muted center">{{ $documentsEmptyMessage }}</td></tr>
                     @endforelse
                 </tbody>
             </table>

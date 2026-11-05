@@ -1,5 +1,5 @@
 /* Batang Surigaonon Scholar's App — safe static-only service worker */
-const CACHE_VERSION = 'bssa-pwa-v6';
+const CACHE_VERSION = 'bssa-pwa-v7';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 
 const PRECACHE_URLS = [

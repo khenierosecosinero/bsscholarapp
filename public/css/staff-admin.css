@@ -3994,8 +3994,10 @@ body:has(.staff-shell) {
     text-align: center;
 }
 
-.staff-table.staff-scholars-table.staff-manage-table tbody td {
-    height: 1px;
+@media (min-width: 801px) {
+    .staff-table.staff-scholars-table.staff-manage-table tbody td {
+        height: 1px;
+    }
 }
 
 .staff-table.staff-scholars-table.staff-manage-table tbody td > .staff-stack-value {
