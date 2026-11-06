@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Services\MailConfigService;
 use App\Services\WorkflowMailService;
 use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -48,9 +49,8 @@ class SendWorkflowMail implements ShouldQueue
 
     public function failed(Throwable $e): void
     {
-        Log::error('Workflow email retries were exhausted.', [
+        Log::error('Workflow email retries were exhausted.', array_merge([
             'title' => $this->title,
-            'exception' => $e::class,
-        ]);
+        ], app(MailConfigService::class)->failureContext($e)));
     }
 }

@@ -255,10 +255,9 @@ class AdminBackupEmailService
                 new AdminBackupEmailVerificationMail($admin, $backup->normalizedEmail(), $url, self::EXPIRE_MINUTES)
             );
         } catch (Throwable $e) {
-            Log::error('Admin backup email verification mail failed.', [
-                'exception' => $e::class,
+            Log::error('Admin backup email verification mail failed.', array_merge([
                 'mailer' => $mailStatus['mailer'],
-            ]);
+            ], $mailConfig->failureContext($e)));
 
             throw ValidationException::withMessages([
                 'backup_email' => $mailConfig->deliveryError($e),

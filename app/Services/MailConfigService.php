@@ -226,8 +226,21 @@ class MailConfigService
             }
 
             if (
+                str_contains($raw, 'accessnotconfigured')
+                || str_contains($raw, 'has not been used')
+                || str_contains($raw, 'it is disabled')
+                || str_contains($raw, 'gmail_api_reason=accessnotconfigured')
+            ) {
+                return 'The Gmail API is disabled for the Google Cloud '
+                    . 'project that owns this OAuth client. Enable the '
+                    . 'Gmail API in that project, wait a few minutes, '
+                    . 'and try again.';
+            }
+
+            if (
                 str_contains($raw, 'insufficientpermissions')
                 || str_contains($raw, 'insufficient authentication scopes')
+                || str_contains($raw, 'gmail_api_reason=insufficientpermissions')
             ) {
                 return 'Gmail API permission is insufficient. '
                     . 'Reconnect the Gmail account and authorize '
@@ -326,6 +339,35 @@ class MailConfigService
 
         return 'The email could not be sent. '
             . 'Check the mail settings and try again.';
+    }
+
+    /**
+     * Safe diagnostic fields for logs. Never includes tokens,
+     * secrets, message bodies, or email addresses.
+     *
+     * @return array<string, int|string>
+     */
+    public function failureContext(Throwable $e): array
+    {
+        $context = [
+            'exception' => $e::class,
+        ];
+
+        $current = $e;
+
+        while ($current instanceof Throwable) {
+            if (preg_match('/gmail_api_status=(\d+)/', $current->getMessage(), $status)) {
+                $context['gmail_status'] = (int) $status[1];
+            }
+
+            if (preg_match('/gmail_api_reason=([a-z0-9_]+)/', strtolower($current->getMessage()), $reason)) {
+                $context['gmail_reason'] = $reason[1];
+            }
+
+            $current = $current->getPrevious();
+        }
+
+        return $context;
     }
 
     /**

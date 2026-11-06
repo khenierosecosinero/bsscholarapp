@@ -332,10 +332,9 @@ class WorkflowMailService
                     try {
                         dispatch_sync($job);
                     } catch (Throwable $e) {
-                        Log::error('Workflow email failed after the response and was queued for retry.', [
+                        Log::error('Workflow email failed after the response and was queued for retry.', array_merge([
                             'title' => $job->title,
-                            'exception' => $e::class,
-                        ]);
+                        ], app(MailConfigService::class)->failureContext($e)));
 
                         dispatch(new SendWorkflowMail(
                             $job->email,

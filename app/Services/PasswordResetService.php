@@ -224,14 +224,13 @@ class PasswordResetService
                 'queued' => false,
             ]);
         } catch (Throwable $e) {
-            Log::error('Password reset email failed at the mail transport.', [
+            Log::error('Password reset email failed at the mail transport.', array_merge([
                 'mailer' => $mailStatus['mailer'],
                 'host' => $mailStatus['host'],
                 'port' => $mailStatus['port'],
                 'encryption' => $mailStatus['encryption'],
                 'username_preview' => $mailStatus['username_preview'] ?? null,
-                'exception' => $e::class,
-            ]);
+            ], $mailConfig->failureContext($e)));
 
             DB::table('password_reset_tokens')->where('email', $email)->delete();
 

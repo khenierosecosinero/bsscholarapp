@@ -127,6 +127,28 @@ class MailConfigServiceTest extends TestCase
         ));
     }
 
+    public function test_disabled_gmail_api_is_reported_without_the_google_response_body(): void
+    {
+        config(['mail.default' => 'gmail_api']);
+
+        $google = new \RuntimeException(
+            '{"error":{"code":403,"message":"Gmail API has not been used in project 123 before or it is disabled.","errors":[{"reason":"accessNotConfigured"}]}}'
+        );
+        $wrapped = new \Symfony\Component\Mailer\Exception\TransportException(
+            'Gmail API email delivery failed. gmail_api_status=403 gmail_api_reason=accessnotconfigured',
+            403,
+            $google
+        );
+
+        $service = app(MailConfigService::class);
+        $message = $service->deliveryError($wrapped);
+
+        $this->assertStringContainsString('Gmail API is disabled', $message);
+        $this->assertStringNotContainsString('project 123', $message);
+        $this->assertSame(403, $service->failureContext($wrapped)['gmail_status']);
+        $this->assertSame('accessnotconfigured', $service->failureContext($wrapped)['gmail_reason']);
+    }
+
     public function test_smtp_connection_error_explains_the_railway_block(): void
     {
         config(['mail.default' => 'smtp']);
@@ -135,7 +157,7 @@ class MailConfigServiceTest extends TestCase
             new \RuntimeException('Connection to smtp.gmail.com:587 timed out.')
         );
 
-        $this->assertStringContainsString('Railway Hobby blocks outbound SMTP', $message);
-        $this->assertStringContainsString('MAIL_MAILER=resend', $message);
+        $this->assertStringContainsString('Railway Hobby restricts outbound SMTP', $message);
+        $this->assertStringContainsString('MAIL_MAILER=gmail_api', $message);
     }
 }

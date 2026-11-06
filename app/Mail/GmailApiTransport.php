@@ -3,8 +3,10 @@
 namespace App\Mail;
 
 use Google\Client as GoogleClient;
+use Google\Service\Exception as GoogleServiceException;
 use Google\Service\Gmail;
 use Google\Service\Gmail\Message as GmailMessage;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\AbstractTransport;
@@ -83,11 +85,17 @@ class GmailApiTransport extends AbstractTransport
                 isset($token['error'])
             ) {
                 $error = is_array($token)
-                    ? ($token['error'] ?? 'unknown_error')
+                    ? (string) ($token['error'] ?? 'unknown_error')
                     : 'unknown_error';
 
+                Log::error('Gmail API token refresh failed.', [
+                    'gmail_status' => 400,
+                    'gmail_reason' => $this->safeReason($error),
+                ]);
+
                 throw new TransportException(
-                    'Gmail API OAuth token refresh failed: ' . $error
+                    'Gmail API OAuth token refresh failed: '.$this->safeReason($error)
+                    .' gmail_api_status=400 gmail_api_reason='.$this->safeReason($error)
                 );
             }
 
@@ -119,12 +127,49 @@ class GmailApiTransport extends AbstractTransport
             throw $e;
 
         } catch (Throwable $e) {
+            [$status, $reason] = $this->googleFailure($e);
+
+            Log::error('Gmail API request failed.', [
+                'gmail_status' => $status,
+                'gmail_reason' => $reason,
+                'exception' => $e::class,
+            ]);
+
             throw new TransportException(
-                'Gmail API email delivery failed. Check OAuth authorization and Gmail API access.',
-                0,
+                'Gmail API email delivery failed.'
+                .' gmail_api_status='.$status
+                .' gmail_api_reason='.$reason,
+                $status,
                 $e
             );
         }
+    }
+
+    /**
+     * @return array{0: int, 1: string}
+     */
+    private function googleFailure(Throwable $e): array
+    {
+        $status = 0;
+        $reason = 'unknown_error';
+
+        if ($e instanceof GoogleServiceException) {
+            $status = (int) $e->getCode();
+            $errors = $e->getErrors();
+            if (is_array($errors) && isset($errors[0]['reason'])) {
+                $reason = $this->safeReason((string) $errors[0]['reason']);
+            }
+        }
+
+        return [$status, $reason];
+    }
+
+    private function safeReason(string $reason): string
+    {
+        $reason = strtolower(trim($reason));
+        $reason = preg_replace('/[^a-z0-9_]/', '', $reason) ?? '';
+
+        return $reason !== '' ? $reason : 'unknown_error';
     }
 
     public function __toString(): string
